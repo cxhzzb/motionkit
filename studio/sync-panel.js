@@ -7,10 +7,13 @@
 
 const $ = (id) => document.getElementById(id);
 
-async function api(path, body) {
-  const opt = body === undefined
-    ? { method: 'GET' }
-    : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) };
+// 注意：只有 /api/git/status 是 GET，其它一律 POST。
+// （踩过的坑：传 undefined 当 body 会退化成 GET，接口就 404 了）
+async function api(path, body, method) {
+  const usePost = method ? method === 'POST' : body !== undefined;
+  const opt = usePost
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }
+    : { method: 'GET' };
   const r = await fetch(path, opt);
   const txt = await r.text();
   try { return JSON.parse(txt); } catch (_) { return { ok: false, error: txt.slice(0, 300) || ('HTTP ' + r.status) }; }
@@ -95,7 +98,7 @@ export function initSyncPanel() {
       log('· 没有新改动，直接上传');
     }
     log('· 正在上传到 GitHub…（第一次会弹窗让你登录/授权）');
-    const p = await api('/api/git/push');
+    const p = await api('/api/git/push', {});
     if (!p.ok) {
       const raw = p.error || '';
       if (/Permission denied \(publickey\)/i.test(raw)) {
@@ -110,6 +113,8 @@ export function initSyncPanel() {
         log('  另：不联网也能干活 —— 点「打包给另一台电脑」，拷过去接着做。');
       } else if (/Repository not found|does not appear to be a git repository/i.test(raw)) {
         log('✗ GitHub 上还没有这个仓库。先在浏览器里建一个空的（名字要和地址里的对上），再点上传。');
+      } else if (/not found: \/api\/git\//i.test(raw)) {
+        log('✗ 本地服务还是旧版本 —— 关掉那个黑窗口，重新双击 启动工作室.bat，然后刷新本页再来一次。');
       } else {
         log('✗ 上传失败：' + raw.split('\n').slice(0, 6).join('\n'));
       }
@@ -122,7 +127,7 @@ export function initSyncPanel() {
 
   $('syncPull').addEventListener('click', () => guard(async () => {
     log('· 正在从 GitHub 拉取…');
-    const r = await api('/api/git/pull');
+    const r = await api('/api/git/pull', {});
     if (!r.ok) { log('✗ 拉取失败：' + (r.error || '').split('\n').slice(0, 6).join('\n')); return; }
     fill(r);
     log('✓ 已拉取最新。改了 studio/ 里的源码的话，刷新一下页面');
@@ -140,7 +145,7 @@ export function initSyncPanel() {
     if (!confirm('把远程仓库的内容整个接过来？\n\n会覆盖本机还没上传的改动（已经提交过的不受影响）。\n新电脑第一次用的时候点这个。')) return;
     guard(async () => {
       log('· 正在从远程仓库接内容…');
-      const r = await api('/api/git/sync-down');
+      const r = await api('/api/git/sync-down', {});
       if (!r.ok) { log('✗ ' + (r.error || '').split('\n').slice(0, 6).join('\n')); return; }
       fill(r);
       log('✓ 已经和远程仓库一致了。刷新一下页面就是最新的代码');
