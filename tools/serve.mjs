@@ -195,7 +195,13 @@ function run(cmd, args, opts = {}) {
 }
 
 // safe.directory：文件夹属主和当前用户不一致时（共用盘、从别处拷过来的仓库）也照样能跑
-const git = (args, opts) => run('git', ['-c', `safe.directory=${ROOT}`, ...args], opts);
+// GIT_TERMINAL_PROMPT=0 + BatchMode：缺凭据时立刻失败，而不是挂在那儿等输入
+const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+const git = (args, opts) => run('git', [
+  '-c', `safe.directory=${ROOT}`,
+  '-c', 'core.sshCommand=ssh -o BatchMode=yes -o ConnectTimeout=15',
+  ...args,
+], { env: GIT_ENV, ...opts });
 
 function readBody(req) {
   return new Promise((resolve) => {

@@ -4985,7 +4985,25 @@ function initSyncPanel() {
     }
     log('· 正在上传到 GitHub…（第一次会弹窗让你登录/授权）');
     const p = await api('/api/git/push');
-    if (!p.ok) { log('✗ 上传失败：' + (p.error || '').split('\n').slice(0, 6).join('\n')); return; }
+    if (!p.ok) {
+      const raw = p.error || '';
+      if (/Permission denied \(publickey\)/i.test(raw)) {
+        log('✗ GitHub 还不认这台电脑 —— 缺一把钥匙。');
+        log('  ① 展开下面的「GitHub 登录用（SSH 公钥）」');
+        log('  ② 点「复制公钥」');
+        log('  ③ 在任意能打开 GitHub 的电脑/手机浏览器里，粘到 Settings → SSH and GPG keys → New SSH key');
+        log('  ④ 回来再点一次「提交并上传」');
+      } else if (/could not read from remote|Connection (timed out|refused|reset)/i.test(raw)) {
+        log('✗ 连不上 GitHub。这台电脑的 https 是被挡的，SSH 那条道也要网络通才行；'
+          + '如果刚断过网/换过网络，等一会儿再试。');
+        log('  另：不联网也能干活 —— 点「打包给另一台电脑」，拷过去接着做。');
+      } else if (/Repository not found|does not appear to be a git repository/i.test(raw)) {
+        log('✗ GitHub 上还没有这个仓库。先在浏览器里建一个空的（名字要和地址里的对上），再点上传。');
+      } else {
+        log('✗ 上传失败：' + raw.split('\n').slice(0, 6).join('\n'));
+      }
+      return;
+    }
     fill(p);
     log('✓ 上传完成');
     log((p.out || '').split('\n').slice(-4).join('\n'));
@@ -5044,7 +5062,9 @@ function initSyncPanel() {
     $('syncMsg').value = '';
     log('· 正在检查…');
     try {
-      await refresh();
+      const st0 = await refresh();
+      // 服务是旧版本（没重启过）时会返回 404/HTML，别装成"检查完了"
+      if (!st0 || st0.git === undefined) throw new Error('本地服务还是旧版本（或者没在跑）');
       log('· 这是开发模式，可以直接同步');
     } catch (e) {
       online = false;
