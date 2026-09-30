@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MotionKit · JS 动效模板工作室</title>
+<link rel="stylesheet" href="./studio.css" />
+<script>
+// 兜底：文件是双击打开的（file://）时也能看到发生了什么，而不是白屏。
+// 必须在主脚本之前执行，这样才能接住后面脚本的语法错误。
+(function () {
+  function panel(title, detail) {
+    function render() {
+      if (document.getElementById('mk-fatal')) return;
+      var d = document.createElement('div');
+      d.id = 'mk-fatal';
+      d.className = 'fatal';
+      d.innerHTML = '<h2>' + title + '</h2><p>' + detail + '</p>' +
+        '<p class="fatal-tip">这个工具需要 <b>Chrome 或 Edge</b>（较新版本）。' +
+        '如果你的默认浏览器是 360 / QQ / 搜狗之类，请右键 studio.html → 打开方式 → Google Chrome。</p>' +
+        '<pre id="mk-fatal-detail"></pre>';
+      document.body.appendChild(d);
+      // 把浏览器信息一起显示出来，方便排查
+      d.querySelector('#mk-fatal-detail').textContent = navigator.userAgent;
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render);
+    else render();
+  }
+  window.__mkFatal = panel;
+
+  window.addEventListener('error', function (e) {
+    var msg = (e && (e.message || (e.error && e.error.message))) || '未知错误';
+    var where = e && e.filename ? (e.filename.split('/').pop() + (e.lineno ? ':' + e.lineno : '')) : '';
+    panel('页面出错了', '错误信息：' + msg + (where ? '（' + where + '）' : ''));
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    panel('页面出错了', '未处理的异常：' + ((e.reason && e.reason.message) || e.reason));
+  });
+
+  // 特性检测：这个工程用了可选链、空值合并、OffscreenCanvas 等较新的语法
+  try {
+    new Function('var a={b:{c:1}}; return a?.b?.c ?? 0;');
+  } catch (err) {
+    panel('浏览器版本太旧', '当前浏览器不支持 ES2020 语法，无法运行。');
+    return;
+  }
+  if (typeof Promise === 'undefined' || typeof fetch === 'undefined') {
+    panel('浏览器版本太旧', '缺少 Promise / fetch 支持。');
+  }
+})();
+</script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <b>MotionKit</b>
+    <span class="sub">JS 动效模板 · 卡点 / 字幕 / 转场 / 特效</span>
+  </div>
+  <div class="top-actions">
+    <button id="btnOpenVideo" class="ghost">载入视频 / 图片</button>
+    <button id="btnOpenAudio" class="ghost">载入音频(卡点)</button>
+    <button id="btnOpenSubs" class="ghost">导入字幕</button>
+    <span class="sep"></span>
+    <select id="selPreset" class="ghost select"><option value="">载入预设…</option></select>
+    <button id="btnNewProject" class="ghost" title="清空当前工程，从空白开始">新建</button>
+    <button id="btnSaveProject" class="ghost">保存工程</button>
+    <button id="btnLoadProject" class="ghost">打开工程</button>
+    <button id="btnSync" class="ghost" title="提交 / 上传到 GitHub / 拉取更新（开发模式）">⇅ 同步</button>
+    <span class="sep"></span>
+    <button id="btnAgent" class="ai">✨ AI 助手</button>
+    <button id="btnExport" class="primary">导出…</button>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- 左：模板库 -->
+  <aside class="panel left">
+    <div class="panel-head tabs">
+      <button id="tabTpl" class="tab active">模板库</button>
+      <button id="tabLayers" class="tab">图层索引 <span id="layerCount" class="cnt">0</span></button>
+    </div>
+
+    <div id="paneTpl" class="pane">
+      <div class="idx-bar">
+        <input id="searchTpl" class="search wide" placeholder="搜索模板…" />
+      </div>
+      <div class="tpl-tip">点一下只是选中 · <b>拖到右边画面里</b>才加进去</div>
+      <div id="templateList" class="tpl-list"></div>
+    </div>
+
+    <div id="paneLayers" class="pane hidden">
+      <div class="idx-bar">
+        <input id="searchLayer" class="search wide" placeholder="搜索图层 / 模板…" />
+        <select id="sortLayers" class="ghost select" title="排序方式">
+          <option value="time">按时间</option>
+          <option value="stack">按层级</option>
+        </select>
+      </div>
+      <div class="idx-map">
+        <canvas id="idxMap" width="300" height="169"></canvas>
+        <div id="idxMapHint" class="dim">播放头处的画面</div>
+      </div>
+      <div id="idxLegend" class="idx-legend"></div>
+      <div id="layerList" class="layer-list"></div>
+    </div>
+  </aside>
+
+  <!-- 中：预览 + 时间轴 -->
+  <section class="center">
+    <div class="stage" id="stage">
+      <div class="checker"></div>
+      <canvas id="preview"></canvas>
+      <div id="editLayer" class="edit-layer hidden"></div>
+      <div id="restoreBar" class="restore-bar hidden">
+        <span id="restoreText"></span>
+        <button id="btnRestoreOk" class="ghost">知道了</button>
+        <button id="btnRestoreDrop" class="ghost danger" title="清掉自动存档，回到空白工程">丢弃</button>
+      </div>
+      <div class="tpl-drop-frame"></div>
+      <div id="tplDropMark" class="tpl-drop-mark"></div>
+      <div id="tplBar" class="tpl-bar hidden">
+        <span id="tplBarText"></span>
+        <button id="tplBarCancel" class="ghost">取消</button>
+      </div>
+      <div id="dropHint" class="drop-hint">
+        <b>把视频 / 图片拖进来</b>
+        <span>也可以直接不放素材，纯做叠加层导出带透明的 PNG 序列</span>
+      </div>
+      <div id="busy" class="busy hidden"><div class="bar"><i></i></div><span id="busyText"></span></div>
+    </div>
+
+    <div class="transport">
+      <button id="btnPlay" class="icon">▶</button>
+      <button id="btnToStart" class="icon">⏮</button>
+      <button id="btnMute" class="icon" title="预览声音">🔊</button>
+      <span id="tcNow" class="tc">00:00:00.00</span>
+      <input id="scrub" class="scrub" type="range" min="0" max="1000" value="0" />
+      <span id="tcTotal" class="tc dim">00:00:10.00</span>
+      <label class="mini"><input id="chkLoop" type="checkbox" checked /> 循环</label>
+      <label class="mini"><input id="chkSnap" type="checkbox" checked /> 吸附卡点</label>
+      <label class="mini" id="flashChip" style="display:none">
+        <input id="chkFlash" type="checkbox" checked /> ⚡ 闪白
+      </label>
+      <span class="sep"></span>
+      <span id="beatInfo" class="badge">未分析音频，默认 120 BPM</span>
+    </div>
+
+    <div class="timeline-wrap">
+      <canvas id="timeline"></canvas>
+      <div class="tl-legend">
+        <span><i class="k beat"></i>卡点</span>
+        <span><i class="k strong"></i>强拍</span>
+        <span><i class="k layer"></i>图层</span>
+        <span><i class="k cap"></i>字幕</span>
+        <span class="hint" id="tlHint">预览里直接改：点选拖动 · 拉角缩放 · 转手柄旋转 · 双击改字 · Alt+点穿透下层 · Del 删除</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 右：参数 -->
+  <aside class="panel right">
+    <div class="right-head">
+      <div class="right-tabs" id="rightTabs">
+        <button class="rtab" data-tab="layer">图层</button>
+        <button class="rtab" data-tab="scene">工程</button>
+        <button class="rtab" data-tab="beat">卡点</button>
+        <button class="rtab" data-tab="subs">字幕</button>
+        <button class="rtab" data-tab="fx">特效 <span class="cnt" id="fxCount">0</span></button>
+      </div>
+      <div class="right-sub" id="rightTitle">工程设置</div>
+    </div>
+    <div id="rightBody" class="right-body"></div>
+  </aside>
+</main>
+
+<dialog id="exportDlg" class="dlg">
+  <h3>导出</h3>
+  <div class="dlg-grid">
+    <button data-ex="png" class="ex">
+      <b>PNG 序列（ZIP，含透明）</b>
+      <span>最通用：解压后拖进 PR / 剪映 / 达芬奇 / AE，直接就是带 Alpha 的叠加层</span>
+    </button>
+    <button data-ex="webm" class="ex">
+      <b>WebM（VP9 含透明）</b>
+      <span>一个文件搞定，Premiere 2020+ / 剪映可直接读</span>
+    </button>
+    <button data-ex="mov" class="ex">
+      <b>ProRes 4444（.mov 含 Alpha）</b>
+      <span>需要本机 ffmpeg：先用 PNG 序列导出，再跑 tools/encode.py</span>
+    </button>
+    <button data-ex="json" class="ex">
+      <b>工程 JSON</b>
+      <span>保存/分享你的模板组合与全部参数</span>
+    </button>
+    <button data-ex="beats" class="ex">
+      <b>卡点标记（剪辑软件用）</b>
+      <span>导出 txt/csv 标记，导入 Premiere 后时间轴上就是一条条卡点</span>
+    </button>
+    <button data-ex="srt" class="ex">
+      <b>字幕 SRT</b>
+      <span>导出当前字幕轨</span>
+    </button>
+  </div>
+  <div class="dlg-foot">
+    <span id="exportInfo" class="dim"></span>
+    <button id="btnCloseDlg" class="ghost">关闭</button>
+  </div>
+</dialog>
+
+<input id="fileVideo" type="file" accept="video/*,image/*" hidden />
+<input id="fileAudio" type="file" accept="audio/*" hidden />
+<input id="fileSubs" type="file" accept=".srt,.vtt,.ass,.ssa,.txt" hidden />
+<input id="fileProject" type="file" accept=".json" hidden />
+
+<dialog id="syncDlg" class="dlg sync-dlg">
+  <h3>同步到 GitHub <span id="syncBadge" class="badge">检查中…</span></h3>
+
+  <div class="sync-grid">
+    <div><b>分支</b><span id="syncBranch">—</span></div>
+    <div><b>远程仓库</b><span id="syncRemote">—</span></div>
+    <div><b>待上传</b><span id="syncDirty">—</span></div>
+    <div><b>提交身份</b><span id="syncWho">—</span></div>
+  </div>
+
+  <div class="sync-sec">
+    <div class="sync-sec-h">第一次用，填一次就行</div>
+    <input id="syncName" class="sync-input" placeholder="你的名字（会写进提交记录）" />
+    <input id="syncEmail" class="sync-input" placeholder="你的邮箱" />
+    <input id="syncRemoteInput" class="sync-input" placeholder="仓库地址，例：https://github.com/你的用户名/motionkit.git" />
+    <button id="syncSave" class="ghost">保存设置</button>
+  </div>
+
+  <div class="sync-sec">
+      <div class="sync-sec-h">日常就点这几个</div>
+    <input id="syncMsg" class="sync-input" placeholder="这次改了什么（可留空，会自动填一句）" />
+    <div class="btn-row">
+      <button id="syncUpload" class="primary">提交并上传</button>
+      <button id="syncPull">拉取最新</button>
+    </div>
+    <div class="btn-row">
+        <button id="syncDown" title="另一台电脑第一次用：把远程仓库整个接过来">接上远程仓库</button>
+      <button id="syncPack">打包给另一台电脑（免网络）</button>
+    </div>
+  </div>
+
+  <details class="sync-sec">
+    <summary>GitHub 登录用（SSH 公钥）</summary>
+    <p class="sync-tip">这台电脑连不上 GitHub 的网页，但 SSH 通道是通的 —— 用公钥就能上传。</p>
+    <textarea id="syncPubKey" class="sync-input" rows="3" spellcheck="false" placeholder="（还没有公钥，点下面的按钮生成）"></textarea>
+    <div class="btn-row">
+      <button id="syncMakeKey">没有就生成一把</button>
+      <button id="syncCopyKey">复制公钥</button>
+    </div>
+    <p class="sync-tip">复制之后粘到 GitHub 的 Settings → SSH and GPG keys → New SSH key。
+      随便哪台能打开 GitHub 的电脑或手机浏览器都行，粘完这台机器就能直接上传了。</p>
+  </details>
+
+  <pre id="syncLog" class="sync-log"></pre>
+
+  <div class="dlg-foot">
+    <span id="syncFoot" class="dim"></span>
+    <button id="btnCloseSync" class="ghost">关闭</button>
+  </div>
+</dialog>
+
+  <dialog id="agentDlg" class="dlg agent-dlg">
+  <h3>AI 助手 <span id="agentEnv" class="badge">检查环境…</span></h3>
+  <div class="agent-body">
+    <div class="agent-col">
+      <div class="agent-sec">
+        <label>1 · 素材</label>
+        <div id="agentSource" class="agent-source">用工作室里已载入的视频</div>
+      </div>
+
+      <div class="agent-sec">
+        <label>2 · 配色风格 <span class="dim">（最关键的一个选择）</span></label>
+        <div id="agentStyles" class="style-grid"></div>
+      </div>
+
+      <div class="agent-sec">
+        <label>3 · 动效幅度 <b id="agentIntensityVal">0.60</b></label>
+        <input id="agentIntensity" type="range" min="0" max="1" step="0.05" value="0.6" />
+        <div class="agent-hint">管闪白强度、大字字号、卡点密度。0.2 很克制，1.0 很躁。</div>
+      </div>
+
+      <div class="agent-sec">
+        <label>4 · 信息密度 <b id="agentDensityVal">0.55</b></label>
+        <input id="agentDensity" type="range" min="0" max="1" step="0.05" value="0.55" />
+        <div class="agent-hint">屏幕上同时挂几样东西（刻度、仪表、编号卡、终端面板）。</div>
+      </div>
+
+      <div class="agent-sec">
+        <label>5 · 字幕</label>
+        <div class="agent-row">
+          <select id="agentCaptions">
+            <option value="auto">自动（有语音就出）</option>
+            <option value="off">不要字幕</option>
+          </select>
+          <select id="agentCaptionStyle">
+            <option value="bar">黑条白字</option>
+            <option value="mono">等宽终端</option>
+            <option value="hero">超大居中</option>
+            <option value="karaoke">逐词高亮</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="agent-sec">
+        <label>6 · 做多长</label>
+        <select id="agentTarget">
+          <option value="15">15 秒（短平快）</option>
+          <option value="30" selected>30 秒</option>
+          <option value="60">60 秒</option>
+          <option value="0">整段素材</option>
+        </select>
+        <div class="agent-hint">长素材会自动挑"最有事发生"的一段。</div>
+      </div>
+
+      <div class="agent-sec">
+        <label>补充要求 <span class="dim">（可选，会交给模型）</span></label>
+        <textarea id="agentNotes" rows="2" placeholder="例：游戏集锦那种狠的；标题写「XX」；别闪太白"></textarea>
+      </div>
+
+      <div class="agent-actions">
+        <button id="agentRun" class="primary">开始生成</button>
+        <label class="mini"><input id="agentRender" type="checkbox" /> 顺便渲染成片（慢）</label>
+      </div>
+    </div>
+
+    <div class="agent-col">
+      <div class="agent-log" id="agentLog"><span class="dim">点「开始生成」后这里会显示进度。</span></div>
+      <div id="agentResult" class="agent-result hidden">
+        <div id="agentReport" class="agent-report"></div>
+        <div class="agent-actions">
+          <button id="agentLoad" class="primary">载入到工作室继续调</button>
+          <span id="agentFiles" class="dim"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <span id="agentFoot" class="dim"></span>
+    <button id="agentClose" class="ghost">关闭</button>
+  </div>
+</dialog>
+
+<script type="module" src="./studio.js"></script>
+</body>
+</html>

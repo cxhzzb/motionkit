@@ -1,0 +1,20 @@
+{
+  "name": "transitions-demo",
+  "width": 1280,
+  "height": 720,
+  "fps": 24,
+  "duration": 6,
+  "bg": null,
+  "transparent": true,
+  "beat": { "bpm": 120, "offset": 0, "duration": 6, "source": "bpm" },
+  "captions": [],
+  "layers": [
+    { "template": "zoom-punch", "start": 0.00, "end": 0.42, "seed": "t-zoom", "name": "冲击推近", "params": { "amount": 0.4, "blur": 14 } },
+    { "template": "whip-pan", "start": 1.00, "end": 1.40, "seed": "t-whip", "name": "甩镜转场", "params": { "direction": "right", "amount": 1.8, "trails": 9 } },
+    { "template": "glitch-burst", "start": 2.00, "end": 2.45, "seed": "t-glitch", "name": "故障爆闪", "params": { "amount": 1.3, "slices": 26, "shift": 110 } },
+    { "template": "halftone-rise", "start": 3.00, "end": 3.60, "seed": "t-half", "name": "网点升起", "params": { "dot": 9, "gap": 13, "direction": "up" } },
+    { "template": "scan-wipe", "start": 4.00, "end": 4.50, "seed": "t-scan", "name": "扫描带转场", "params": { "band": 240, "direction": "down" } },
+    { "template": "shutter-wipe", "start": 5.00, "end": 5.40, "seed": "t-shut", "name": "百叶窗划像", "params": { "rows": 11 } }
+  ],
+  "fx": []
+}

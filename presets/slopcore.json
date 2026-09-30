@@ -1,0 +1,173 @@
+{
+  "name": "slopcore",
+  "width": 1920,
+  "height": 1080,
+  "fps": 24,
+  "duration": 12,
+  "bg": null,
+  "transparent": true,
+  "beat": { "bpm": 128, "offset": 0.06, "duration": 12, "source": "bpm" },
+  "captions": [
+    { "start": 0.6, "end": 2.4, "text": "Ladies, gentlemen, agents." },
+    { "start": 2.6, "end": 4.4, "text": "This is not an AI billboard." },
+    { "start": 4.6, "end": 6.4, "text": "Prepare to walk." },
+    { "start": 6.6, "end": 8.4, "text": "Stop hiring humans." },
+    { "start": 8.6, "end": 10.4, "text": "You have 18 months to escape." },
+    { "start": 10.6, "end": 12, "text": "Lock in." }
+  ],
+  "layers": [
+    {
+      "template": "hud-frame",
+      "start": 0,
+      "end": 12,
+      "seed": "slop-hud",
+      "name": "HUD 全屏框",
+      "params": {
+        "labelLeft": "SIGNAL",
+        "labelRight": "REC",
+        "tickerTop": "ESCAPE VELOCITY  11.2 KM/S  PERMANENT UNDERCLASS  ZERO-DAY",
+        "tickerBottom": "SIGNAL LOCKED  AGENT ONLINE  TOKENS BURNED  NVIDIA GTC  129 BILLION",
+        "inset": 46,
+        "noise": 0.6
+      }
+    },
+    {
+      "template": "title-mark",
+      "start": 0.3,
+      "end": 2.3,
+      "seed": "slop-title",
+      "name": "标题定格",
+      "params": {
+        "title": "ESCAPE VELOCITY",
+        "kicker": "SLOPCORE / TRANSMISSION 01",
+        "note": "MADE IN SAN FRANCISCO",
+        "position": "0.5,0.5",
+        "size": 150
+      }
+    },
+    {
+      "template": "terminal-prompt",
+      "start": 1.6,
+      "end": 5.2,
+      "seed": "slop-term",
+      "name": "终端面板",
+      "params": {
+        "title": "PROMPT",
+        "lines": "command+shift+k 出戏\n> spawn 213 agents\n> burn 12.9B tokens\n> status: LOCKED IN",
+        "position": "0.06,0.34",
+        "width": 440,
+        "charDelay": 0.02
+      }
+    },
+    {
+      "template": "stat-counter",
+      "start": 1.2,
+      "end": 5.0,
+      "seed": "slop-stat",
+      "name": "数字滚动计数",
+      "params": { "value": 25, "suffix": "%", "label": "PROBABILITY OF DOOM", "position": "0.78,0.22", "size": 132 }
+    },
+    {
+      "template": "look-card",
+      "start": 4.6,
+      "end": 8.6,
+      "seed": "slop-look",
+      "name": "编号卡片",
+      "params": {
+        "items": "Our Waymo hit someone.\nRISK PAUSED.\nNot an AI billboard.\nA real leather jacket.",
+        "position": "0.08,0.30",
+        "width": 380,
+        "startIndex": 6,
+        "stagger": 2
+      }
+    },
+    {
+      "template": "kinetic-type",
+      "start": 2.6,
+      "end": 7.4,
+      "seed": "slop-kt",
+      "name": "卡点大字",
+      "params": {
+        "text": "LOOK 06\nZERO-DAY.\nSTARGATE:\nLOCK IN",
+        "beatsPerStep": 2,
+        "size": 168,
+        "position": "0.55,0.62"
+      }
+    },
+    {
+      "template": "word-grid",
+      "start": 7.4,
+      "end": 12,
+      "seed": "slop-grid",
+      "name": "词块宫格",
+      "params": {
+        "text": "ESCAPE VELOCITY PERMANENT UNDERCLASS 18 MONTHS LOCK IN FEEL THE ENGINE WE ARE SO BACK",
+        "cols": 5,
+        "position": "0.5,0.42",
+        "cellW": 262,
+        "cellH": 76,
+        "beatsPerStep": 1
+      }
+    },
+    {
+      "template": "shipping-label",
+      "start": 8.4,
+      "end": 12,
+      "seed": "slop-label",
+      "name": "吊牌 / 条码卡",
+      "params": {
+        "product": "ESCAPE VELOCITY",
+        "sku": "EV-11.2 / KM-S",
+        "position": "0.72,0.30",
+        "rotate": -6
+      }
+    },
+    {
+      "template": "dial-gauge",
+      "start": 6.0,
+      "end": 10.0,
+      "seed": "slop-dial",
+      "name": "圆盘仪表",
+      "params": { "value": 0.68, "position": "0.15,0.76", "radius": 70, "label": "HUMANITY" }
+    },
+    {
+      "template": "param-ticks",
+      "start": 3.0,
+      "end": 9.0,
+      "seed": "slop-pt",
+      "name": "参数刻度簇",
+      "params": { "position": "0.06,0.66", "width": 280, "rows": 4 }
+    },
+    {
+      "template": "note-bubble",
+      "start": 5.4,
+      "end": 7.6,
+      "seed": "slop-note",
+      "name": "注释气泡",
+      "params": { "text": "command+shift+k", "position": "0.34,0.70", "width": 320 }
+    },
+    {
+      "template": "ticker-strip",
+      "start": 9.6,
+      "end": 12,
+      "seed": "slop-tick",
+      "name": "跑马灯条",
+      "params": { "position": "0.06,0.90,0.88", "height": 34, "text": "SIGNAL LOCKED · AGENT ONLINE · TOKENS BURNED · COUNTRY OF GENIUSES" }
+    },
+    {
+      "template": "subtitle-kinetic",
+      "start": 0,
+      "end": 12,
+      "seed": "slop-subs",
+      "name": "卡点字幕",
+      "params": { "style": "bar", "position": "0.5,0.87", "size": 42, "maxWidth": 0.72 }
+    }
+  ],
+  "fx": [
+    { "type": "grain", "amount": 0.12 },
+    { "type": "scanlines", "amount": 0.14, "step": 3 },
+    { "type": "chromatic", "amount": 3, "animated": true, "jitter": 1.5 },
+    { "type": "vignette", "amount": 0.5 },
+    { "type": "flash", "fillColor": "#ffffff", "hits": "beats", "duration": 0.06, "amount": 0.18 }
+  ]
+}

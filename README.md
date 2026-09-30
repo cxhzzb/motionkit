@@ -1,0 +1,533 @@
+# MotionKit · JS 动效模板引擎 + 剪辑插件
+
+一套跑在浏览器里的**动效模板引擎**，专门做视频里那种"科技感叠加层"：
+HUD 细线框、卡点大字、终端面板、编号卡片、跑马灯、计数器、故障 / 扫描 / 网点转场……
+全部是纯 JS + Canvas 绘制的，**零依赖、零安装、离线可用**。
+
+它给你的剪辑流程补上四件事：
+
+| 你想要 | MotionKit 怎么做 |
+| --- | --- |
+| **卡点** | 拖进一首歌 → 自动算出 BPM 和每一个拍点 → 图层自动吸附，还能"一键每拍铺一层闪白" |
+| **出字幕** | 导入 SRT / ASS / VTT → 自动切短句 → 卡点字幕模板逐句弹出 / 逐词高亮 |
+| **做转场** | 甩镜、冲击推近、镜头震动、闪白、百叶窗、网点升起、扫描带、故障爆闪、遮幅推入、色散 |
+| **视觉特效** | 颗粒、扫描线、色差、故障切片、暗角、辉光、像素化、VHS、数据摩什、反相闪光 |
+
+做好的东西可以导出成**带 Alpha 的 PNG 序列 / WebM / ProRes 4444**，
+直接拖进 Premiere、剪映专业版、达芬奇、AE 当叠加层用；也可以让 ffmpeg 直接烧到你的成片上。
+
+### ✨ 现在还有 AI 助手
+
+丢一段视频进去，它自己挑片段、自己分析、自己出字幕、自己排图层，
+你只在几个关键点上拍板：**配色风格、动效幅度、信息密度、要不要字幕、做多长**。
+
+```bash
+python agent/autopilot.py --video 素材.mp4 --out projects/demo --render
+```
+
+界面上在顶栏 **✨ AI 助手**（双击 `启动工作室.bat` 就是带后端的开发模式）。
+细节看 [agent/README.md](agent/README.md)。
+
+![Slopcore 预设预览](docs/preview-slopcore.png)
+
+> 上面这一屏就是用 `presets/slopcore.json` 渲染出来的（叠加层铺在底图上）。
+> 视觉语言参考了 [SLOPCORE: ESCAPE VELOCITY](https://www.youtube.com/watch?v=C3fxudvU-UU) 那支片子。
+
+---
+
+## 30 秒上手
+
+### 方式一：双击 `启动工作室.bat`（推荐）
+
+它会起本地服务（开发模式）并**自动用 Chrome / Edge 打开工作室**，关掉就按窗口里的 Ctrl+C。
+**AI 助手只有这个模式才有**，所以推荐一直用它。
+
+顺手做的两件事：检查 Node / Python / faster-whisper 并在启动时告诉你缺什么；
+重复双击不会起第二个服务——它会认出已经在跑的那个，直接把页面打开。
+
+### 方式二：离线单文件版（没有 AI 助手）
+
+直接双击 `dist/studio.html`。模板、卡点、字幕、导出全都在，只是没有 AI 助手。
+**必须用 Chrome 或 Edge**：默认浏览器是 360 / QQ / 搜狗之类的话大概率白屏，
+右键 `dist/studio.html` → 打开方式 → Google Chrome。
+
+好处是零依赖、不占端口、可以拷到任何机器上跑。
+
+### 方式三：命令行 / 改源码（改完即时生效）
+
+```bash
+npm run studio              # 起服务，手动打开 http://localhost:5178/studio/index.html
+node tools/serve.mjs --open # 起服务并自动开浏览器（bat 里用的就是这个）
+```
+
+> 为什么开发模式需要服务器：源码是 ES Module，浏览器不允许 `file://` 直接加载模块；
+> AI 助手还要调 python / ffmpeg / 无头浏览器，得有个后端转手。
+> 改完源码跑 `npm run bundle` 重新生成 `dist/studio.html`。
+
+### 然后
+
+1. 把**视频**拖进中间的画面区（或者什么都不放，纯做叠加层）
+2. 把**音乐**拖进去 → 自动分析出 BPM 和拍点，时间轴出现一条条卡点线
+3. 左边模板库**按住一个模板拖到画面里**放下 → 图层加进来了（拖到哪儿就摆在哪儿的
+   位置参数上），再在右边调参数
+4. 加字幕：`导入字幕` 选 `.srt`，会自动挂一个"卡点字幕"图层
+5. 右上角 `导出…`
+
+> **工程会自动保存。** 改了什么都会存在浏览器本地，图层、参数、特效、字幕、卡点、
+> 你在预览里摆的位置全都在。刷新页面、关掉浏览器、第二天再打开，都会自动接着上次继续。
+> 要用别的机器 / 发给别人 / 手动留底，才需要点顶栏的 **保存工程** 存成 JSON。
+> 想从空白开始：顶栏 **新建**，或者恢复提示条上的 **丢弃**。
+
+> **两台电脑轮着开发？** 顶栏还有 **⇅ 同步**：点按钮就完成 提交 / 上传到 GitHub /
+> 拉取更新，也能一键打包成 zip 免网络拷到另一台机器（同一个面板里还能复制 SSH 公钥）。
+> 按钮都在 [docs/命令速查.md](docs/命令速查.md) 里写了，全程不用敲命令。
+
+---
+
+## 界面
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ 载入视频/图片 · 载入音频(卡点) · 导入字幕 · 预设 · 保存/打开工程 · 导出 │
+├────────┬──────────────────────────────────────────────┬──────────────┤
+│        │                                              │              │
+│ 模板库 │            预览（棋盘格 = 透明）              │ 标签页：     │
+│  ⇄     │                                              │ 图层 · 工程  │
+│ 图层索引│                                             │ 卡点 · 字幕  │
+│        ├──────────────────────────────────────────────┤ 特效        │
+│        │  ▶ ⏮ 时间码 ──●────────── 循环 吸附卡点       │ 内容按页签   │
+│        ├──────────────────────────────────────────────┤ 切换        │
+│        │ 时间轴：卡点线 / 图层条 / 字幕轨 / 播放头      │              │
+└────────┴──────────────────────────────────────────────┴──────────────┘
+```
+
+![工作室界面：在预览里直接选中图层、缩放、改文字](docs/preview-direct-edit.png)
+
+![把模板拖到画面里添加](docs/preview-drag-add.png)
+
+**右栏是分页签的**：`图层 / 工程 / 卡点 / 字幕 / 特效` 置顶，点一下就切，不用在一条长滚动条里翻。
+选中图层（在预览里点、在时间轴上点、在图层索引里点都算）会**自动跳到「图层」页**，
+页签下面那行小字会告诉你在看哪一层。`特效` 页签上带一个数字，是当前挂了几条后期特效。
+
+**模板库**（左栏第一个页签）：**点一下只是选中，不会往工程里塞东西**。要加图层，
+得把模板**按住拖到中间的预览里松手**——画面会亮出虚线框和十字，标出落点；
+拖到哪儿就摆在哪儿（落点会写进模板自己的 `位置` 参数）。全屏 HUD、转场这类
+本来就没有位置参数的模板，按它们自己的默认布局来。
+
+**直接在预览里改**：不用去右边翻参数。在预览上点一下图层就选中（选择框和手柄出来），
+拖动挪位置、拉四个角缩放、转上面那个圆手柄旋转、**双击直接改文字**（浮窗里边打边看）。
+位置 / 缩放 / 旋转记在图层自己的变换上，不去动模板的 `position` 参数，
+所以 23 个模板——包括根本没有位置参数的全屏 HUD、字幕层、转场层——都能这么调；
+而且导出和无头渲染走的是同一个引擎，界面里摆成什么样，导出来就是什么样。
+
+**图层索引**（左栏第二个页签，快捷键 `I`）：图层一多，光看时间轴上的色条不知道谁是谁。
+这里每行是一个图层，除了名字、模板、起止时间，还有一张**缩略图，画出这层在画面上的实际位置**
+（不是读模板的 position 参数猜的，是把那一层单独渲染一次、量出来的真实包围盒）。
+顶上一张小图画的是播放头这一刻画面里所有图层的框和编号，跟下面列表一一对应；
+正在生效的行会高亮。
+
+点一下行 = 选中并跳到该图层中间；双击 = 跳到开头；点行首的圆点 = 临时关掉这层（只看效果，不动参数）。
+可以按时间或按层级排序，也可以搜名字。
+
+**时间轴操作**：点图层条选中 · 拖两端改时长 · 拖中间整体移动 · 空白处点击移动播放头 ·
+拖动时自动吸附卡点（可在走带栏关掉"吸附卡点"）。
+
+**预览操作**：点选拖动 · 拉角缩放 · 转手柄旋转 · 双击改文字 · `Alt`+点穿透到下层 ·
+`Alt`+滚轮缩放 · 拖到画面中央会自动吸附（出现青色对中线）。
+
+**快捷键**：`空格` 播放/暂停 · `←/→` 逐帧（加 `Shift` 逐秒）· `Del` 删除选中图层 ·
+`Home/End` 跳头尾 · `I` 图层索引 · `M` 静音 · `Esc` 取消选中 ·
+`Alt`+`←↑↓→` 微调选中图层的位置（加 `Shift` 走大步）。
+
+---
+
+## 卡点
+
+这是整套东西的核心。
+
+拖入音频后，浏览器里会做一次真正的节拍分析：
+
+1. STFT 求**分频段谱通量**，低频（底鼓）权重最高，高频（镲片）压下去
+2. 对数压缩，避免低频瞬态把一切淹没
+3. 自相关估周期，带 100–140 BPM 先验，避免半拍 / 双拍歧义
+4. **最小二乘把拍点网格拟合到实际起音峰**——这一步是精度关键，
+   能把 hop 带来的量化误差平掉。实测 128 BPM 的素材算出 128.01
+5. 按 4/4 找强拍（第一个"1"）
+
+得到的拍点会以竖线画在时间轴上（青色更粗 = 强拍），同时：
+
+- 新加的图层自动吸附到最近的卡点
+- 右边"卡点"分组可以改 BPM / 偏移
+- **一键卡点铺满（闪白）**：每个拍点叠一个短闪白图层
+- **每 2 拍铺一个推近**：两拍一个冲击推近
+
+> 没有音频也行：默认 120 BPM，手动改 BPM 和偏移照样能卡。
+
+命令行侧有一份等价实现：
+
+```bash
+python tools/beatmap.py --in music.mp3 --out beats.json --markers beats.txt --fps 25
+```
+
+`beats.txt` 可在 Premiere 的**标记面板 → 导入标记**，时间轴上就出现一条条卡点。
+
+---
+
+## 字幕
+
+支持 **SRT / WebVTT / ASS(SSA)**。导入后：
+
+- 自动挂一个 `卡点字幕` 图层（如果还没有的话）
+- `把当前字幕切短句` 会按标点切成 ≤12 字的短块，并**按字符数分配时长**，用来做"逐句弹字"
+- 有音频分析结果时，会给每条字幕估算**词级时间**，`karaoke` 样式即可逐词高亮
+
+| 样式 | 效果 |
+| --- | --- |
+| `bar` | 黑条 + 白字，最像纪录片字幕（默认） |
+| `mono` | 等宽小字，终端感 |
+| `hero` | 超大居中 + 橙色短线，适合喊口号 |
+| `karaoke` | 逐词从暗到亮（需要词级时间） |
+
+---
+
+## 模板总览（23 个）
+
+### 叠加层 / HUD
+
+| id | 名称 | 说明 |
+| --- | --- | --- |
+| `hud-frame` | HUD 全屏框 | 四角括号、侧边刻度、时间码、上下跑马灯、电平条、噪点。做打底最稳 |
+| `stat-counter` | 数字滚动计数 | `+25%` / `12°` / `2.3KB`，count / slot / scramble 三种滚动 |
+| `dial-gauge` | 圆盘仪表 | 带刻度和百分比的圆盘 |
+| `ticker-strip` | 跑马灯条 | 独立可摆放的滚动信息条，右侧带实时帧号 |
+| `param-ticks` | 参数刻度簇 | 一组小滑杆 + 读数，角落里的"工程感" |
+
+### 动态排版
+
+| id | 名称 | 说明 |
+| --- | --- | --- |
+| `kinetic-type` | 卡点大字 | 每个卡点换一句大字，slam / cut / scramble / typewriter / stack 五种切换 |
+| `word-grid` | 词块宫格 | `ESCAPE / VELOCITY / PERMANENT / UNDERCLASS` 逐格点亮 |
+| `title-mark` | 标题定格 | 带引线和小注解的标题（`ZERO-DAY.` / `STARGATE:`） |
+| `subtitle-kinetic` | 卡点字幕 | 读取字幕轨，四种样式 |
+
+### 面板卡片
+
+| id | 名称 | 说明 |
+| --- | --- | --- |
+| `terminal-prompt` | 终端面板 | 黑底等宽窗口 + 打字机 + 光标 |
+| `look-card` | 编号卡片 | `Look 06` 那种白卡，一条条按节拍弹出来 |
+| `shipping-label` | 吊牌 / 条码卡 | `Do not iron / Wash cold / Made in San Francisco` 吊牌 |
+| `note-bubble` | 注释气泡 | 黑底小气泡 + 一行代码 |
+
+### 转场 / 冲击
+
+| id | 名称 | 实现方式 |
+| --- | --- | --- |
+| `whip-pan` | 甩镜转场 | 变换式：位移 + 拖影 + 速度线 |
+| `zoom-punch` | 冲击推近 | 变换式：放大 + 径向速度线 + 旋转 |
+| `cam-shake` | 镜头震动 | 变换式：机震，压重低音 |
+| `flash-cut` | 闪白硬切 | 遮罩式 |
+| `shutter-wipe` | 百叶窗划像 | 遮罩式 |
+| `halftone-rise` | 网点升起 | 遮罩式 |
+| `scan-wipe` | 扫描带转场 | 遮罩式 |
+| `glitch-burst` | 故障爆闪 | 遮罩式：切片 + RGB 分离 + 闪帧 + 色块 |
+| `letterbox-push` | 遮幅推入 | 遮罩式 |
+| `rgb-split` | 色散冲击 | 遮罩式 |
+
+> **变换式**会先快照整帧再重绘，所以它们**必须放在图层栈最上面**。
+> 从模板库点加的图层默认追加在末尾，正好符合这个规则。
+
+![转场预览](docs/preview-transitions.png)
+
+### 后期特效（是特效栈，不是图层）
+
+写在工程的 `fx` 数组里，按顺序全屏叠加：
+
+`grain` 颗粒 · `scanlines` 扫描线 · `chromatic` 色差 · `glitch` 故障切片 ·
+`flash` 闪白（支持 `hits: "beats"` 自动踩点）· `vignette` 暗角 · `bloom` 辉光 ·
+`halftone` 半调 · `pixelate` 像素化 · `vhs` · `datamosh` 数据摩什 ·
+`letterbox` 遮幅 · `bleach` 漂白 · `invert` 反相
+
+```json
+"fx": [
+  { "type": "grain", "amount": 0.12 },
+  { "type": "scanlines", "amount": 0.14, "step": 3 },
+  { "type": "chromatic", "amount": 3, "animated": true, "jitter": 1.5 },
+  { "type": "vignette", "amount": 0.5 },
+  { "type": "flash", "hits": "beats", "duration": 0.06, "amount": 0.18 }
+]
+```
+
+`hits` 可以写 `"beats"`（每个拍）、`"downbeats"`（每小节第一拍）、`"bars"`，也可以直接给一串秒数。
+
+---
+
+## 导出 & 接进剪辑软件
+
+点右上角 `导出…`：
+
+| 导出项 | 用途 |
+| --- | --- |
+| **PNG 序列（ZIP，含透明）** | 最通用。解压后一批 PNG 直接拖进任何剪辑软件 |
+| **WebM（VP9 含透明）** | 一个文件搞定，Premiere 2020+ / 剪映可直接读 |
+| **ProRes 4444（.mov 含 Alpha）** | 画质最好，走本机 ffmpeg（见下） |
+| **工程 JSON** | 保存 / 分享你的模板组合和全部参数 |
+| **卡点标记** | txt 标记，导入 Premiere 后时间轴上是一条条卡点 |
+| **字幕 SRT** | 导出当前字幕轨 |
+
+弹窗下面有个开关：**"把底下的视频/图片一起渲染进去"**。
+默认不勾选 = 只导出带透明的叠加层（剪辑时铺在上面）；勾上了就是直接把效果烧进画面。
+
+### 用 ffmpeg 编码 / 直接烧到成片
+
+```bash
+# PNG 序列 -> ProRes 4444（带 Alpha，PR / FCP / 达芬奇都认）
+python tools/encode.py --in .out/frames --out ESCAPE.mov --codec prores4444 --fps 24
+
+# PNG 序列 -> WebM VP9（带 Alpha，体积小）
+python tools/encode.py --in .out/frames --out ESCAPE.webm --codec webm-alpha --fps 24
+
+# 直接把叠加层烧到你的剪辑上，并配上音频
+python tools/encode.py --in .out/frames --out final.mp4 --codec h264 \
+    --overlay my_cut.mp4 --audio music.wav --fps 24
+```
+
+> ffmpeg 从哪来：优先用 `pip install imageio-ffmpeg` 自带的那份，其次找系统 PATH。
+> 本机已经装了 `imageio-ffmpeg`，直接能用。
+
+具体软件的导入步骤见 [docs/](docs/)：Premiere、剪映专业版、达芬奇、AE 各有一份。
+
+---
+
+## 命令行：无头批量渲染
+
+不用打开界面，直接用本机 Chrome/Edge 逐帧渲染（零 npm 依赖，靠 Node 内置 WebSocket 走 CDP）。
+
+```bash
+# 渲染一个工程
+node tools/render.mjs --scene presets/slopcore.json --out .out/slop --fps 24
+
+# 只渲染一个模板来试参数
+node tools/render.mjs --template hud-frame --duration 3 --width 1920 --height 1080 --out .out/hud
+
+# 只看 [1.0, 2.5] 秒这一段
+node tools/render.mjs --scene presets/slopcore.json --out .out/cut --range 1.0 2.5
+
+# 把一张底图垫在下面，用来核对叠加层 / 转场
+node tools/render.mjs --scene presets/transitions-demo.json --media docs/sample-footage.jpg --out .out/trans
+
+# 直接跑打包好的单文件版，连服务器都不用起
+node tools/render.mjs --page dist/studio.html --scene presets/demo-scene.json --out .out/frames
+```
+
+| 参数 | 说明 |
+| --- | --- |
+| `--scene <file>` | 工程 JSON |
+| `--template <id>` | 快速模式：单个模板铺满整段 |
+| `--page <file>` | 用打包好的 `dist/studio.html` 渲染 |
+| `--media <image>` | 垫一张底图 |
+| `--width/--height/--fps/--duration` | 覆盖工程里的设置 |
+| `--range <a> <b>` | 只渲染这段时间（秒） |
+| `--bg <#hex>` | 给个不透明底色；不给就是透明 |
+| `--out <dir>` | 输出目录 |
+| `--browser <path>` | 手动指定浏览器 |
+
+完整流程（`npm run demo` 就是跑这个）：
+
+```bash
+node tools/render.mjs --scene presets/demo-scene.json --out .out/demo --fps 24
+python tools/encode.py --in .out/demo --out .out/demo.mov --codec prores4444 --fps 24
+```
+
+---
+
+## 写自己的模板
+
+一个模板就是一个对象，看三个字段：`params`（自动生成右侧控件）、`draw`（画一帧）。
+
+```js
+// templates/my-effect.js
+import { text, hudPanel, ui } from '../engine/draw.js';
+import { envelope, color, P } from './_lib.js';
+
+export const myEffect = {
+  id: 'my-effect',
+  name: '我的效果',
+  category: 'overlay',              // overlay | typography | caption | panel | transition
+  hint: '一句话说明，会显示在模板库和搜索里',
+  params: [
+    { key: 'title', label: '标题', type: 'string', default: 'HELLO' },
+    { key: 'position', label: '位置', type: 'string', default: '0.5,0.5' },
+    P.color('white'),
+    P.accent('orange'),
+  ],
+  draw(ctx, env) {
+    // env 里有：scene / t / local / duration / progress / params
+    //          / rng（确定性随机）/ beat / beatPhase / beatIndex / caption / frame / fps
+    const { width: w, height: h, params: p } = env;
+    const a = envelope(env.progress, { inFrac: 0.1, outFrac: 0.1 });  // 自动进退场
+    if (a <= 0.001) return;
+    const [nx, ny] = String(p.position).split(',').map(Number);
+    ctx.save();
+    ctx.globalAlpha *= a;
+    hudPanel(ctx, w * nx - 160, h * ny - 40, 320, 80);
+    text(ctx, p.title, w * nx, h * ny, {
+      font: 'Arial Narrow, sans-serif', size: 40, weight: 700,
+      color: color(p.color, ui.paper), align: 'center', baseline: 'middle',
+    });
+    ctx.restore();
+  },
+};
+
+export default [myEffect];
+```
+
+然后在 `templates/index.js` 里 import 进来、加进 `ALL`，跑一次 `npm run bundle` 就完事。
+
+**几个约定**（照着做风格才会统一）：
+
+- 图层默认画在**透明画布**上，别自己填满屏幕
+- 用 `envelope()` / `envelopeByTime()` 做进退场，别硬切
+- 随机一律走 `env.rng` 或 `trng(env)`，保证预览和导出逐帧一致
+- 想要"跟着拍走"就用 `env.beatPhase`（距最近拍的时间差）和 `env.beatIndex`
+
+### 可用的绘图原语
+
+`engine/draw.js` 里都是成套的：`text` `label` `measure` `fitSize` `wrap` `scramble` `typewriter` `blink`
+`roundRect` `cornerTicks` `hudPanel` `microRow` `statBlock` `hbar` `ticker` `barcode` `dial` `crosshair`
+`dotGrid` `gridLines` `scanlines` `card` `ruler` `sprockets` `quoteBubble` `shake` `box` `pt` `palette` `FONTS`。
+
+---
+
+## 目录结构
+
+```
+动效JS插件/
+├─ dist/studio.html        ← 打包好的单文件版，双击就用
+├─ studio/                 工作室界面（index.html / studio.css / studio.js）
+├─ engine/
+│   ├─ core.js             时间轴 / 节拍图 / 图层 / 场景 / 缓动 / 确定性随机 / 渲染调度
+│   ├─ draw.js             绘图原语（HUD 框、等宽标签、跑马灯、条码、仪表、网点……）
+│   ├─ fx.js               后期特效栈 + runFx + beatHits
+│   ├─ audio.js            卡点分析（STFT 分频段通量 → 自相关 → 最小二乘精修）
+│   ├─ srt.js              字幕解析 / 导出 / 切短句 / 词级时间估算
+│   └─ zip.js              ZIP 写入器（含流式版本，边渲染边落盘）
+├─ templates/              23 个模板（hud / type / panels / transitions / hits）
+├─ presets/                slopcore / demo-scene / transitions-demo + index.json
+├─ agent/                  AI 助手：分析 → 转写 → 文案 → 排布 → 成片
+│   ├─ autopilot.py        总入口（CLI 也是本地服务调的那支）
+│   ├─ analyze.py          拍点 / 镜头切点 / 亮度 / 运动量 / 人声段
+│   ├─ transcribe.py       语音转写（本地 faster-whisper 或任意 OpenAI 兼容接口）
+│   ├─ llm.py              文案与定调（DeepSeek / OpenAI / 本地 Ollama 都行）
+│   ├─ director.py         导演：把分析 + 选择 + 文案排成图层栈（含占位避让）
+│   ├─ styles.json         6 套配色风格预设
+│   ├─ schema.json         从 23 个模板导出的参数表，用来校验生成结果
+│   └─ _mock_api.py        离线自检用的假接口
+├─ tools/
+│   ├─ serve.mjs           零依赖静态服务器
+│   ├─ render.mjs          无头批量渲染（CDP + Node 内置 WebSocket）
+│   ├─ shot.mjs            工作室界面截图 / 拿脚本驱动界面（改完 UI 自己看一眼）
+│   ├─ ui-selftest.js      预览直接操控的自检脚本（点选/拖动/缩放/旋转/改字）
+│   ├─ ui-persist-test.js  「刷新后工程还在吗」的自检（改工程 → 刷新 → 核对）
+│   ├─ bundle.mjs          单文件打包
+│   ├─ schema.mjs          导出模板参数表给 agent 用
+│   ├─ encode.py           PNG 序列 → ProRes / WebM / H.264，以及烧到成片
+│   └─ beatmap.py          命令行卡点分析
+└─ docs/                   效果对照表 + 各软件接入步骤 + 命令速查
+```
+
+---
+
+## 已知限制 & FAQ
+
+**刷新一下工程就没了？**
+
+不会了。工作室会自动把工程存在浏览器本地：工程本身（图层 / 参数 / 变换 / 特效栈 /
+字幕 / 卡点 / 分辨率帧率）存 localStorage，素材（视频 / 图片 / 音乐）存 IndexedDB。
+改完什么都不用点——刷新、关掉浏览器、换一天再打开，都会自动接着上一次，
+画面顶上会有一条「已恢复上次的工程」提示：**知道了** 收起来，**丢弃** 从空白重来。
+
+两个边界要说清楚：
+
+1. 单个素材超过 **120 MB** 就不一起存了（会提示你重新拖进来），工程本身照存不误。
+   长视频想省事就自己留着原文件，工程在图层的都在。
+2. 存的是**这台机器这个浏览器**里的本地数据。清浏览器数据 / 换机器 / 换浏览器 / 发给别人，
+   都要用顶栏的 **保存工程** 存成 JSON 文件（打开工程 载回来）。
+   另外用 `?render=1` 或无头渲染打开时不会读写这份存档，不影响批处理。
+
+**双击打不开 / 白屏怎么办？**
+
+按这个顺序排查：
+
+1. 用 `启动工作室.bat` 打开（它会挑 Chrome/Edge）
+2. 还是白屏 → 说明浏览器不对。右键 `dist/studio.html` → 打开方式 → **Google Chrome**
+3. 页面现在有兜底：真出错了会直接显示红色错误面板和错误信息，把那段话发我
+4. 用的是源码版（`studio/index.html`）？那个**必须**先 `npm run studio` 起服务器，
+   直接双击会因为浏览器不允许 `file://` 加载 ES Module 而白屏
+
+**某个图层位置不对，或者想让它大一点 / 小一点？**
+
+在预览里点一下它，选择框和手柄就出来了：拖动挪位置、拉四个角缩放、转上面那个圆手柄旋转、
+双击直接改文字。挪到画面正中会自己吸住，并出现青色对中线。要够到被压住的层，按住 `Alt` 再点。
+右侧「图层参数」里的 **复位变换** 能一键还原——它只清掉你手动摆的位移 / 缩放 / 旋转，
+模板自己的 `位置` 参数不受影响。
+
+这些变换是写进工程里的（存 JSON、导出、无头渲染都带着），所以摆完直接导出就行。
+唯一的例外是**转场类图层**（`whip-pan`、`zoom-punch`、`flash-cut` 这些）：它们每一帧都是把
+整个画面抓下来重组，本身就是"整帧效果"，拖动和缩放对它们没有意义。
+
+**AI 助手点了没反应，或者提示「需要开发模式」？**
+
+AI 助手要调 python、ffmpeg 和无头浏览器，只有带后端的开发模式才有。
+双击 `dist/studio.html` 是纯前端单文件版，没有后端。改用一键启动：
+
+**双击 `启动工作室.bat`**（或者 `npm run studio` → 打开 http://localhost:5178/studio/index.html），
+然后顶栏点 **✨ AI 助手**。
+
+面板顶上那行会告诉你环境缺什么（Python / ffmpeg / LLM / 字幕），缺了也不影响其它部分。
+完全不用 LLM 也能跑，只是文案由本地规则生成。
+
+**自动字幕要额外的 Key 吗？**
+
+不用。这台机器已经装好 [faster-whisper](https://github.com/SYSTRAN/faster-whisper)
+和 `small` 模型（463 MB，在 `C:\Users\<你>\.cache\huggingface\hub` 里），
+**完全离线、免费**。实测 20 秒中文人声约 10 秒出结果。
+唯一的取舍是模型大小：想更准就换 `medium`（越准越慢），详见
+[agent/README.md](agent/README.md#本地字幕这台机器上已经装好)。
+
+**AI 助手生成的不合口味？**
+
+先调那两个滑杆：**幅度**管"狠不狠"，**密度**管"东西多不多"——这两个能解决八成的口味问题。
+换 **配色风格** 是第二大杠杆。还想更细就让它在工作室里当草稿：工程载进来之后，
+每个图层、每个参数都能继续改，跟手搓的工程没有任何区别。
+它每次的判断和理由都写在输出目录的 `report.md` 里，先看那份比瞎调快。
+
+**它会不会写出引擎不认的工程？**
+
+不会。生成之后会拿 `agent/schema.json`（从 23 个模板导出的参数表）逐字段校验：
+不认识的键丢掉、越界数字钳回范围、非法选项退回默认，越界的情况会记在 `report.md` 里。
+
+**为什么导出的 PNG 这么大？**
+颗粒（grain）是逐像素噪声，PNG 压不动。1 秒 1080p 大概 200–400 MB。
+如果嫌大：把 `fx` 里的 `grain` 去掉，或者先导 ProRes 4444（有压缩且无损）。
+
+**能出 4K 吗？**
+能。工程设置里把宽高改成 3840×2160 就行。渲染速度约 2–4 帧/秒（看模板数量）。
+
+**导出的时候要等很久？**
+PNG 序列是逐帧起浏览器渲染的，1080p 大概 8–15 帧/秒。
+导出时先弹一个保存框（Chrome 的 File System Access），选好路径后是**边渲染边写盘**，
+不会把几百帧堆在内存里。
+
+**转场模板为什么看不出效果？**
+变换式转场（甩镜 / 推近 / 震动）需要底下有画面。如果没载入素材，它们会去快照一张空画布。
+载入视频、或者用 `--media` 垫张图就能看到。
+
+**卡点不准？**
+先看时间轴上的卡点线跟波形对不对得上。差一点点的话，在右边"卡点"里微调 `偏移`（秒）。
+差半拍的话把 `BPM` 乘 2 或除 2。乐器密集的曲子可以试着把 `--bpm-min/--bpm-max` 收窄。
+
+**能用在 Premiere 里当面板吗？**
+现在的形态是"工作室 + 通用文件导出"，所有剪辑软件都能用。
+面板化（CEP/UXP）需要额外打包和签名，如果你确定要我可以再加一层壳。

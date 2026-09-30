@@ -1,0 +1,90 @@
+{
+  "$comment": "配色 / 质感预设。agent 让用户只在几个关键点上做选择，这里是其中最主要的一个。",
+  "styles": {
+    "slopcore": {
+      "name": "终端 HUD",
+      "desc": "米白细线 + 橙红强调，等宽读数，参考 SLOPCORE 那支片子",
+      "mood": "冷峻、工程感、像监控回放或终端日志",
+      "dark": true,
+      "ink": "#efece4",
+      "accent": "#ff5a24",
+      "plate": "#0a0a0b",
+      "plateText": "#efece4",
+      "fx": { "grain": 0.10, "scanlines": 0.16, "vignette": 0.30 },
+      "type": { "weight": "700", "tracking": -0.02, "upper": true },
+      "hooks": ["CONTACT", "SIGNAL", "LOCK", "TRACE", "RECORD"],
+      "kicker": "RECORDED"
+    },
+    "neon": {
+      "name": "赛博霓虹",
+      "desc": "黑底青蓝 + 品红双色，靠发光和色散出效果",
+      "mood": "夜店、赛博朋克、速度感",
+      "dark": true,
+      "ink": "#eafcff",
+      "accent": "#00e5ff",
+      "accent2": "#ff2bd6",
+      "plate": "#05060a",
+      "plateText": "#eafcff",
+      "fx": { "grain": 0.08, "scanlines": 0.10, "vignette": 0.42, "chromatic": 0.35 },
+      "type": { "weight": "800", "tracking": 0.02, "upper": true },
+      "hooks": ["ONLINE", "PULSE", "DRIVE", "FLASH", "NIGHT"],
+      "kicker": "LIVE"
+    },
+    "cinema": {
+      "name": "电影胶片",
+      "desc": "暖白 + 琥珀金，颗粒和遮幅要够，像老片子",
+      "mood": "叙事、克制、纪录片开场",
+      "dark": true,
+      "ink": "#f2ece0",
+      "accent": "#d9a441",
+      "plate": "#101010",
+      "plateText": "#f2ece0",
+      "fx": { "grain": 0.16, "scanlines": 0.06, "vignette": 0.50 },
+      "type": { "weight": "600", "tracking": 0.01, "upper": true },
+      "hooks": ["NOW", "LOOK", "WAIT", "HERE", "AGAIN"],
+      "kicker": "A FILM"
+    },
+    "paper": {
+      "name": "纸面报告",
+      "desc": "白底黑字 + 正红印章色，亮背景下的信息卡",
+      "mood": "说明、教学、测评、清单",
+      "dark": false,
+      "ink": "#111111",
+      "accent": "#e2402c",
+      "plate": "#ffffff",
+      "plateText": "#111111",
+      "fx": { "grain": 0.05, "scanlines": 0.0, "vignette": 0.16 },
+      "type": { "weight": "700", "tracking": -0.01, "upper": true },
+      "hooks": ["NOTE", "STEP", "FACT", "CHECK", "END"],
+      "kicker": "NOTE"
+    },
+    "punch": {
+      "name": "高对比冲击",
+      "desc": "纯黑纯白 + 荧光黄，闪白和故障给到最大",
+      "mood": "游戏集锦、运动、卡点混剪",
+      "dark": true,
+      "ink": "#ffffff",
+      "accent": "#ffe600",
+      "plate": "#000000",
+      "plateText": "#ffffff",
+      "fx": { "grain": 0.12, "scanlines": 0.0, "vignette": 0.34 },
+      "type": { "weight": "900", "tracking": -0.03, "upper": true },
+      "hooks": ["HIT", "DOWN", "GO", "YES", "AGAIN"],
+      "kicker": "CLIP"
+    },
+    "cooltech": {
+      "name": "冷调科技",
+      "desc": "深蓝灰 + 亮蓝，克制但偏产品发布会那种干净感",
+      "mood": "产品、科技、数据、汇报",
+      "dark": true,
+      "ink": "#e8f0ff",
+      "accent": "#4da3ff",
+      "plate": "#0b1016",
+      "plateText": "#e8f0ff",
+      "fx": { "grain": 0.06, "scanlines": 0.08, "vignette": 0.28 },
+      "type": { "weight": "600", "tracking": -0.01, "upper": false },
+      "hooks": ["DATA", "SCALE", "TREND", "LIVE", "NEXT"],
+      "kicker": "BRIEF"
+    }
+  }
+}

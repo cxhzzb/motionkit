@@ -1,0 +1,83 @@
+{
+  "name": "demo",
+  "width": 1920,
+  "height": 1080,
+  "fps": 24,
+  "duration": 6,
+  "bg": null,
+  "transparent": true,
+  "beat": { "bpm": 120, "offset": 0, "duration": 6, "source": "bpm" },
+  "captions": [
+    { "start": 0.4, "end": 2.2, "text": "This is not an AI billboard." },
+    { "start": 2.4, "end": 4.2, "text": "You have 18 months to escape." },
+    { "start": 4.4, "end": 5.8, "text": "Lock in." }
+  ],
+  "layers": [
+    {
+      "template": "hud-frame",
+      "start": 0,
+      "end": 6,
+      "opacity": 1,
+      "seed": "demo-hud",
+      "name": "HUD 全屏框",
+      "params": { "labelLeft": "SIGNAL", "labelRight": "REC" }
+    },
+    {
+      "template": "kinetic-type",
+      "start": 0.2,
+      "end": 3.6,
+      "seed": "demo-kt",
+      "name": "卡点大字",
+      "params": {
+        "text": "LOCK IN\nESCAPE VELOCITY\nPERMANENT UNDERCLASS",
+        "beatsPerStep": 2,
+        "size": 150,
+        "position": "0.5,0.46"
+      }
+    },
+    {
+      "template": "word-grid",
+      "start": 3.4,
+      "end": 6,
+      "seed": "demo-grid",
+      "name": "词块宫格",
+      "params": {
+        "text": "ESCAPE VELOCITY PERMANENT UNDERCLASS 18 MONTHS LOCK IN FEEL THE ENGINE WE ARE SO BACK",
+        "cols": 5,
+        "position": "0.5,0.44",
+        "cellW": 260,
+        "cellH": 74
+      }
+    },
+    {
+      "template": "stat-counter",
+      "start": 0.6,
+      "end": 4.6,
+      "seed": "demo-stat",
+      "name": "数字滚动计数",
+      "params": { "value": 25, "suffix": "%", "label": "PROBABILITY", "position": "0.76,0.24", "size": 120 }
+    },
+    {
+      "template": "dial-gauge",
+      "start": 3.4,
+      "end": 6,
+      "seed": "demo-dial",
+      "name": "圆盘仪表",
+      "params": { "value": 0.72, "position": "0.83,0.74", "radius": 66, "label": "HUMANITY" }
+    },
+    {
+      "template": "subtitle-kinetic",
+      "start": 0,
+      "end": 6,
+      "seed": "demo-subs",
+      "name": "卡点字幕",
+      "params": { "style": "bar", "position": "0.5,0.87", "size": 40 }
+    }
+  ],
+  "fx": [
+    { "type": "grain", "amount": 0.1 },
+    { "type": "scanlines", "amount": 0.12, "step": 3 },
+    { "type": "chromatic", "amount": 2.5, "animated": true, "jitter": 1.2 },
+    { "type": "vignette", "amount": 0.45 }
+  ]
+}

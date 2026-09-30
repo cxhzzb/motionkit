@@ -1,0 +1,30 @@
+{
+  "$说明": [
+    "复制这个文件为 agent/config.json 再填内容。",
+    "两个都可以不配：不配 LLM 就用本地规则文案，不配 ASR 就不出字幕，其余功能照常。",
+    "环境变量优先级更高：MK_LLM_BASE / MK_LLM_KEY / MK_LLM_MODEL，MK_ASR_BASE / MK_ASR_KEY / MK_ASR_MODEL"
+  ],
+
+  "llm": {
+    "baseUrl": "https://api.deepseek.com",
+    "apiKey": "",
+    "model": "deepseek-chat",
+    "timeout": 90,
+    "$可选": "任何 OpenAI 兼容的 /v1/chat/completions 都行：DeepSeek、OpenAI、硅基流动、通义、本地 Ollama(http://127.0.0.1:11434/v1) …"
+  },
+
+  "asr": {
+    "provider": "auto",
+    "$provider": "auto / local / api，auto = 先试本地 faster-whisper，再试接口",
+    "model": "small",
+    "$model": "tiny 39MB / base 74MB / small 244MB / medium 769MB / large-v3 约 1.5GB。中文从 small 起步，要更准就上 medium（慢 2~3 倍）。",
+    "device": "auto",
+    "$device": "auto = 能用显卡就用（缺 CUDA 运行库会自动回落到 CPU）。想强制 CPU 就填 cpu。",
+    "computeType": "int8",
+    "vad": "auto",
+    "$vad": "auto（默认）= 先用静音检测，若一段都没识别到就关掉重跑一次；false = 直接不用 VAD（唱歌/唱词建议 false）；true = 只用 VAD。",
+    "baseUrl": "",
+    "apiKey": "",
+    "$api": "不想在本机跑模型时才需要：填任意 OpenAI 兼容的 /v1/audio/transcriptions（baseUrl 带不带 /v1 都行）"
+  }
+}

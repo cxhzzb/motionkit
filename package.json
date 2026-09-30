@@ -1,0 +1,18 @@
+{
+  "name": "motionjs-editor-kit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "JS 动效模板引擎 + 剪辑用卡点/字幕/转场/特效插件",
+  "scripts": {
+    "studio": "node tools/serve.mjs",
+    "render": "node tools/render.mjs",
+    "bundle": "node tools/bundle.mjs",
+    "schema": "node tools/schema.mjs",
+    "agent": "python agent/autopilot.py",
+    "demo": "node tools/render.mjs --scene presets/demo-scene.json --out .out/demo --fps 24 && python tools/encode.py --in .out/demo --out .out/demo.mov --codec prores4444 --fps 24"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

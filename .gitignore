@@ -1,0 +1,31 @@
+# 渲染出来的临时帧 / 视频，别提交
+.out/
+*.mov
+*.webm
+*.mp4
+*.wav
+*.m4a
+*.npy
+
+# agent 的私有配置（API Key 别进仓库）
+agent/config.json
+.env
+
+# 干活产出的工程 / 成片。默认整块不进仓库，原因有三：
+#   1) 体积：这里光是成片就 1.4 GB，远超 GitHub 的合理范围（单文件硬上限 100 MB）
+#   2) 素材版权：里面是真实素材（游戏录像、歌曲）
+#   3) 隐私：转写出来的字幕里有歌词正文
+# 想拿某个小工程当示例，单独强制添加它的 JSON 就行：
+#   git add -f projects/demo-agent/scene.json
+projects/
+
+# 系统垃圾
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# 依赖 / 缓存
+node_modules/
+__pycache__/
+
+# 注意：dist/studio.html 是打包产物，但它是"双击即用"的交付物，故意保留

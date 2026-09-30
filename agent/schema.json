@@ -1,0 +1,1628 @@
+{
+  "generatedBy": "tools/schema.mjs",
+  "count": 23,
+  "categories": {
+    "overlay": "叠加层 / HUD",
+    "typography": "动态排版",
+    "caption": "字幕",
+    "panel": "面板卡片",
+    "transition": "转场 / 冲击"
+  },
+  "templates": {
+    "hud-frame": {
+      "id": "hud-frame",
+      "name": "HUD 全屏框",
+      "category": "overlay",
+      "categoryLabel": "叠加层 / HUD",
+      "desc": "",
+      "params": [
+        {
+          "key": "inset",
+          "label": "内缩",
+          "type": "number",
+          "default": 44,
+          "min": 0,
+          "max": 300,
+          "step": 2
+        },
+        {
+          "key": "corners",
+          "label": "四角括号",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "tickLen",
+          "label": "括号长度",
+          "type": "number",
+          "default": 26,
+          "min": 6,
+          "max": 120,
+          "step": 2
+        },
+        {
+          "key": "rulers",
+          "label": "侧边刻度",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "timecode",
+          "label": "时间码",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "tickerTop",
+          "label": "上跑马灯",
+          "type": "string",
+          "default": "ESCAPE VELOCITY  11.2 KM/S  PERMANENT UNDERCLASS"
+        },
+        {
+          "key": "tickerBottom",
+          "label": "下跑马灯",
+          "type": "string",
+          "default": "SIGNAL LOCKED  AGENT ONLINE  TOKENS BURNED  NVIDIA GTC"
+        },
+        {
+          "key": "labelLeft",
+          "label": "左上标签",
+          "type": "string",
+          "default": "SIGNAL"
+        },
+        {
+          "key": "labelRight",
+          "label": "右上标签",
+          "type": "string",
+          "default": "REC"
+        },
+        {
+          "key": "meter",
+          "label": "电平条",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "noise",
+          "label": "噪点强度",
+          "type": "number",
+          "default": 0.5,
+          "min": 0,
+          "max": 1.5,
+          "step": 0.05
+        },
+        {
+          "key": "color",
+          "label": "颜色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "speed",
+          "label": "速度",
+          "type": "number",
+          "default": 1,
+          "min": 0.1,
+          "max": 4,
+          "step": 0.05
+        }
+      ]
+    },
+    "stat-counter": {
+      "id": "stat-counter",
+      "name": "数字滚动计数",
+      "category": "overlay",
+      "categoryLabel": "叠加层 / HUD",
+      "desc": "",
+      "params": [
+        {
+          "key": "value",
+          "label": "目标值",
+          "type": "number",
+          "default": 25,
+          "min": -99999,
+          "max": 99999,
+          "step": 0.01
+        },
+        {
+          "key": "from",
+          "label": "起始值",
+          "type": "number",
+          "default": 0,
+          "min": -99999,
+          "max": 99999,
+          "step": 0.01
+        },
+        {
+          "key": "decimals",
+          "label": "小数位",
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "max": 4,
+          "step": 1
+        },
+        {
+          "key": "prefix",
+          "label": "前缀",
+          "type": "string",
+          "default": ""
+        },
+        {
+          "key": "suffix",
+          "label": "后缀",
+          "type": "string",
+          "default": "%"
+        },
+        {
+          "key": "label",
+          "label": "标签",
+          "type": "string",
+          "default": "PROBABILITY"
+        },
+        {
+          "key": "position",
+          "label": "位置",
+          "type": "string",
+          "default": "0.70,0.22"
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 130,
+          "min": 24,
+          "max": 520,
+          "step": 4
+        },
+        {
+          "key": "bar",
+          "label": "显示进度条",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "roll",
+          "label": "滚动方式",
+          "type": "select",
+          "default": "count",
+          "options": [
+            "count",
+            "slot",
+            "scramble"
+          ]
+        },
+        {
+          "key": "color",
+          "label": "颜色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "beatSync",
+          "label": "跟随卡点",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "beatsPerStep",
+          "label": "每步拍数",
+          "type": "number",
+          "default": 1,
+          "min": 0.25,
+          "max": 8,
+          "step": 0.25
+        }
+      ]
+    },
+    "dial-gauge": {
+      "id": "dial-gauge",
+      "name": "圆盘仪表",
+      "category": "overlay",
+      "categoryLabel": "叠加层 / HUD",
+      "desc": "",
+      "params": [
+        {
+          "key": "value",
+          "label": "数值(0-1)",
+          "type": "number",
+          "default": 0.68,
+          "min": 0,
+          "max": 1,
+          "step": 0.01
+        },
+        {
+          "key": "position",
+          "label": "位置",
+          "type": "string",
+          "default": "0.80,0.72"
+        },
+        {
+          "key": "radius",
+          "label": "半径",
+          "type": "number",
+          "default": 62,
+          "min": 20,
+          "max": 260,
+          "step": 2
+        },
+        {
+          "key": "label",
+          "label": "标签",
+          "type": "string",
+          "default": "HUMANITY"
+        },
+        {
+          "key": "showValue",
+          "label": "显示数值",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "sweep",
+          "label": "卡点扫动",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "color",
+          "label": "颜色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
+    "ticker-strip": {
+      "id": "ticker-strip",
+      "name": "跑马灯条",
+      "category": "overlay",
+      "categoryLabel": "叠加层 / HUD",
+      "desc": "",
+      "params": [
+        {
+          "key": "text",
+          "label": "内容",
+          "type": "string",
+          "default": "THE SINGULARITY IS NEAR  ·  ESCAPE VELOCITY  ·  LOCK IN  ·  FEEL THE AGI"
+        },
+        {
+          "key": "position",
+          "label": "X,Y,W [0-1]",
+          "type": "string",
+          "default": "0.06,0.06,0.88"
+        },
+        {
+          "key": "height",
+          "label": "高度",
+          "type": "number",
+          "default": 34,
+          "min": 16,
+          "max": 160,
+          "step": 1
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 15,
+          "min": 8,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "columns",
+          "label": "分列",
+          "type": "number",
+          "default": 8,
+          "min": 0,
+          "max": 24,
+          "step": 1
+        },
+        {
+          "key": "fpsRoll",
+          "label": "帧率滚动",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "key": "speed",
+          "label": "速度",
+          "type": "number",
+          "default": 1,
+          "min": 0.1,
+          "max": 4,
+          "step": 0.05
+        },
+        {
+          "key": "color",
+          "label": "颜色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
+    "param-ticks": {
+      "id": "param-ticks",
+      "name": "参数刻度簇",
+      "category": "overlay",
+      "categoryLabel": "叠加层 / HUD",
+      "desc": "",
+      "params": [
+        {
+          "key": "position",
+          "label": "位置",
+          "type": "string",
+          "default": "0.06,0.72"
+        },
+        {
+          "key": "width",
+          "label": "宽度",
+          "type": "number",
+          "default": 260,
+          "min": 120,
+          "max": 800,
+          "step": 10
+        },
+        {
+          "key": "rows",
+          "label": "行数",
+          "type": "number",
+          "default": 4,
+          "min": 1,
+          "max": 10,
+          "step": 1
+        },
+        {
+          "key": "live",
+          "label": "数值跳动",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "frame",
+          "label": "外框",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "color",
+          "label": "颜色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
+    "kinetic-type": {
+      "id": "kinetic-type",
+      "name": "卡点大字",
+      "category": "typography",
+      "categoryLabel": "动态排版",
+      "desc": "",
+      "params": [
+        {
+          "key": "text",
+          "label": "文案(每行一句)",
+          "type": "multiline",
+          "default": "LOCK IN\nESCAPE VELOCITY\nPERMANENT UNDERCLASS\nFEEL THE ENGINE\nWE ARE SO BACK"
+        },
+        {
+          "key": "mode",
+          "label": "切换方式",
+          "type": "select",
+          "default": "slam",
+          "options": [
+            "slam",
+            "cut",
+            "scramble",
+            "typewriter",
+            "stack"
+          ]
+        },
+        {
+          "key": "position",
+          "label": "位置",
+          "type": "string",
+          "default": "0.5,0.5"
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 150,
+          "min": 20,
+          "max": 620,
+          "step": 2
+        },
+        {
+          "key": "weight",
+          "label": "字重",
+          "type": "select",
+          "default": "700",
+          "options": [
+            "400",
+            "500",
+            "600",
+            "700",
+            "800",
+            "900"
+          ]
+        },
+        {
+          "key": "tracking",
+          "label": "字距(tracking)",
+          "type": "number",
+          "default": -0.03,
+          "min": -0.1,
+          "max": 0.6,
+          "step": 0.005
+        },
+        {
+          "key": "plate",
+          "label": "文字底衬色",
+          "type": "color",
+          "default": ""
+        },
+        {
+          "key": "outline",
+          "label": "描边色",
+          "type": "color",
+          "default": ""
+        },
+        {
+          "key": "maxWidth",
+          "label": "最大宽度[0-1]",
+          "type": "number",
+          "default": 0.86,
+          "min": 0.2,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "fit",
+          "label": "自动缩放到宽",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "ghost",
+          "label": "残影",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "align",
+          "label": "对齐",
+          "type": "select",
+          "default": "center",
+          "options": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        {
+          "key": "color",
+          "label": "颜色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "beatSync",
+          "label": "跟随卡点",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "beatsPerStep",
+          "label": "每步拍数",
+          "type": "number",
+          "default": 2,
+          "min": 0.25,
+          "max": 8,
+          "step": 0.25
+        },
+        {
+          "key": "scale",
+          "label": "缩放",
+          "type": "number",
+          "default": 1,
+          "min": 0.2,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "word-grid": {
+      "id": "word-grid",
+      "name": "词块宫格",
+      "category": "typography",
+      "categoryLabel": "动态排版",
+      "desc": "",
+      "params": [
+        {
+          "key": "text",
+          "label": "词表(空格或换行分隔)",
+          "type": "multiline",
+          "default": "ESCAPE VELOCITY PERMANENT UNDERCLASS 18 MONTHS LOCK IN FEEL THE ENGINE"
+        },
+        {
+          "key": "cols",
+          "label": "列数",
+          "type": "number",
+          "default": 5,
+          "min": 1,
+          "max": 12,
+          "step": 1
+        },
+        {
+          "key": "position",
+          "label": "位置",
+          "type": "string",
+          "default": "0.5,0.5"
+        },
+        {
+          "key": "cellW",
+          "label": "单元宽",
+          "type": "number",
+          "default": 260,
+          "min": 60,
+          "max": 700,
+          "step": 5
+        },
+        {
+          "key": "cellH",
+          "label": "单元高",
+          "type": "number",
+          "default": 84,
+          "min": 30,
+          "max": 300,
+          "step": 2
+        },
+        {
+          "key": "gap",
+          "label": "间距",
+          "type": "number",
+          "default": 8,
+          "min": 0,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "mode",
+          "label": "点亮方式",
+          "type": "select",
+          "default": "sequence",
+          "options": [
+            "sequence",
+            "row",
+            "random",
+            "sweep"
+          ]
+        },
+        {
+          "key": "fillActive",
+          "label": "点亮时反白",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "fontSize",
+          "label": "字号",
+          "type": "number",
+          "default": 30,
+          "min": 8,
+          "max": 120,
+          "step": 1
+        },
+        {
+          "key": "color",
+          "label": "颜色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "beatsPerStep",
+          "label": "每步拍数",
+          "type": "number",
+          "default": 1,
+          "min": 0.25,
+          "max": 8,
+          "step": 0.25
+        }
+      ]
+    },
+    "title-mark": {
+      "id": "title-mark",
+      "name": "标题定格",
+      "category": "typography",
+      "categoryLabel": "动态排版",
+      "desc": "",
+      "params": [
+        {
+          "key": "title",
+          "label": "主标题",
+          "type": "string",
+          "default": "ZERO-DAY."
+        },
+        {
+          "key": "kicker",
+          "label": "上方小字",
+          "type": "string",
+          "default": "SUBSECTION 04 / CLASSIFIED"
+        },
+        {
+          "key": "note",
+          "label": "下方注解",
+          "type": "string",
+          "default": "ANSWER KEYS HACKED IN JULY"
+        },
+        {
+          "key": "position",
+          "label": "位置",
+          "type": "string",
+          "default": "0.5,0.52"
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 170,
+          "min": 24,
+          "max": 600,
+          "step": 2
+        },
+        {
+          "key": "maxWidth",
+          "label": "最大宽度[0-1]",
+          "type": "number",
+          "default": 0.9,
+          "min": 0.2,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "fit",
+          "label": "自动缩字",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "rule",
+          "label": "显示引线",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "boxed",
+          "label": "加外框",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "key": "plate",
+          "label": "底色块(空=无)",
+          "type": "color",
+          "default": ""
+        },
+        {
+          "key": "align",
+          "label": "对齐",
+          "type": "select",
+          "default": "center",
+          "options": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        {
+          "key": "color",
+          "label": "颜色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
+    "subtitle-kinetic": {
+      "id": "subtitle-kinetic",
+      "name": "卡点字幕",
+      "category": "caption",
+      "categoryLabel": "字幕",
+      "desc": "",
+      "params": [
+        {
+          "key": "style",
+          "label": "样式",
+          "type": "select",
+          "default": "bar",
+          "options": [
+            "bar",
+            "mono",
+            "hero",
+            "karaoke"
+          ]
+        },
+        {
+          "key": "position",
+          "label": "位置",
+          "type": "string",
+          "default": "0.5,0.86"
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 44,
+          "min": 12,
+          "max": 220,
+          "step": 2
+        },
+        {
+          "key": "maxWidth",
+          "label": "最大宽度[0-1]",
+          "type": "number",
+          "default": 0.78,
+          "min": 0.2,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "plate",
+          "label": "文字底板",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "uppercase",
+          "label": "强制大写",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "key": "pop",
+          "label": "卡点弹出",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "color",
+          "label": "颜色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
+    "terminal-prompt": {
+      "id": "terminal-prompt",
+      "name": "终端面板",
+      "category": "panel",
+      "categoryLabel": "面板卡片",
+      "desc": "",
+      "params": [
+        {
+          "key": "title",
+          "label": "窗口标题",
+          "type": "string",
+          "default": "PROMPT"
+        },
+        {
+          "key": "lines",
+          "label": "内容(每行一句)",
+          "type": "multiline",
+          "default": "command+shift+k 出戏\n> spawn 128 agents\n> budget 12.9B tokens\n> status: LOCKED IN"
+        },
+        {
+          "key": "position",
+          "label": "位置",
+          "type": "string",
+          "default": "0.08,0.42"
+        },
+        {
+          "key": "width",
+          "label": "宽度",
+          "type": "number",
+          "default": 430,
+          "min": 160,
+          "max": 1200,
+          "step": 10
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 17,
+          "min": 9,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "lineHeight",
+          "label": "行高倍率",
+          "type": "number",
+          "default": 1.7,
+          "min": 1,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "charDelay",
+          "label": "每字秒数",
+          "type": "number",
+          "default": 0.022,
+          "min": 0.001,
+          "max": 0.3,
+          "step": 0.001
+        },
+        {
+          "key": "cursor",
+          "label": "光标",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "chrome",
+          "label": "窗口按钮",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "fill",
+          "label": "底色",
+          "type": "color",
+          "default": "#08090b"
+        },
+        {
+          "key": "color",
+          "label": "颜色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "lime"
+        }
+      ]
+    },
+    "look-card": {
+      "id": "look-card",
+      "name": "编号卡片",
+      "category": "panel",
+      "categoryLabel": "面板卡片",
+      "desc": "",
+      "params": [
+        {
+          "key": "title",
+          "label": "标题前缀",
+          "type": "string",
+          "default": "Look"
+        },
+        {
+          "key": "items",
+          "label": "条目(每行一条)",
+          "type": "multiline",
+          "default": "Our Waymo hit someone.\nRISK PAUSED.\nNot an AI billboard.\nA real leather jacket.\nShoes off at the door."
+        },
+        {
+          "key": "position",
+          "label": "位置",
+          "type": "string",
+          "default": "0.12,0.30"
+        },
+        {
+          "key": "width",
+          "label": "卡片宽",
+          "type": "number",
+          "default": 360,
+          "min": 140,
+          "max": 900,
+          "step": 10
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 22,
+          "min": 10,
+          "max": 72,
+          "step": 1
+        },
+        {
+          "key": "startIndex",
+          "label": "起始编号",
+          "type": "number",
+          "default": 6,
+          "min": 0,
+          "max": 99,
+          "step": 1
+        },
+        {
+          "key": "stagger",
+          "label": "每条几拍",
+          "type": "number",
+          "default": 2,
+          "min": 0.25,
+          "max": 8,
+          "step": 0.25
+        },
+        {
+          "key": "hold",
+          "label": "常驻不消失",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "key": "fill",
+          "label": "卡片底色",
+          "type": "color",
+          "default": "#ffffff"
+        },
+        {
+          "key": "textColor",
+          "label": "文字颜色",
+          "type": "color",
+          "default": "#0a0a0a"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
+    "shipping-label": {
+      "id": "shipping-label",
+      "name": "吊牌 / 条码卡",
+      "category": "panel",
+      "categoryLabel": "面板卡片",
+      "desc": "",
+      "params": [
+        {
+          "key": "product",
+          "label": "品名",
+          "type": "string",
+          "default": "ESCAPE VELOCITY"
+        },
+        {
+          "key": "sku",
+          "label": "货号",
+          "type": "string",
+          "default": "EV-11.2 / KM-S"
+        },
+        {
+          "key": "care",
+          "label": "注意事项(逗号分隔)",
+          "type": "string",
+          "default": "Wash cold,Do not iron,Do not nerf,Made in San Francisco"
+        },
+        {
+          "key": "position",
+          "label": "位置",
+          "type": "string",
+          "default": "0.62,0.30"
+        },
+        {
+          "key": "width",
+          "label": "卡片宽",
+          "type": "number",
+          "default": 330,
+          "min": 140,
+          "max": 800,
+          "step": 10
+        },
+        {
+          "key": "rotate",
+          "label": "旋转(度)",
+          "type": "number",
+          "default": -5,
+          "min": -45,
+          "max": 45,
+          "step": 0.5
+        },
+        {
+          "key": "string",
+          "label": "吊绳",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 20,
+          "min": 8,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
+    "note-bubble": {
+      "id": "note-bubble",
+      "name": "注释气泡",
+      "category": "panel",
+      "categoryLabel": "面板卡片",
+      "desc": "",
+      "params": [
+        {
+          "key": "text",
+          "label": "内容(每行一句)",
+          "type": "multiline",
+          "default": "command+shift+k"
+        },
+        {
+          "key": "position",
+          "label": "位置",
+          "type": "string",
+          "default": "0.30,0.62"
+        },
+        {
+          "key": "width",
+          "label": "宽度",
+          "type": "number",
+          "default": 300,
+          "min": 120,
+          "max": 800,
+          "step": 10
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 18,
+          "min": 9,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "fill",
+          "label": "底色",
+          "type": "color",
+          "default": "#0b0b0c"
+        },
+        {
+          "key": "tail",
+          "label": "小尾巴",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "color",
+          "label": "颜色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
+    "whip-pan": {
+      "id": "whip-pan",
+      "name": "甩镜转场",
+      "category": "transition",
+      "categoryLabel": "转场 / 冲击",
+      "desc": "",
+      "params": [
+        {
+          "key": "direction",
+          "label": "方向",
+          "type": "select",
+          "default": "right",
+          "options": [
+            "left",
+            "right",
+            "up",
+            "down"
+          ]
+        },
+        {
+          "key": "amount",
+          "label": "幅度(屏幕倍数)",
+          "type": "number",
+          "default": 1.6,
+          "min": 0.2,
+          "max": 4,
+          "step": 0.1
+        },
+        {
+          "key": "trails",
+          "label": "拖影层数",
+          "type": "number",
+          "default": 7,
+          "min": 1,
+          "max": 24,
+          "step": 1
+        },
+        {
+          "key": "streaks",
+          "label": "速度线",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "flashAtEnd",
+          "label": "结尾闪白",
+          "type": "bool",
+          "default": false
+        }
+      ]
+    },
+    "zoom-punch": {
+      "id": "zoom-punch",
+      "name": "冲击推近",
+      "category": "transition",
+      "categoryLabel": "转场 / 冲击",
+      "desc": "",
+      "params": [
+        {
+          "key": "amount",
+          "label": "放大量",
+          "type": "number",
+          "default": 0.35,
+          "min": 0.02,
+          "max": 1.5,
+          "step": 0.01
+        },
+        {
+          "key": "rotate",
+          "label": "旋转(度)",
+          "type": "number",
+          "default": 1.2,
+          "min": 0,
+          "max": 12,
+          "step": 0.1
+        },
+        {
+          "key": "blur",
+          "label": "模糊",
+          "type": "number",
+          "default": 10,
+          "min": 0,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "streaks",
+          "label": "径向速度线",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "flash",
+          "label": "起始闪白",
+          "type": "bool",
+          "default": true
+        }
+      ]
+    },
+    "cam-shake": {
+      "id": "cam-shake",
+      "name": "镜头震动",
+      "category": "transition",
+      "categoryLabel": "转场 / 冲击",
+      "desc": "",
+      "params": [
+        {
+          "key": "amount",
+          "label": "强度(像素)",
+          "type": "number",
+          "default": 26,
+          "min": 0,
+          "max": 160,
+          "step": 1
+        },
+        {
+          "key": "freq",
+          "label": "频率",
+          "type": "number",
+          "default": 26,
+          "min": 4,
+          "max": 90,
+          "step": 1
+        },
+        {
+          "key": "decay",
+          "label": "衰减",
+          "type": "number",
+          "default": 2.2,
+          "min": 0.2,
+          "max": 6,
+          "step": 0.1
+        },
+        {
+          "key": "roll",
+          "label": "旋转抖动(度)",
+          "type": "number",
+          "default": 0.8,
+          "min": 0,
+          "max": 8,
+          "step": 0.1
+        }
+      ]
+    },
+    "flash-cut": {
+      "id": "flash-cut",
+      "name": "闪白硬切",
+      "category": "transition",
+      "categoryLabel": "转场 / 冲击",
+      "desc": "",
+      "params": [
+        {
+          "key": "fillColor",
+          "label": "颜色",
+          "type": "color",
+          "default": "#ffffff"
+        },
+        {
+          "key": "peak",
+          "label": "峰值不透明度",
+          "type": "number",
+          "default": 1,
+          "min": 0.1,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "fadeIn",
+          "label": "上升占比",
+          "type": "number",
+          "default": 0.45,
+          "min": 0.02,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "bar",
+          "label": "附加横条",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
+    "shutter-wipe": {
+      "id": "shutter-wipe",
+      "name": "百叶窗划像",
+      "category": "transition",
+      "categoryLabel": "转场 / 冲击",
+      "desc": "",
+      "params": [
+        {
+          "key": "rows",
+          "label": "条数",
+          "type": "number",
+          "default": 9,
+          "min": 2,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "fillColor",
+          "label": "颜色",
+          "type": "color",
+          "default": "#0a0a0a"
+        },
+        {
+          "key": "accent",
+          "label": "强调线",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
+    "halftone-rise": {
+      "id": "halftone-rise",
+      "name": "网点升起",
+      "category": "transition",
+      "categoryLabel": "转场 / 冲击",
+      "desc": "",
+      "params": [
+        {
+          "key": "fillColor",
+          "label": "颜色",
+          "type": "color",
+          "default": "#0a0a0a"
+        },
+        {
+          "key": "dot",
+          "label": "网点直径",
+          "type": "number",
+          "default": 7,
+          "min": 2,
+          "max": 30,
+          "step": 1
+        },
+        {
+          "key": "gap",
+          "label": "网点间距",
+          "type": "number",
+          "default": 11,
+          "min": 3,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "direction",
+          "label": "方向",
+          "type": "select",
+          "default": "up",
+          "options": [
+            "up",
+            "down",
+            "left",
+            "right"
+          ]
+        },
+        {
+          "key": "jitter",
+          "label": "随机抖动",
+          "type": "number",
+          "default": 0.4,
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        }
+      ]
+    },
+    "scan-wipe": {
+      "id": "scan-wipe",
+      "name": "扫描带转场",
+      "category": "transition",
+      "categoryLabel": "转场 / 冲击",
+      "desc": "",
+      "params": [
+        {
+          "key": "fillColor",
+          "label": "底色",
+          "type": "color",
+          "default": "#0a0a0a"
+        },
+        {
+          "key": "band",
+          "label": "扫描带高度",
+          "type": "number",
+          "default": 220,
+          "min": 20,
+          "max": 800,
+          "step": 5
+        },
+        {
+          "key": "direction",
+          "label": "方向",
+          "type": "select",
+          "default": "down",
+          "options": [
+            "down",
+            "up"
+          ]
+        },
+        {
+          "key": "glowColor",
+          "label": "辉光色",
+          "type": "color",
+          "default": "#00e5ff"
+        },
+        {
+          "key": "readout",
+          "label": "显示读数",
+          "type": "bool",
+          "default": true
+        }
+      ]
+    },
+    "glitch-burst": {
+      "id": "glitch-burst",
+      "name": "故障爆闪",
+      "category": "transition",
+      "categoryLabel": "转场 / 冲击",
+      "desc": "",
+      "params": [
+        {
+          "key": "amount",
+          "label": "强度",
+          "type": "number",
+          "default": 1,
+          "min": 0.1,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "slices",
+          "label": "切片数",
+          "type": "number",
+          "default": 22,
+          "min": 2,
+          "max": 80,
+          "step": 1
+        },
+        {
+          "key": "shift",
+          "label": "错位距离",
+          "type": "number",
+          "default": 90,
+          "min": 4,
+          "max": 400,
+          "step": 4
+        },
+        {
+          "key": "rgb",
+          "label": "RGB 分离",
+          "type": "number",
+          "default": 1,
+          "min": 0,
+          "max": 2,
+          "step": 0.05
+        },
+        {
+          "key": "flashes",
+          "label": "夹闪帧",
+          "type": "number",
+          "default": 3,
+          "min": 0,
+          "max": 10,
+          "step": 1
+        },
+        {
+          "key": "blockColor",
+          "label": "色块",
+          "type": "color",
+          "default": "#ff4b1f"
+        }
+      ]
+    },
+    "letterbox-push": {
+      "id": "letterbox-push",
+      "name": "遮幅推入",
+      "category": "transition",
+      "categoryLabel": "转场 / 冲击",
+      "desc": "",
+      "params": [
+        {
+          "key": "ratio",
+          "label": "目标画幅比",
+          "type": "number",
+          "default": 2.39,
+          "min": 1,
+          "max": 3,
+          "step": 0.01
+        },
+        {
+          "key": "holdIn",
+          "label": "保持占比",
+          "type": "number",
+          "default": 0.4,
+          "min": 0,
+          "max": 0.9,
+          "step": 0.05
+        },
+        {
+          "key": "caption",
+          "label": "档位文字",
+          "type": "string",
+          "default": ""
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
+    "rgb-split": {
+      "id": "rgb-split",
+      "name": "色散冲击",
+      "category": "transition",
+      "categoryLabel": "转场 / 冲击",
+      "desc": "",
+      "params": [
+        {
+          "key": "amount",
+          "label": "色散像素",
+          "type": "number",
+          "default": 14,
+          "min": 0,
+          "max": 80,
+          "step": 1
+        },
+        {
+          "key": "jitter",
+          "label": "抖动",
+          "type": "number",
+          "default": 6,
+          "min": 0,
+          "max": 40,
+          "step": 1
+        },
+        {
+          "key": "scan",
+          "label": "附加扫描线",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "double",
+          "label": "双向",
+          "type": "bool",
+          "default": false
+        }
+      ]
+    }
+  }
+}
