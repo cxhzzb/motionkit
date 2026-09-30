@@ -12,6 +12,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const report = { checks: {} };
 const logText = () => (document.getElementById('syncLog').textContent || '');
 const tail = (t, n = 400) => t.slice(-n);
+const busy = () => (document.getElementById('syncFoot').textContent || '').trim() !== '';
+// 点一个按钮并等它跑完（按钮在忙的时候是禁用的，不等完就点会被忽略 —— 这个坑踩过）
+async function clickAndWait(id, ms = 45000) {
+  const el = document.getElementById(id);
+  const t0 = Date.now();
+  while (busy() && Date.now() - t0 < 8000) await sleep(150);
+  el.click();
+  await sleep(250);
+  while (busy() && Date.now() - t0 < ms) await sleep(200);
+  await sleep(250);
+}
 
 // 打开面板
 document.getElementById('btnSync').click();
@@ -19,27 +30,15 @@ await sleep(1200);
 report.open = tail(logText(), 500);
 
 // 点「提交并上传」（没配密钥/没建仓库时应该给出人话提示，而不是 not found）
-document.getElementById('syncUpload').click();
-for (let i = 0; i < 40; i++) {
-  await sleep(400);
-  if (/✓ 上传完成|✗/.test(tail(logText(), 120))) break;
-}
+await clickAndWait('syncUpload');
 report.upload = tail(logText(), 700);
 
 // 点「拉取最新」
-document.getElementById('syncPull').click();
-for (let i = 0; i < 30; i++) {
-  await sleep(400);
-  if (/已拉取最新|✗/.test(tail(logText(), 120))) break;
-}
+await clickAndWait('syncPull');
 report.pull = tail(logText(), 400);
 
 // 点「打包给另一台电脑」
-document.getElementById('syncPack').click();
-for (let i = 0; i < 60; i++) {
-  await sleep(500);
-  if (/✓ 好了|✗ 打包失败/.test(logText())) break;
-}
+await clickAndWait('syncPack');
 report.pack = tail(logText(), 400);
 
 const all = [report.open, report.upload, report.pull, report.pack].join('\n');

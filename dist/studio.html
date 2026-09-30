@@ -4996,12 +4996,14 @@ function initSyncPanel() {
         log('  ② 点「复制公钥」');
         log('  ③ 在任意能打开 GitHub 的电脑/手机浏览器里，粘到 Settings → SSH and GPG keys → New SSH key');
         log('  ④ 回来再点一次「提交并上传」');
-      } else if (/could not read from remote|Connection (timed out|refused|reset)/i.test(raw)) {
+      } else if (/Repository not found|does not appear to be a git repository/i.test(raw)) {
+        log('✓ 认证是通过的（钥匙没问题），只是 GitHub 上还没有这个仓库。');
+        log('  去 https://github.com/new 建一个空的，名字要跟地址里的一样；');
+        log('  三个「Add a README / .gitignore / license」都别勾，建完回来再点一次上传。');
+      } else if (/Connection (timed out|refused|reset)|Could not resolve host|Network is unreachable/i.test(raw)) {
         log('✗ 连不上 GitHub。这台电脑的 https 是被挡的，SSH 那条道也要网络通才行；'
           + '如果刚断过网/换过网络，等一会儿再试。');
         log('  另：不联网也能干活 —— 点「打包给另一台电脑」，拷过去接着做。');
-      } else if (/Repository not found|does not appear to be a git repository/i.test(raw)) {
-        log('✗ GitHub 上还没有这个仓库。先在浏览器里建一个空的（名字要和地址里的对上），再点上传。');
       } else if (/not found: \/api\/git\//i.test(raw)) {
         log('✗ 本地服务还是旧版本 —— 关掉那个黑窗口，重新双击 启动工作室.bat，然后刷新本页再来一次。');
       } else {
