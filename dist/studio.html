@@ -8102,6 +8102,7 @@ registerAll();
 const state = {
   scene: new Scene({ width: 1920, height: 1080, fps: 24, duration: 10, transparent: true }),
   selection: null,          // 选中的图层 id
+  selected: new Set(),      // 多选：一起选中的图层 id（框选 / Shift 点选）。selection 是其中的"主选"
   playing: false,
   t: 0,
   lastFrameTs: 0,
@@ -8179,8 +8180,52 @@ function blit() {
   }
   previewCtx.clearRect(0, 0, dw, dh);
   previewCtx.drawImage(off.canvas, 0, 0, dw, dh);
+  drawPreviewMarks(dw, dh);
   $('dropHint').classList.toggle('hidden', !!state.media.video);
   layoutEditOverlay();
+}
+
+/**
+ * 预览上的多选标记：除了"主选"（那个带手柄的 DOM 选择框），
+ * 其余一起选中的图层用细虚线描一圈；正在拉的框选矩形也画在这。
+ */
+function drawPreviewMarks(dw, dh) {
+  if (!previewCtx) return;
+  const strokeBox = (b, color, dash, width, fill) => {
+    if (!b || b.w <= 0 || b.h <= 0) return;
+    const x = b.x * dw, y = b.y * dh, w = b.w * dw, h = b.h * dh;
+    if (fill) { previewCtx.fillStyle = fill; previewCtx.fillRect(x, y, w, h); }
+    previewCtx.setLineDash(dash);
+    previewCtx.lineWidth = width;
+    previewCtx.strokeStyle = color;
+    previewCtx.strokeRect(x + 0.5, y + 0.5, w, h);
+    previewCtx.setLineDash([]);
+  };
+
+  for (const L of selectedLayers()) {
+    if (L.id === state.selection) continue;          // 主选已经有 DOM 选择框了
+    if (!L.covers(state.t)) continue;
+    strokeBox(layerBoxFor(L), 'rgba(0,229,255,0.9)', [4, 3], 1.5, 'rgba(0,229,255,0.08)');
+  }
+  if (marquee) strokeBox(marqueeRect(marquee), 'rgba(255,255,255,0.95)', [5, 4], 1, 'rgba(255,75,31,0.12)');
+}
+
+function marqueeRect(m) {
+  return { x: Math.min(m.x0, m.x1), y: Math.min(m.y0, m.y1), w: Math.abs(m.x1 - m.x0), h: Math.abs(m.y1 - m.y0) };
+}
+
+/** 框选的矩形碰到了哪几层（只认此刻画面上真有的层，所见即所选） */
+function layersInMarquee(m) {
+  const r = marqueeRect(m);
+  const out = [];
+  for (const L of state.scene.layers) {
+    if (!L.covers(state.t)) continue;
+    const b = layerBoxFor(L);
+    if (!b) continue;
+    if (b.x + b.w < r.x || b.x > r.x + r.w || b.y + b.h < r.y || b.y > r.y + r.h) continue;
+    out.push(L);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- 主循环
@@ -8422,20 +8467,21 @@ function drawTimeline() {
     const bx = sx(L.start), bw = Math.max(3, sx(L.end) - sx(L.start));
     rowMap.set(L.id, { y, x: bx, w: bw });
     const tpl = listTemplates().find((t) => t.id === L.template);
-    const isSel = L.id === state.selection;
+    const isSel = isSelected(L.id);        // 框选 / Shift 加选都算选中
+    const isMain = L.id === state.selection;
     const hit = !find || (tpl ? tpl.name : L.template).toLowerCase().includes(find)
       || String(L.template).toLowerCase().includes(find) || String(L.name || '').toLowerCase().includes(find);
-    tlCtx.fillStyle = !L.enabled ? '#2a2d34' : isSel ? '#ff4b1f' : 'rgba(255,75,31,0.55)';
+    tlCtx.fillStyle = !L.enabled ? '#2a2d34' : isMain ? '#ff4b1f' : isSel ? '#c8341a' : 'rgba(255,75,31,0.55)';
     tlCtx.globalAlpha = (!find || hit) ? 1 : 0.22;     // 搜索时，没中的层淡下去
     roundRectPath(tlCtx, bx, y, bw, ROW_H, 3); tlCtx.fill();
     tlCtx.globalAlpha = 1;
-    tlCtx.fillStyle = isSel ? '#1a0a04' : '#e9ecf1';
+    tlCtx.fillStyle = isMain ? '#1a0a04' : '#e9ecf1';
     tlCtx.font = '600 11px ' + getComputedStyle(document.body).getPropertyValue('--sans');
     const nm = (tpl ? tpl.name : L.template) + '  ' + L.start.toFixed(2) + 's→' + L.end.toFixed(2) + 's';
     tlCtx.save(); tlCtx.beginPath(); tlCtx.rect(bx + 6, y, bw - 12, ROW_H); tlCtx.clip();
     tlCtx.fillText(nm, bx + 7, y + ROW_H / 2 + 0.5);
     tlCtx.restore();
-    if (isSel) {
+    if (isMain) {
       tlCtx.fillStyle = '#ffffff';
       tlCtx.fillRect(bx - 2, y, 4, ROW_H);
       tlCtx.fillRect(bx + bw - 2, y, 4, ROW_H);
@@ -8446,6 +8492,18 @@ function drawTimeline() {
       tlCtx.stroke();
     }
   });
+  // 正在拉的框选
+  if (tlMarquee) {
+    const mx0 = Math.min(tlMarquee.x0, tlMarquee.x1), mx1 = Math.max(tlMarquee.x0, tlMarquee.x1);
+    const my0 = Math.min(tlMarquee.y0, tlMarquee.y1), my1 = Math.max(tlMarquee.y0, tlMarquee.y1);
+    tlCtx.fillStyle = 'rgba(255,75,31,0.14)';
+    tlCtx.fillRect(mx0, my0, mx1 - mx0, my1 - my0);
+    tlCtx.setLineDash([5, 4]);
+    tlCtx.strokeStyle = 'rgba(255,255,255,0.9)';
+    tlCtx.lineWidth = 1;
+    tlCtx.strokeRect(mx0 + 0.5, my0 + 0.5, mx1 - mx0, my1 - my0);
+    tlCtx.setLineDash([]);
+  }
   tlCtx.restore();
 
   // 图层区的滚动条（层数多到装不下时出现）
@@ -8573,6 +8631,15 @@ function tlTimeAt(clientX) {
 tl.addEventListener('pointerdown', (e) => {
   const r = tl.getBoundingClientRect();
   const y = e.clientY - r.top;
+  const mx = e.clientX - r.left;
+  // Shift + 空白处拖动 = 框选（一块区域里的图层一起选上，然后 Delete 删掉）
+  const hitRow = [...rowMap].some(([, g]) => y >= g.y && y <= g.y + ROW_H && mx >= g.x - 2 && mx <= g.x + g.w + 2);
+  if (!hitRow && e.shiftKey) {
+    tlMarquee = { x0: mx, y0: y, x1: mx, y1: y, keep: e.shiftKey ? new Set(state.selected) : new Set(), moved: false };
+    try { tl.setPointerCapture(e.pointerId); } catch (_) {}
+    drawTimeline();
+    return;
+  }
   // 命中图层？
   for (const [id, g] of rowMap) {
     if (y >= g.y && y <= g.y + ROW_H && e.clientX - r.left >= g.x - 2 && e.clientX - r.left <= g.x + g.w + 2) {
@@ -8581,18 +8648,29 @@ tl.addEventListener('pointerdown', (e) => {
       if (edge < 6) drag = { id, mode: 'resize-l', orig: L.start };
       else if (edge > g.w - 6) drag = { id, mode: 'resize-r', orig: L.end };
       else drag = { id, mode: 'move', grab: tlTimeAt(e.clientX) - L.start, origStart: L.start, origEnd: L.end };
-      selectLayer(id);
-      tl.setPointerCapture(e.pointerId);
+      // Shift 点杆子 = 加选（多选之后一次性删掉），否则还是单选
+      const mode = e.shiftKey ? 'add' : (e.metaKey || e.ctrlKey) ? 'toggle' : undefined;
+      selectLayer(id, mode);
+      if (mode) { try { tl.setPointerCapture(e.pointerId); } catch (_) {} return; }   // 加选时别顺手把杆子拖走
+      try { tl.setPointerCapture(e.pointerId); } catch (_) {}
       return;
     }
   }
   // 否则设置播放头
   scrubbing = true;
   setTime(tlTimeAt(e.clientX));
-  tl.setPointerCapture(e.pointerId);
+  try { tl.setPointerCapture(e.pointerId); } catch (_) {}
 });
 
 tl.addEventListener('pointermove', (e) => {
+  if (tlMarquee) {
+    const r = tl.getBoundingClientRect();
+    tlMarquee.x1 = e.clientX - r.left;
+    tlMarquee.y1 = e.clientY - r.top;
+    if (Math.abs(tlMarquee.x1 - tlMarquee.x0) > 2 || Math.abs(tlMarquee.y1 - tlMarquee.y0) > 2) tlMarquee.moved = true;
+    drawTimeline();
+    return;
+  }
   if (scrubbing) { setTime(tlTimeAt(e.clientX)); return; }
   if (!drag) return;
   const L = state.scene.layers.find((x) => x.id === drag.id);
@@ -8610,7 +8688,30 @@ tl.addEventListener('pointermove', (e) => {
   drawTimeline(); renderAt(state.t); blit();
 });
 
-const endDrag = () => { drag = null; scrubbing = false; };
+const endDrag = () => {
+  if (tlMarquee) {
+    const m = tlMarquee;
+    tlMarquee = null;
+    if (m.moved) {
+      const x0 = Math.min(m.x0, m.x1), x1 = Math.max(m.x0, m.x1);
+      const y0 = Math.min(m.y0, m.y1), y1 = Math.max(m.y0, m.y1);
+      const hit = [];
+      for (const [id, g] of rowMap) {
+        if (g.y + ROW_H < y0 || g.y > y1) continue;
+        if (g.x + g.w < x0 || g.x > x1) continue;
+        hit.push(id);
+      }
+      const keep = [...m.keep].filter((id) => state.scene.layers.some((L) => L.id === id));
+      state.selected = new Set([...keep, ...hit]);
+      state.selection = hit[0] || keep[0] || null;
+      if (state.selection != null) rightTab = 'layer';
+      renderRight();
+      if (state.selected.size > 1) toast(`框选了 ${state.selected.size} 层 —— Delete 删除`);
+    }
+    drawTimeline();
+  }
+  drag = null; scrubbing = false;
+};
 tl.addEventListener('pointerup', endDrag);
 tl.addEventListener('pointercancel', endDrag);
 // 滚轮：上下翻图层（层数多的时候时间轴装不下）
@@ -8978,6 +9079,24 @@ function rightPanelLayer(body, L) {
   }
   {
     const t = listTemplates().find((x) => x.id === L.template);
+    // 多选（框选 / Shift 点选）时先给一块整组的信息和删除入口
+    if (state.selected.size > 1) {
+      const gm = group('已选 ' + state.selected.size + ' 层');
+      const note = document.createElement('div');
+      note.className = 'fx-note';
+      note.textContent = '下面是"主选"那一层的参数。'
+        + '框选（预览里空白处拖 / 时间轴上 Shift 拖）或 Shift 点选可以一次选多层，Delete 一次删掉。';
+      gm.appendChild(note);
+      const row = document.createElement('div');
+      row.className = 'btn-row';
+      row.appendChild(btn('删除这 ' + state.selected.size + ' 层', () => {
+        if (confirm('删掉选中的 ' + state.selected.size + ' 层？')) deleteSelectedLayers();
+      }, 'danger'));
+      row.appendChild(btn('只留主选那层', () => { selectLayer(state.selection); }));
+      row.appendChild(btn('取消选择', () => { selectLayer(null); }));
+      gm.appendChild(row);
+      body.appendChild(gm);
+    }
     const g0 = group('图层');
     g0.appendChild(field('模板', () => {
       const sel = document.createElement('select');
@@ -10108,7 +10227,10 @@ function beatFxClear(tpl) {
   const before = state.scene.layers.length;
   state.scene.layers = state.scene.layers.filter((L) => L.template !== tpl);
   const n = before - state.scene.layers.length;
-  if (state.selection && !state.scene.layers.some((L) => L.id === state.selection)) state.selection = null;
+  if (state.selection && !state.scene.layers.some((L) => L.id === state.selection)) {
+    state.selection = null;
+    state.selected = new Set();
+  }
   markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
   return n;
 }
@@ -10477,6 +10599,7 @@ async function applyPreset(file) {
   state.scene = sc;
   state.media = media;
   state.selection = null;
+    state.selected = new Set();
     rightTab = 'scene';
   resetLayerIndex();
   resize(); drawTimeline(); renderRight(); updateBeatInfo();
@@ -10495,6 +10618,7 @@ function openProject(file) {
       state.scene = Scene.fromJSON(data);
       state.media = media;
       state.selection = null;
+      state.selected = new Set();
       rightTab = 'scene';
       resetLayerIndex();
       resize(); drawTimeline(); renderRight(); updateBeatInfo();
@@ -11100,12 +11224,8 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowLeft') { e.preventDefault(); setTime(state.t - step); }
   else if (e.key === 'ArrowRight') { e.preventDefault(); setTime(state.t + step); }
   else if (e.key === 'Delete' || e.key === 'Backspace') {
-    const L = state.scene.layers.find((x) => x.id === state.selection);
-    if (L) {
-      state.scene.layers = state.scene.layers.filter((x) => x !== L);
-        selectLayer(null);
-      markIndexDirty();
-    }
+    e.preventDefault();
+    deleteSelectedLayers();          // 单选 / 框选 / Shift 加选，一次都删掉
   } else if (e.key === 'Home') setTime(0);
   else if (e.key === 'End') setTime(state.scene.duration);
   else if (e.key === 'm' || e.key === 'M') { state.muted = !state.muted; applyAudio(); }
@@ -11124,6 +11244,8 @@ let elSel = null, elTagName = null, elRotH = null, elText = null, elTextKey = nu
 let elGuideX = null, elGuideY = null;
 let pdrag = null;        // 正在进行的拖拽
 let lastHit = null;      // 上一次落点，重叠时用来逐层下探
+let marquee = null;      // 预览里正在拉的框选矩形（归一化坐标）
+let tlMarquee = null;    // 时间轴上正在拉的框选矩形（画布像素坐标）
 let textParamKey = null; // 文字浮窗正在编辑的参数
 
 function selectedLayer() { return state.scene.layers.find((x) => x.id === state.selection) || null; }
@@ -11200,9 +11322,7 @@ function buildEditOverlay() {
       L.transform = null;
       markIndexDirty(); renderAt(state.t); blit();
     } else if (b.dataset.act === 'del') {
-      state.scene.layers = state.scene.layers.filter((x) => x !== L);
-        selectLayer(null); markIndexDirty();
-      renderAt(state.t); blit();
+      deleteSelectedLayers();
     }
   });
 
@@ -11217,7 +11337,12 @@ function buildEditOverlay() {
 
     const p = pointerNorm(e);
     const cands = pickLayerAt(p.x, p.y);
-    if (!cands.length) { selectLayer(null); return; }
+    if (!cands.length) {
+      // 空白处按下 = 框选（原来这里是"点空白取消选择"，没丢功能：
+      // 不拖动的单击在抬手时一样是取消选择）
+      startMarquee(e, p);
+      return;
+    }
 
     let hit = cands[0];
     // Alt + 点 = 穿透到下面那层（重叠时不用去翻图层列表）。
@@ -11229,9 +11354,20 @@ function buildEditOverlay() {
       else hit = cands[cands.length - 1];
     }
     lastHit = { x: p.x, y: p.y, id: hit.id };
+    // Shift = 加选（多选后一次性删掉）；Ctrl/Cmd = 在已选里来回切
+    const mode = e.shiftKey ? 'add' : (e.metaKey || e.ctrlKey) ? 'toggle' : undefined;
+    if (mode) { selectLayer(hit.id, mode); return; }
     if (state.selection !== hit.id) selectLayer(hit.id);
     startMove(e, hit);
   });
+
+  function startMarquee(e, p) {
+    marquee = { x0: p.x, y0: p.y, x1: p.x, y1: p.y, keep: e.shiftKey ? new Set(state.selected) : new Set(), moved: false };
+    if (!e.shiftKey) { state.selected = new Set(); state.selection = null; }
+    try { editLayerEl.setPointerCapture(e.pointerId); } catch (_) {}
+    renderRight(); drawTimeline();
+    blit();
+  }
 
   editLayerEl.addEventListener('pointermove', (e) => {
     if (pdrag) return;                       // 拖拽中的移动统一走 window，指针甩出画布也不断线
@@ -11239,6 +11375,19 @@ function buildEditOverlay() {
     editLayerEl.style.cursor = pickLayerAt(p.x, p.y).length ? 'move' : 'default';
   });
   const endDrag = () => {
+    if (marquee) {
+      const m = marquee;
+      marquee = null;
+      const hit = m.moved ? layersInMarquee(m) : [];
+      const keep = [...m.keep].filter((id) => state.scene.layers.some((L) => L.id === id));
+      const ids = [...keep, ...hit.map((L) => L.id)];
+      state.selected = new Set(ids);
+      state.selection = (hit[0] || state.scene.layers.find((L) => L.id === keep[0]) || {}).id ?? null;
+      if (state.selection != null) rightTab = 'layer';
+      renderRight(); drawTimeline(); blit();
+      if (hit.length > 1) toast(`框选了 ${ids.length} 层 —— Delete 删除，Shift 点选加减，空白单击取消`);
+      return;
+    }
     if (!pdrag) return;
     const L = pdrag.L;
     pdrag = null;
@@ -11250,7 +11399,14 @@ function buildEditOverlay() {
     renderRight();          // 右栏那句「预览里摆过位置」跟着刷新
     markIndexDirty();
   };
-  window.addEventListener('pointermove', (e) => { if (pdrag) onDragMove(e); });
+  window.addEventListener('pointermove', (e) => {
+    if (pdrag) { onDragMove(e); return; }
+    if (!marquee) return;
+    const p = pointerNorm(e);
+    marquee.x1 = p.x; marquee.y1 = p.y;
+    if (Math.abs(p.x - marquee.x0) > 0.004 || Math.abs(p.y - marquee.y0) > 0.004) marquee.moved = true;
+    blit();
+  });
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
   editLayerEl.addEventListener('pointerleave', () => { if (!pdrag) editLayerEl.style.cursor = 'default'; });
@@ -11316,13 +11472,52 @@ function pickLayerAt(nx, ny) {
   return out;
 }
 
-function selectLayer(id) {
-  state.selection = id;
-  if (id != null) rightTab = 'layer';     // 选了图层就自动切到「图层」页
+/**
+ * 选中图层。mode：
+ *   undefined  单选（原来的行为）
+ *   'add'      Shift 点选 —— 加进已选集合
+ *   'toggle'   Ctrl/Cmd 点选 —— 在集合里来回切
+ *   'keep'     只换"主选"，集合不动（框选完想让参数面板认某一层时用）
+ */
+function selectLayer(id, mode) {
+  if (id == null) {
+    if (mode !== 'keep') state.selected = new Set();
+    state.selection = null;
+  } else {
+    if (mode === 'add') state.selected.add(id);
+    else if (mode === 'toggle') {
+      if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
+    } else if (mode !== 'keep') {
+      state.selected = new Set([id]);
+    }
+    if (!state.selected.size) state.selected.add(id);
+    // 主选 = 刚点的这个（如果被 toggle 掉了，就退回集合里的第一个）
+    state.selection = state.selected.has(id) ? id : (selectedLayers()[0] || {}).id ?? null;
+  }
+  if (state.selection != null) rightTab = 'layer';   // 选了图层就自动切到「图层」页
   if (elText) closeTextEditor();
-  if (id != null) scrollLayerIntoView(id); // 让它出现在时间轴可见区里
+  if (state.selection != null) scrollLayerIntoView(state.selection);
   renderRight();
   drawTimeline();
+}
+
+/** 已选的图层（按图层栈顺序，方便"选一批一起删"） */
+function selectedLayers() { return state.scene.layers.filter((L) => state.selected.has(L.id)); }
+function isSelected(id) { return state.selected.has(id); }
+
+/** 删掉当前选中的全部图层（单选 / 框选 / Shift 加选都走这里） */
+function deleteSelectedLayers() {
+  const ids = new Set(state.selected);
+  if (!ids.size && state.selection != null) ids.add(state.selection);
+  if (!ids.size) return 0;
+  const n = ids.size;
+  state.scene.layers = state.scene.layers.filter((L) => !ids.has(L.id));
+  state.selected = new Set();
+  state.selection = null;
+  markIndexDirty();
+  renderRight(); drawTimeline(); renderAt(state.t); blit();
+  toast(n > 1 ? `删掉 ${n} 层` : '删掉 1 层');
+  return n;
 }
 
 function startMove(e, L) {
@@ -11618,6 +11813,7 @@ function autosaveNow(force) {
 function adoptScene(json) {
   state.scene = Scene.fromJSON(json);
   state.selection = null;
+  state.selected = new Set();
   rightTab = 'scene';
   resetLayerIndex();
   resize(); drawTimeline(); renderRight(); updateBeatInfo();
@@ -11637,6 +11833,7 @@ function newProject(silent) {
   state.media = { video: null, audio: null, videoName: '', audioName: '', videoFile: null, videoMeta: null, audioMeta: null };
   state.analysis = null;
   state.selection = null;
+  state.selected = new Set();
   rightTab = 'scene';
   state.t = 0;
   resetLayerIndex();
@@ -11742,6 +11939,7 @@ initAgentPanel({
     state.scene = Scene.fromJSON(json);
     state.media = media;
     state.selection = null;
+    state.selected = new Set();
     rightTab = 'scene';
     resetLayerIndex();
     if (!state.media.video) state.media.videoName = state.media.videoName || '';
@@ -11757,6 +11955,7 @@ window.MotionKit = {
   renderAt, setScene(json) {
     state.scene = Scene.fromJSON(json);
     state.selection = null;
+    state.selected = new Set();
     rightTab = 'scene';
     resetLayerIndex();
     resize(); drawTimeline(); renderRight(); updateBeatInfo();
