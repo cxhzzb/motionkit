@@ -16,6 +16,8 @@ const ARGV = process.argv.slice(2);
 const OPEN_BROWSER = ARGV.includes('--open');
 const PORT = Number(ARGV.find((a) => /^\d+$/.test(a)) || 5178);
 const PORT_MAX = PORT + 12;
+// 加了新接口就把这个数字 +1：启动器发现端口上跑的是旧版本，会把它换掉再起新的
+const APP_VERSION = Number(process.env.MK_APP_VERSION || 6);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -453,7 +455,10 @@ const server = http.createServer(async (req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   // 轻量探活：不能拿 /api/agent/status 当心跳，它要起 python，两秒才回，
   // 而"是不是已经有一个工作室在跑"必须在几百毫秒内问出答案。
-  if (p === '/api/ping') { json(res, { app: 'motionkit-studio', ok: true }); return; }
+    if (p === '/api/ping') {
+      json(res, { app: 'motionkit-studio', ok: true, v: APP_VERSION, pid: process.pid });
+      return;
+    }
   if (p === '/api/agent/status') { agentStatus(res); return; }
   if (p === '/api/agent/run' && req.method === 'POST') { agentRun(req, res); return; }
   if (p === '/api/agent/fill' && req.method === 'POST') { fillRun(req, res); return; }
@@ -507,7 +512,11 @@ function openBrowser(url) {
   }
 }
 
-/** 已经有一个工作室在跑就别再起一个（一键启动连点两次的常见情况）。 */
+/**
+ * 端口上已经有工作室在跑？
+ *   · 同一个版本 → 直接用它（一键启动连点两次的常见情况）
+ *   · 旧版本     → 返回它的端口和 pid，让 main() 把它换掉（否则新加的接口会 404）
+ */
 async function findRunning() {
   for (let p = PORT; p <= PORT_MAX; p++) {
     try {
@@ -515,7 +524,10 @@ async function findRunning() {
                             { signal: AbortSignal.timeout(700) });
       if (r.ok) {
         const j = await r.json();
-        if (j && j.app === 'motionkit-studio') return p;
+        if (j && j.app === 'motionkit-studio') {
+          if (j.v === APP_VERSION) return { port: p, same: true, v: j.v, pid: j.pid };
+          return { port: p, same: false, v: j.v ?? null, pid: j.pid ?? null };
+        }
       }
     } catch (_) { /* 这个端口没人在听 */ }
   }
@@ -537,12 +549,22 @@ async function main() {
   const url0 = `http://localhost:${PORT}/studio/index.html`;
   if (OPEN_BROWSER) {
     const running = await findRunning();
-    if (running) {
-      const url = `http://localhost:${running}/studio/index.html`;
+    if (running && running.same) {
+      const url = `http://localhost:${running.port}/studio/index.html`;
       console.log(`\n  已经有一个工作室在 ${url} 上跑着了，直接给你打开。`);
       console.log('  （要重启就先在原来那个窗口按 Ctrl+C）\n');
       openBrowser(url);
       return;
+    }
+    if (running && !running.same) {
+      // 端口上那个是旧版本：新加的接口它会 404，先把它换掉
+      console.log(`\n  端口 ${running.port} 上跑的是旧版服务（v${running.v ?? '?'}），正在换成本次启动的新版…`);
+      if (running.pid) {
+        try { process.kill(running.pid); await new Promise((r) => setTimeout(r, 700)); }
+        catch (_) { console.log('  （旧进程没能自动关掉，新的会换到下一个端口）'); }
+      } else {
+        console.log('  （旧版没留 pid，新的会换到下一个端口；旧窗口可以随时手动关掉）');
+      }
     }
   }
 

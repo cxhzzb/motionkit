@@ -102,6 +102,15 @@ function updateSourceLabel() {
   }
 }
 
+/** 接口报错时说人话：404 基本都是"本地服务还是旧版本，没这个接口" */
+function apiError(status) {
+  if (status === 404) {
+    return '本地服务是旧版本（没有这个接口）—— 关掉那个黑窗口，重新双击 启动工作室.bat，然后刷新本页';
+  }
+  if (status === 413) return '素材太大，本地服务拒收了（换短一点的素材试试）';
+  return 'HTTP ' + status;
+}
+
 function setRunning(v) {
   running = v;
   $('agentRun').disabled = v;
@@ -165,7 +174,7 @@ async function runFill() {
       },
       body: file,
     });
-    if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+    if (!res.ok || !res.body) throw new Error(apiError(res.status));
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = '';
@@ -260,7 +269,7 @@ async function runAgent() {
       },
       body: file,
     });
-    if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+    if (!res.ok || !res.body) throw new Error(apiError(res.status));
 
     const reader = res.body.getReader();
     const dec = new TextDecoder();

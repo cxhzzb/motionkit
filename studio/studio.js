@@ -2576,6 +2576,24 @@ if (!NO_PERSIST) {
 }
 
 // ---------------------------------------------------------------- 初始化
+// 本地服务是不是旧版本？（旧版本没有新加的接口，会莫名其妙 404）
+{
+  const NEED = 6;   // 和 tools/serve.mjs 的 APP_VERSION 保持一致
+  fetch('/api/ping', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => {
+      if (!j || j.app !== 'motionkit-studio') return;          // 没后端（单文件版）就不提示
+      if (typeof j.v === 'number' && j.v < NEED) {
+        $('staleText').innerHTML = '本地服务是<b>旧版本</b>（没有新功能需要的接口）。'
+          + '关掉那个黑窗口，重新双击 <b>启动工作室.bat</b>，再刷新本页就好。';
+        $('staleBar').classList.remove('hidden');
+      }
+    })
+    .catch(() => {});
+  const sb = $('btnStaleOk');
+  if (sb) sb.addEventListener('click', () => $('staleBar').classList.add('hidden'));
+}
+
 buildEditOverlay();
 restoreAutosave();          // 先把上次的工程接回来，后面的初始化都在它上面跑
 buildTemplateList();
