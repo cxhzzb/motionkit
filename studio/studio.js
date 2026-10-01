@@ -989,7 +989,7 @@ function rightPanelScene(body) {
       if (!applyAutoDuration()) { if (durNote) durNote.textContent = mediaNote(); }
       renderRight();
     }));
-    g.appendChild(colorField('背景色(空=透明)', state.scene.bg || '', (v) => { state.scene.bg = v || null; }));
+    g.appendChild(colorField('背景色', state.scene.bg || '', (v) => { state.scene.bg = v || null; }, true));
     g.appendChild(btn('重置为默认', () => {
       state.scene.width = 1920; state.scene.height = 1080; state.scene.fps = 24; resize();
     }));
@@ -1324,16 +1324,65 @@ function numField(labelText, value, min, max, step, onInput) {
   wrap.appendChild(r); wrap.appendChild(n);
   return field(labelText, () => wrap);
 }
-function colorField(labelText, value, onChange) {
+/**
+ * 颜色参数。
+ * allowTransparent=true 时多给一个「透明」勾选 —— 底色类参数（垫底色 / 纸色 / 填充）
+ * 清空文字框就是透明，但没人猜得到，所以给个明面上的开关。
+ */
+function colorField(labelText, value, onChange, allowTransparent) {
   return field(labelText, () => {
     const holder = document.createElement('div');
     holder.style.cssText = 'display:flex;gap:6px;flex:1 1 auto;min-width:0';
     const c = document.createElement('input'); c.type = 'color';
     c.value = /^#[0-9a-f]{6}$/i.test(value) ? value : '#ffffff';
     const t = document.createElement('input'); t.type = 'text'; t.value = value || ''; t.placeholder = '空 = 透明';
-    c.addEventListener('input', () => { t.value = c.value; onChange(c.value); renderAt(state.t); blit(); });
-    t.addEventListener('change', () => { onChange(t.value.trim()); renderAt(state.t); blit(); });
+    let last = c.value;
+    const apply = (v) => { t.value = v; onChange(v); renderAt(state.t); blit(); };
+    c.addEventListener('input', () => { last = c.value; apply(c.value); });
+    t.addEventListener('change', () => {
+      const v = t.value.trim();
+      if (/^#[0-9a-f]{6}$/i.test(v)) last = v;
+      apply(v);
+    });
     holder.appendChild(c); holder.appendChild(t);
+    if (allowTransparent) {
+      const chip = document.createElement('div');
+      chip.className = 'swatch-tp';
+      chip.title = '透明';
+      chip.style.display = 'none';
+      holder.insertBefore(chip, c);
+      const box = document.createElement('label');
+      box.className = 'mini nowrap';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !value;
+      cb.title = '勾上＝这一层不要底色（透明）';
+      const sync = () => {
+        cb.checked = !t.value.trim();
+        c.disabled = cb.checked;
+        t.disabled = cb.checked;
+        c.classList.toggle('is-transparent', cb.checked);
+        c.style.display = cb.checked ? 'none' : '';
+        chip.style.display = cb.checked ? '' : 'none';
+        t.placeholder = cb.checked ? '透明' : '空 = 透明';
+      };
+      cb.addEventListener('change', () => {
+        if (cb.checked) { t.value = ''; onChange(''); }
+        else { apply(last); }
+        sync();
+        renderAt(state.t); blit();
+      });
+      t.addEventListener('input', sync);
+      sync();
+      box.appendChild(cb);
+      box.appendChild(document.createTextNode('透明'));
+      const tip = document.createElement('span');
+      tip.textContent = 'ⓘ';
+      tip.title = '勾上之后这一层不带底色，可以直接压在视频上';
+      tip.style.cssText = 'color:#8b929e;cursor:help;margin-left:2px';
+      box.appendChild(tip);
+      holder.appendChild(box);
+    }
     return holder;
   });
 }
@@ -1366,7 +1415,8 @@ function paramField(p, bag, onChange) {
   switch (p.type) {
     case 'number': return numField(p.label, get(), p.min ?? 0, p.max ?? 100, p.step ?? 0.1, (v) => { bag[p.key] = v; onChange(); });
     case 'bool': return checkField(p.label, get(), (v) => { bag[p.key] = v; onChange(); });
-    case 'color': return colorField(p.label, get(), (v) => { bag[p.key] = v; onChange(); });
+      case 'color': return colorField(p.label, get(), (v) => { bag[p.key] = v; onChange(); },
+        /(plate|fill|bg|paper|backdrop)/i.test(p.key));   // 底色类才给「透明」开关
     case 'multiline': return textField(p.label, get(), (v) => { bag[p.key] = v; onChange(); }, true);
     case 'select': return field(p.label, () => {
       const s = document.createElement('select');

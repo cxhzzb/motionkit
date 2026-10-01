@@ -385,6 +385,28 @@ if (textPick) {
   report.panels.resetLeft = Math.round(Lp.getBoundingClientRect().width);
   report.checks.panelReset = Math.abs(Lp.getBoundingClientRect().width - 250) < 3;
 
+  // ---------------------------------------------------------------- 15. 底色类参数有「透明」开关
+  const tplL = MK.addTemplate('terminal-prompt', { x: 0.5, y: 0.5 });
+  await sleep(250);
+  MK.selectLayer(tplL.id);
+  await sleep(250);
+  const frow = [...document.querySelectorAll('#rightBody .field')].find((r) => {
+    const lb = r.querySelector('label');
+    return lb && /底|填充|纸|背景/.test(lb.textContent);
+  });
+  const fcb = frow && frow.querySelector('input[type=checkbox]');
+  if (fcb) { fcb.checked = true; fcb.dispatchEvent(new Event('change', { bubbles: true })); }
+  await sleep(200);
+  const transFill = tplL.params.fill;
+  const chipEl = frow && frow.querySelector('.swatch-tp');
+  const chipOn = !!(chipEl && chipEl.style.display !== 'none');
+  if (fcb) { fcb.checked = false; fcb.dispatchEvent(new Event('change', { bubbles: true })); }
+  await sleep(200);
+  report.transparent = { found: !!fcb, after: transFill, chipOn, restored: tplL.params.fill };
+  report.checks.transparentOpt = !!fcb && transFill === '' && chipOn && !!tplL.params.fill;
+  MK.state.scene.layers = MK.state.scene.layers.filter((l) => l !== tplL);   // 别影响后面的截图
+  MK.selectLayer(null);
+
   // ---------------------------------------------------------------- 收尾：留个好看的演示状态
   // ---------------------------------------------------------------- 13. 模板库：缩略图 + 分类折叠
   await sleep(900);                         // 缩略图是分帧画的，等一下
