@@ -541,6 +541,59 @@ tl.addEventListener('wheel', (e) => {
   if (tlScrollBy(dy)) e.preventDefault();
 }, { passive: false });
 
+// 左右两栏宽度可拖（模板库太窄、参数栏想宽点，都能自己调；双击复位）
+{
+  const layoutEl = document.querySelector('.layout');
+  const DEFAULT_L = 250, DEFAULT_R = 320;
+  const MIN_L = 190, MAX_L = 720, MIN_R = 240, MAX_R = 820;
+  const setW = (name, w) => {
+    layoutEl.style.setProperty(name, Math.round(w) + 'px');
+    blit(); drawTimeline();          // 中间的画布和时间轴要跟着重新量
+  };
+  try {
+    const l = Number(localStorage.getItem('motionkit.leftW') || 0);
+    const r = Number(localStorage.getItem('motionkit.rightW') || 0);
+    if (l >= MIN_L && l <= MAX_L) layoutEl.style.setProperty('--left-w', l + 'px');
+    if (r >= MIN_R && r <= MAX_R) layoutEl.style.setProperty('--right-w', r + 'px');
+  } catch (_) {}
+
+  const bind = (gripId, varName, dir, min, max, key, def) => {
+    const grip = $(gripId);
+    if (!grip) return;
+    const cur = () => {
+      const v = getComputedStyle(layoutEl).getPropertyValue(varName).trim();
+      const n = parseFloat(v);
+      return Number.isFinite(n) ? n : def;
+    };
+    let st = null;
+    grip.addEventListener('pointerdown', (e) => {
+      st = { x: e.clientX, w: cur() };
+      grip.classList.add('dragging');
+      try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+    });
+    grip.addEventListener('pointermove', (e) => {
+      if (!st) return;
+      setW(varName, clamp(st.w + dir * (e.clientX - st.x), min, max));
+    });
+    const end = () => {
+      if (!st) return;
+      st = null;
+      grip.classList.remove('dragging');
+      try { localStorage.setItem(key, String(Math.round(cur()))); } catch (_) {}
+      blit(); drawTimeline();
+    };
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
+    grip.addEventListener('dblclick', () => {
+      setW(varName, def);
+      try { localStorage.setItem(key, String(def)); } catch (_) {}
+    });
+  };
+  bind('leftResize', '--left-w', 1, MIN_L, MAX_L, 'motionkit.leftW', DEFAULT_L);
+  bind('rightResize', '--right-w', -1, MIN_R, MAX_R, 'motionkit.rightW', DEFAULT_R);
+}
+
 // 拖动时间轴顶端那条：调整高度（图层多的时候拉高点）
 {
   const grip = $('tlResize');

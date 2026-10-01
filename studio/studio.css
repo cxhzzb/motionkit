@@ -51,7 +51,22 @@ button.ai:hover { border-color: #5a6f9e; background: linear-gradient(135deg, #22
 .search { cursor: text; width: 110px; }
 
 /* ---------- 布局 ---------- */
-.layout { flex: 1 1 auto; display: grid; grid-template-columns: 250px 1fr 320px; min-height: 0; }
+.layout {
+  flex: 1 1 auto; display: grid; min-height: 0;
+  /* 左右两栏宽度可拖（见下面的 .col-resize），默认 250 / 320 */
+  grid-template-columns: var(--left-w, 250px) 6px minmax(0, 1fr) 6px var(--right-w, 320px);
+}
+.col-resize {
+  cursor: col-resize; background: var(--bg);
+  border-right: 1px solid var(--line); border-left: 1px solid var(--line);
+  position: relative;
+}
+.col-resize::after {
+  content: ''; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 2px; height: 42px; border-radius: 2px; background: #2f343c; transition: background .12s, height .12s;
+}
+.col-resize:hover::after, .col-resize.dragging::after { background: var(--accent); height: 88px; }
+.col-resize:hover { background: #15171c; }
 .panel { background: var(--bg2); display: flex; flex-direction: column; min-height: 0; }
 .panel.left { border-right: 1px solid var(--line); }
 .panel.right { border-left: 1px solid var(--line); }

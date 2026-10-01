@@ -58,7 +58,22 @@ button.ai:hover { border-color: #5a6f9e; background: linear-gradient(135deg, #22
 .search { cursor: text; width: 110px; }
 
 /* ---------- 布局 ---------- */
-.layout { flex: 1 1 auto; display: grid; grid-template-columns: 250px 1fr 320px; min-height: 0; }
+.layout {
+  flex: 1 1 auto; display: grid; min-height: 0;
+  /* 左右两栏宽度可拖（见下面的 .col-resize），默认 250 / 320 */
+  grid-template-columns: var(--left-w, 250px) 6px minmax(0, 1fr) 6px var(--right-w, 320px);
+}
+.col-resize {
+  cursor: col-resize; background: var(--bg);
+  border-right: 1px solid var(--line); border-left: 1px solid var(--line);
+  position: relative;
+}
+.col-resize::after {
+  content: ''; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 2px; height: 42px; border-radius: 2px; background: #2f343c; transition: background .12s, height .12s;
+}
+.col-resize:hover::after, .col-resize.dragging::after { background: var(--accent); height: 88px; }
+.col-resize:hover { background: #15171c; }
 .panel { background: var(--bg2); display: flex; flex-direction: column; min-height: 0; }
 .panel.left { border-right: 1px solid var(--line); }
 .panel.right { border-left: 1px solid var(--line); }
@@ -633,6 +648,7 @@ textarea.sync-input { resize: vertical; line-height: 1.45; }
   </aside>
 
   <!-- 中：预览 + 时间轴 -->
+  <div id="leftResize" class="col-resize" title="拖动调整左栏宽度（双击复位）"></div>
   <section class="center">
     <div class="stage" id="stage">
       <div class="checker"></div>
@@ -694,6 +710,7 @@ textarea.sync-input { resize: vertical; line-height: 1.45; }
   </section>
 
   <!-- 右：参数 -->
+  <div id="rightResize" class="col-resize" title="拖动调整右栏宽度（双击复位）"></div>
   <aside class="panel right">
     <div class="right-head">
       <div class="right-tabs" id="rightTabs">
@@ -7669,6 +7686,59 @@ tl.addEventListener('wheel', (e) => {
   const dy = e.deltaY > 0 ? Math.max(14, Math.abs(e.deltaY) * 0.6) : -Math.max(14, Math.abs(e.deltaY) * 0.6);
   if (tlScrollBy(dy)) e.preventDefault();
 }, { passive: false });
+
+// 左右两栏宽度可拖（模板库太窄、参数栏想宽点，都能自己调；双击复位）
+{
+  const layoutEl = document.querySelector('.layout');
+  const DEFAULT_L = 250, DEFAULT_R = 320;
+  const MIN_L = 190, MAX_L = 720, MIN_R = 240, MAX_R = 820;
+  const setW = (name, w) => {
+    layoutEl.style.setProperty(name, Math.round(w) + 'px');
+    blit(); drawTimeline();          // 中间的画布和时间轴要跟着重新量
+  };
+  try {
+    const l = Number(localStorage.getItem('motionkit.leftW') || 0);
+    const r = Number(localStorage.getItem('motionkit.rightW') || 0);
+    if (l >= MIN_L && l <= MAX_L) layoutEl.style.setProperty('--left-w', l + 'px');
+    if (r >= MIN_R && r <= MAX_R) layoutEl.style.setProperty('--right-w', r + 'px');
+  } catch (_) {}
+
+  const bind = (gripId, varName, dir, min, max, key, def) => {
+    const grip = $(gripId);
+    if (!grip) return;
+    const cur = () => {
+      const v = getComputedStyle(layoutEl).getPropertyValue(varName).trim();
+      const n = parseFloat(v);
+      return Number.isFinite(n) ? n : def;
+    };
+    let st = null;
+    grip.addEventListener('pointerdown', (e) => {
+      st = { x: e.clientX, w: cur() };
+      grip.classList.add('dragging');
+      try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+    });
+    grip.addEventListener('pointermove', (e) => {
+      if (!st) return;
+      setW(varName, clamp(st.w + dir * (e.clientX - st.x), min, max));
+    });
+    const end = () => {
+      if (!st) return;
+      st = null;
+      grip.classList.remove('dragging');
+      try { localStorage.setItem(key, String(Math.round(cur()))); } catch (_) {}
+      blit(); drawTimeline();
+    };
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
+    grip.addEventListener('dblclick', () => {
+      setW(varName, def);
+      try { localStorage.setItem(key, String(def)); } catch (_) {}
+    });
+  };
+  bind('leftResize', '--left-w', 1, MIN_L, MAX_L, 'motionkit.leftW', DEFAULT_L);
+  bind('rightResize', '--right-w', -1, MIN_R, MAX_R, 'motionkit.rightW', DEFAULT_R);
+}
 
 // 拖动时间轴顶端那条：调整高度（图层多的时候拉高点）
 {

@@ -357,6 +357,34 @@ if (textPick) {
   report.checks.retimeText = bigTexts.length === 0 || (moved > 0 && report.retime.changed);
   report.checks.subtitleGroup = MK.beatFx.base('subtitle-kinetic') !== null;
 
+  // ---------------------------------------------------------------- 14. 左右两栏可以拉宽
+  const Lp = document.querySelector('.panel.left');
+  const Rp = document.querySelector('.panel.right');
+  const grab = (id, dx) => {
+    const g = document.getElementById(id);
+    const r = g.getBoundingClientRect();
+    const ev = (t, x) => g.dispatchEvent(new PointerEvent(t, {
+      clientX: x, clientY: r.top + 200, bubbles: true, cancelable: true,
+      pointerId: 9, isPrimary: true, button: 0, buttons: 1,
+    }));
+    ev('pointerdown', r.left + 3);
+    ev('pointermove', r.left + 3 + dx);
+    ev('pointerup', r.left + 3 + dx);
+  };
+  const w0 = [Lp.getBoundingClientRect().width, Rp.getBoundingClientRect().width];
+  grab('leftResize', 90);
+  await sleep(150);
+  const w1 = [Lp.getBoundingClientRect().width, Rp.getBoundingClientRect().width];
+  grab('rightResize', -90);
+  await sleep(150);
+  const w2 = [Lp.getBoundingClientRect().width, Rp.getBoundingClientRect().width];
+  report.panels = { before: w0.map(Math.round), afterLeft: w1.map(Math.round), afterRight: w2.map(Math.round) };
+  report.checks.panelResize = w1[0] > w0[0] + 60 && w2[1] > w1[1] + 60;
+  document.getElementById('leftResize').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  await sleep(150);
+  report.panels.resetLeft = Math.round(Lp.getBoundingClientRect().width);
+  report.checks.panelReset = Math.abs(Lp.getBoundingClientRect().width - 250) < 3;
+
   // ---------------------------------------------------------------- 收尾：留个好看的演示状态
   // ---------------------------------------------------------------- 13. 模板库：缩略图 + 分类折叠
   await sleep(900);                         // 缩略图是分帧画的，等一下
