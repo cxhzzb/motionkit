@@ -29,3 +29,4 @@ node_modules/
 __pycache__/
 
 # 注意：dist/studio.html 是打包产物，但它是"双击即用"的交付物，故意保留
+参考/
