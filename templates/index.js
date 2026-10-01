@@ -15,10 +15,11 @@ import focus from './focus.js';
 import data from './data.js';
 import mark from './mark.js';
 import chaos from './chaos.js';
+import grid2 from './grid2.js';
 
 // 顺序 = 模板库里的分组顺序：叠加层 → 动态排版 → 设计排版 → 面板卡片 → 转场
 // 顺序 = 模板库里的分组顺序
-export const ALL = [...hud, ...type, ...design, ...chaos, ...data, ...focus, ...mark, ...rock, ...panels, ...transitions, ...hits];
+export const ALL = [...hud, ...type, ...design, ...chaos, ...grid2, ...data, ...focus, ...mark, ...rock, ...panels, ...transitions, ...hits];
 
 let registered = false;
 export function registerAll(force = false) {
