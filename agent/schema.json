@@ -1,12 +1,13 @@
 {
   "generatedBy": "tools/schema.mjs",
-  "count": 26,
+  "count": 29,
   "categories": {
     "overlay": "叠加层 / HUD",
     "typography": "动态排版",
     "caption": "字幕",
     "panel": "面板卡片",
     "design": "设计排版",
+    "rock": "摇滚 / 海报",
     "transition": "转场 / 冲击"
   },
   "templates": {
@@ -1185,6 +1186,309 @@
           "label": "淡出(秒)",
           "type": "number",
           "default": 0.6,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "rock-title": {
+      "id": "rock-title",
+      "name": "摇滚大标题",
+      "category": "rock",
+      "categoryLabel": "摇滚 / 海报",
+      "desc": "",
+      "params": [
+        {
+          "key": "text",
+          "label": "主标题（换行=多行）",
+          "type": "multiline",
+          "default": "NO\nSURRENDER"
+        },
+        {
+          "key": "sub",
+          "label": "下方小字",
+          "type": "string",
+          "default": "2026 WORLD TOUR · LIVE IN SHANGHAI"
+        },
+        {
+          "key": "tag",
+          "label": "左上角标签",
+          "type": "string",
+          "default": "SIDE A"
+        },
+        {
+          "key": "position",
+          "label": "位置 X,Y",
+          "type": "string",
+          "default": "0.5,0.5"
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 168,
+          "min": 20,
+          "max": 600,
+          "step": 2
+        },
+        {
+          "key": "maxWidth",
+          "label": "最大宽度[0-1]",
+          "type": "number",
+          "default": 0.78,
+          "min": 0.2,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "rotate",
+          "label": "倾斜(度)",
+          "type": "number",
+          "default": -1.4,
+          "min": -20,
+          "max": 20,
+          "step": 0.2
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "red"
+        },
+        {
+          "key": "color",
+          "label": "文字色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "band",
+          "label": "撕边色带",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "offset",
+          "label": "错版偏移(px)",
+          "type": "number",
+          "default": 7,
+          "min": 0,
+          "max": 40,
+          "step": 1
+        },
+        {
+          "key": "holes",
+          "label": "网点底纹",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "shakeAmt",
+          "label": "落地抖动",
+          "type": "number",
+          "default": 0.6,
+          "min": 0,
+          "max": 3,
+          "step": 0.1
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.42,
+          "min": 0.05,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.35,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "gig-poster": {
+      "id": "gig-poster",
+      "name": "演出海报",
+      "category": "rock",
+      "categoryLabel": "摇滚 / 海报",
+      "desc": "",
+      "params": [
+        {
+          "key": "title",
+          "label": "标题（换行=两行）",
+          "type": "multiline",
+          "default": "LOUD\n& CLEAR"
+        },
+        {
+          "key": "kicker",
+          "label": "顶部小标",
+          "type": "string",
+          "default": "LIVE 2026"
+        },
+        {
+          "key": "line1",
+          "label": "信息行 1",
+          "type": "string",
+          "default": "07.18 SAT · 20:30"
+        },
+        {
+          "key": "line2",
+          "label": "信息行 2",
+          "type": "string",
+          "default": "MAO LIVEHOUSE · SHANGHAI"
+        },
+        {
+          "key": "line3",
+          "label": "信息行 3",
+          "type": "string",
+          "default": "预售 ¥180 / 现场 ¥220"
+        },
+        {
+          "key": "stamp",
+          "label": "角标",
+          "type": "string",
+          "default": "ADMIT ONE"
+        },
+        {
+          "key": "position",
+          "label": "位置 X,Y",
+          "type": "string",
+          "default": "0.5,0.5"
+        },
+        {
+          "key": "width",
+          "label": "卡片宽度[0-1]",
+          "type": "number",
+          "default": 0.46,
+          "min": 0.2,
+          "max": 0.9,
+          "step": 0.02
+        },
+        {
+          "key": "size",
+          "label": "标题字号",
+          "type": "number",
+          "default": 118,
+          "min": 20,
+          "max": 400,
+          "step": 2
+        },
+        {
+          "key": "angle",
+          "label": "倾斜(度)",
+          "type": "number",
+          "default": -1.2,
+          "min": -15,
+          "max": 15,
+          "step": 0.2
+        },
+        {
+          "key": "paper",
+          "label": "纸色底",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "red"
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.5,
+          "min": 0.05,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.4,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "tape-label": {
+      "id": "tape-label",
+      "name": "胶带标签",
+      "category": "rock",
+      "categoryLabel": "摇滚 / 海报",
+      "desc": "",
+      "params": [
+        {
+          "key": "label",
+          "label": "主标签",
+          "type": "string",
+          "default": "SIDE A"
+        },
+        {
+          "key": "note",
+          "label": "第二截小字（空=不贴）",
+          "type": "string",
+          "default": "REEL 02 · 24FPS"
+        },
+        {
+          "key": "position",
+          "label": "位置 X,Y",
+          "type": "string",
+          "default": "0.5,0.5"
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 48,
+          "min": 12,
+          "max": 200,
+          "step": 2
+        },
+        {
+          "key": "angle",
+          "label": "倾斜(度)",
+          "type": "number",
+          "default": -5,
+          "min": -30,
+          "max": 30,
+          "step": 0.5
+        },
+        {
+          "key": "tapeColor",
+          "label": "胶带色",
+          "type": "color",
+          "default": "#e8d9a8"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "red"
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.3,
+          "min": 0.05,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.3,
           "min": 0,
           "max": 3,
           "step": 0.05

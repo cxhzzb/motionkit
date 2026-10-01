@@ -2,4 +2,5 @@
   { "file": "slopcore.json", "name": "Slopcore 全套（视频同款 · 12 秒）" },
   { "file": "demo-scene.json", "name": "快速演示（HUD + 卡点大字 · 6 秒）" }
   ,{ "file": "design-demo.json", "name": "设计排版（杂志标题 / 名字条 / 片尾名单 · 12 秒）" }
+  ,{ "file": "rock-2min.json", "name": "摇滚 2 分钟（大标题 / 胶带段落标 / 副歌砸字 · 120 秒）" }
 ]

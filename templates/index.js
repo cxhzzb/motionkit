@@ -10,9 +10,10 @@ import panels from './panels.js';
 import transitions from './transitions.js';
 import hits from './hits.js';
 import design from './design.js';
+import rock from './rock.js';
 
 // 顺序 = 模板库里的分组顺序：叠加层 → 动态排版 → 设计排版 → 面板卡片 → 转场
-export const ALL = [...hud, ...type, ...design, ...panels, ...transitions, ...hits];
+export const ALL = [...hud, ...type, ...design, ...rock, ...panels, ...transitions, ...hits];
 
 let registered = false;
 export function registerAll(force = false) {
@@ -29,6 +30,7 @@ export const CATEGORIES = {
   caption: '字幕',
   panel: '面板卡片',
   design: '设计排版',
+  rock: '摇滚 / 海报',
   transition: '转场 / 冲击',
 };
 

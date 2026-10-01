@@ -202,7 +202,15 @@ async function main() {
     };
     const readScript = (inline, file) => (file ? fs.readFileSync(path.resolve(ROOT, file), 'utf8') : inline);
 
-    await waitReady();
+    try {
+      await waitReady();
+    } catch (e) {
+      // 页面没起来的话，最有用的信息是控制台里的报错 —— 别只丢一句"超时"
+      console.error('页面没初始化成功。抓到的报错：');
+      if (!pageErrors.length) console.error('  （浏览器没报错，可能是启动慢或者资源加载失败）');
+      for (const x of pageErrors.slice(0, 10)) console.error('  - ' + String(x).split('\n').slice(0, 3).join(' / '));
+      throw e;
+    }
     await runScript(readScript(OPT.js, OPT.jsFile));
 
     // --reload：刷新一遍再跑第二段脚本，用来确认"刷新后状态还在"

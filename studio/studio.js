@@ -1204,12 +1204,12 @@ function openProject(file) {
 
 const CAT_COLOR = {
   overlay: '#00e5ff', typography: '#ff4b1f', caption: '#39ff88',
-  panel: '#ffcc00', design: '#ff7ab6', transition: '#b98bff', other: '#8b929e',
+  panel: '#ffcc00', design: '#ff7ab6', rock: '#e01818', transition: '#b98bff', other: '#8b929e',
 };
 
 const CAT_LABEL = {
   overlay: '叠加层 / HUD', typography: '动态排版', caption: '字幕',
-  panel: '面板卡片', design: '设计排版', transition: '转场 / 冲击', other: '其它',
+  panel: '面板卡片', design: '设计排版', rock: '摇滚 / 海报', transition: '转场 / 冲击', other: '其它',
 };
 
 let idxScratch = null;       // 全分辨率临时画布（复用一个）

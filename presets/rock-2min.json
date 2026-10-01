@@ -1,0 +1,222 @@
+{
+  "name": "rock-2min",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "duration": 120.0,
+  "bg": null,
+  "transparent": true,
+  "beat": {
+    "bpm": 127.87,
+    "offset": 0.2728,
+    "duration": 120.0,
+    "source": "auto"
+  },
+  "captions": [],
+  "layers": [
+    {
+      "template": "rock-title",
+      "start": 0.35,
+      "end": 6.5,
+      "opacity": 1,
+      "seed": "rock-open",
+      "name": "摇滚大标题",
+      "params": {
+        "text": "NIGHT DRIVE",
+        "sub": "AUTO CUT · 128 BPM",
+        "tag": "SIDE A",
+        "size": 170,
+        "maxWidth": 0.8
+      }
+    },
+    {
+      "template": "tape-label",
+      "start": 25.834,
+      "end": 28.574,
+      "opacity": 1,
+      "seed": "tape-1",
+      "name": "胶带标签 · CHORUS 1",
+      "params": {
+        "label": "CHORUS 1",
+        "note": "128 BPM",
+        "size": 44,
+        "position": "0.5,0.22",
+        "angle": -5
+      }
+    },
+    {
+      "template": "rock-title",
+      "start": 25.924,
+      "end": 29.974,
+      "opacity": 1,
+      "seed": "rock-1",
+      "name": "摇滚大标题 · CHORUS 1",
+      "params": {
+        "text": "TURN IT UP",
+        "sub": "CHORUS 1",
+        "tag": "CHORUS",
+        "size": 176,
+        "maxWidth": 0.78
+      }
+    },
+    {
+      "template": "tape-label",
+      "start": 38.959,
+      "end": 41.699,
+      "opacity": 1,
+      "seed": "tape-2",
+      "name": "胶带标签 · BUILD 1",
+      "params": {
+        "label": "BUILD 1",
+        "note": "128 BPM",
+        "size": 44,
+        "position": "0.5,0.22",
+        "angle": -5
+      }
+    },
+    {
+      "template": "tape-label",
+      "start": 57.239,
+      "end": 59.979,
+      "opacity": 1,
+      "seed": "tape-3",
+      "name": "胶带标签 · CHORUS 2",
+      "params": {
+        "label": "CHORUS 2",
+        "note": "128 BPM",
+        "size": 44,
+        "position": "0.5,0.22",
+        "angle": -5
+      }
+    },
+    {
+      "template": "rock-title",
+      "start": 57.329,
+      "end": 61.379,
+      "opacity": 1,
+      "seed": "rock-3",
+      "name": "摇滚大标题 · CHORUS 2",
+      "params": {
+        "text": "LOUDER",
+        "sub": "CHORUS 2",
+        "tag": "CHORUS",
+        "size": 176,
+        "maxWidth": 0.78
+      }
+    },
+    {
+      "template": "tape-label",
+      "start": 71.775,
+      "end": 74.515,
+      "opacity": 1,
+      "seed": "tape-4",
+      "name": "胶带标签 · VERSE 2",
+      "params": {
+        "label": "VERSE 2",
+        "note": "128 BPM",
+        "size": 44,
+        "position": "0.5,0.22",
+        "angle": -5
+      }
+    },
+    {
+      "template": "tape-label",
+      "start": 81.614,
+      "end": 84.354,
+      "opacity": 1,
+      "seed": "tape-5",
+      "name": "胶带标签 · CHORUS 3",
+      "params": {
+        "label": "CHORUS 3",
+        "note": "128 BPM",
+        "size": 44,
+        "position": "0.5,0.22",
+        "angle": -5
+      }
+    },
+    {
+      "template": "rock-title",
+      "start": 81.704,
+      "end": 85.754,
+      "opacity": 1,
+      "seed": "rock-5",
+      "name": "摇滚大标题 · CHORUS 3",
+      "params": {
+        "text": "NO SURRENDER",
+        "sub": "CHORUS 3",
+        "tag": "CHORUS",
+        "size": 176,
+        "maxWidth": 0.78
+      }
+    },
+    {
+      "template": "tape-label",
+      "start": 96.614,
+      "end": 99.354,
+      "opacity": 1,
+      "seed": "tape-6",
+      "name": "胶带标签 · BUILD 2",
+      "params": {
+        "label": "BUILD 2",
+        "note": "128 BPM",
+        "size": 44,
+        "position": "0.5,0.22",
+        "angle": -5
+      }
+    },
+    {
+      "template": "tape-label",
+      "start": 112.555,
+      "end": 115.295,
+      "opacity": 1,
+      "seed": "tape-7",
+      "name": "胶带标签 · VERSE 3",
+      "params": {
+        "label": "VERSE 3",
+        "note": "128 BPM",
+        "size": 44,
+        "position": "0.5,0.22",
+        "angle": -5
+      }
+    },
+    {
+      "template": "rock-title",
+      "start": 114.8,
+      "end": 119.6,
+      "opacity": 1,
+      "seed": "rock-end",
+      "name": "摇滚大标题 · 收尾",
+      "params": {
+        "text": "THAT'S ALL",
+        "sub": "THANKS FOR WATCHING",
+        "tag": "SIDE B",
+        "size": 132,
+        "maxWidth": 0.7
+      }
+    }
+  ],
+  "fx": [
+    {
+      "type": "grain",
+      "amount": 0.1
+    },
+    {
+      "type": "vignette",
+      "amount": 0.42
+    },
+    {
+      "type": "chromatic",
+      "amount": 2.2,
+      "animated": true,
+      "jitter": 0.8
+    },
+    {
+      "type": "flash",
+      "fillColor": "#ffffff",
+      "hits": "beats",
+      "every": 2,
+      "duration": 0.05,
+      "amount": 0.1
+    }
+  ]
+}

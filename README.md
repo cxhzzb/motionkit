@@ -117,7 +117,7 @@ node tools/serve.mjs --open # 起服务并自动开浏览器（bat 里用的就�
 **直接在预览里改**：不用去右边翻参数。在预览上点一下图层就选中（选择框和手柄出来），
 拖动挪位置、拉四个角缩放、转上面那个圆手柄旋转、**双击直接改文字**（浮窗里边打边看）。
 位置 / 缩放 / 旋转记在图层自己的变换上，不去动模板的 `position` 参数，
-所以 26 个模板——包括根本没有位置参数的全屏 HUD、字幕层、转场层——都能这么调；
+所以 29 个模板——包括根本没有位置参数的全屏 HUD、字幕层、转场层——都能这么调；
 而且导出和无头渲染走的是同一个引擎，界面里摆成什么样，导出来就是什么样。
 
 **图层索引**（左栏第二个页签，快捷键 `I`）：图层一多，光看时间轴上的色条不知道谁是谁。
@@ -190,7 +190,7 @@ python tools/beatmap.py --in music.mp3 --out beats.json --markers beats.txt --fp
 
 ---
 
-## 模板总览（26 个）
+## 模板总览（29 个）
 
 ### 叠加层 / HUD
 
@@ -224,6 +224,44 @@ python tools/beatmap.py --in music.mp3 --out beats.json --markers beats.txt --fp
 | `credits-roll` | 片尾名单 | 从下往上滚的片尾名单，左边职位右边名字，带出画淡出与速度控制 |
 
 预设 `presets/design-demo.json`（载入预设 → 设计排版）能一次看到这三款的效果。
+
+### 摇滚 / 海报〔新增〕
+
+印刷海报那一路：压扁的大字、故意做旧的错版重影、网点、胶带、撕边，
+动效是"砸下来 + 抖一下"，不是慢慢淡入。
+
+![摇滚三款模板](docs/preview-rock-templates.png)
+
+| id | 名称 | 说明 |
+| --- | --- | --- |
+| `rock-title` | 摇滚大标题 | 撕边色带 + 压扁大字 + 错版重影 + 落地抖动，左上角还能挂个 `SIDE A` 标签 |
+| `gig-poster` | 演出海报 | 海报式信息卡：大标题 + 日期 / 场地 / 票价 + `ADMIT ONE` 角标，网点做旧 |
+| `tape-label` | 胶带标签 | 一截胶带啪地贴上去，带撕边和纤维纹路，可以再叠一小截写备注 |
+
+## 自动卡点剪辑（跟着音乐剪）
+
+`tools/autocut.py`：给一首歌 + 一堆素材，自动按拍点剪成一条片子。
+
+```bash
+# 先看它打算怎么剪（不落盘）
+python tools/autocut.py --music song.mp3 --clips D:\clips --dry-run
+
+# 真剪：按拍点切素材 → 拼接 → 配上这首歌
+python tools/autocut.py --music song.mp3 --clips D:\clips --out projects/rock-auto
+
+# 只生成摇滚叠加层工程（不剪片），在工作室里接着调
+python tools/autocut.py --music song.mp3 --clips D:\clips --scene-only --title "NIGHT DRIVE"
+```
+
+它怎么决定"哪里切"：分频段谱通量求拍点（和工作室里同一套算法）→ 归一到 4 拍强拍网格 →
+按每段能量档位给密度（**安静段 4 拍一刀 / 中段 2 拍 / 爆点 1 拍**）→
+切点再做 ±90ms 的起音峰吸附。实测切点与拍点的最大偏差 **8ms**。
+
+顺便会自动生成一份**摇滚风格的 2 分钟叠加层工程**（开场大标题、每个段落一枚胶带标签、
+副歌砸大字、收尾、配好 BPM 与卡点）：`presets/rock-2min.json` 就是用它生成的示例，
+在工作室里「载入预设 → 摇滚 2 分钟」可以直接打开接着调。
+
+![2 分钟摇滚预设](docs/preview-rock.png)
 
 ### 面板卡片
 
@@ -427,8 +465,8 @@ export default [myEffect];
 │   ├─ audio.js            卡点分析（STFT 分频段通量 → 自相关 → 最小二乘精修）
 │   ├─ srt.js              字幕解析 / 导出 / 切短句 / 词级时间估算
 │   └─ zip.js              ZIP 写入器（含流式版本，边渲染边落盘）
-├─ templates/              26 个模板（hud / type / panels / transitions / hits / design）
-├─ presets/                slopcore / demo-scene / transitions-demo / design-demo + index.json
+├─ templates/              29 个模板（hud / type / design / rock / panels / transitions / hits）
+├─ presets/                slopcore / demo-scene / transitions-demo / design-demo / rock-2min + index.json
 ├─ agent/                  AI 助手：分析 → 转写 → 文案 → 排布 → 成片
 │   ├─ autopilot.py        总入口（CLI 也是本地服务调的那支）
 │   ├─ analyze.py          拍点 / 镜头切点 / 亮度 / 运动量 / 人声段
@@ -436,7 +474,7 @@ export default [myEffect];
 │   ├─ llm.py              文案与定调（DeepSeek / OpenAI / 本地 Ollama 都行）
 │   ├─ director.py         导演：把分析 + 选择 + 文案排成图层栈（含占位避让）
 │   ├─ styles.json         6 套配色风格预设
-│   ├─ schema.json         从 26 个模板导出的参数表，用来校验生成结果
+│   ├─ schema.json         从 29 个模板导出的参数表，用来校验生成结果
 │   └─ _mock_api.py        离线自检用的假接口
 ├─ tools/
 │   ├─ serve.mjs           零依赖静态服务器
@@ -447,6 +485,7 @@ export default [myEffect];
 │   ├─ bundle.mjs          单文件打包
 │   ├─ schema.mjs          导出模板参数表给 agent 用
 │   ├─ encode.py           PNG 序列 → ProRes / WebM / H.264，以及烧到成片
+│   ├─ autocut.py          跟着音乐自动剪片（卡点剪辑 + 自动生成摇滚叠加层工程）
 │   └─ beatmap.py          命令行卡点分析
 └─ docs/                   效果对照表 + 各软件接入步骤 + 命令速查
 ```
@@ -519,7 +558,7 @@ AI 助手要调 python、ffmpeg 和无头浏览器，只有带后端的开发模
 
 **它会不会写出引擎不认的工程？**
 
-不会。生成之后会拿 `agent/schema.json`（从 26 个模板导出的参数表）逐字段校验：
+不会。生成之后会拿 `agent/schema.json`（从 29 个模板导出的参数表）逐字段校验：
 不认识的键丢掉、越界数字钳回范围、非法选项退回默认，越界的情况会记在 `report.md` 里。
 
 **为什么导出的 PNG 这么大？**
