@@ -1,0 +1,711 @@
+{
+  "name": "slopcore-180s",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "duration": 180,
+  "bg": null,
+  "transparent": true,
+  "beat": {
+    "bpm": 128,
+    "offset": 0,
+    "duration": 180,
+    "source": "manual"
+  },
+  "captions": [],
+  "layers": [
+    {
+      "template": "hud-frame",
+      "start": 0.0,
+      "end": 180.0,
+      "opacity": 1,
+      "seed": "hud-frame-00",
+      "name": "HUD 全屏框（铺满全程）",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "noise": 0.6,
+        "speed": 0.9,
+        "inset": 46,
+        "labelLeft": "SIGNAL",
+        "labelRight": "REC",
+        "meter": true,
+        "rulers": true,
+        "tickerTop": "ESCAPE VELOCITY  11.2 KM/S  PERMANENT UNDERCLASS  ZERO-DAY  NO EXIT",
+        "tickerBottom": "SIGNAL LOCKED  AGENT ONLINE  TOKENS BURNED  NVIDIA GTC  129 BILLION"
+      }
+    },
+    {
+      "template": "title-mark",
+      "start": 0.15,
+      "end": 6.4,
+      "opacity": 1,
+      "seed": "title-mark-01",
+      "name": "标题定格 · 开场",
+      "params": {
+        "title": "ESCAPE VELOCITY",
+        "kicker": "SLOPCORE / TRANSMISSION 01",
+        "note": "MADE IN SAN FRANCISCO",
+        "position": "0.5,0.50",
+        "size": 168,
+        "fit": true,
+        "maxWidth": 0.86,
+        "rule": true
+      }
+    },
+    {
+      "template": "terminal-prompt",
+      "start": 1.2,
+      "end": 7.0,
+      "opacity": 1,
+      "seed": "terminal-prompt-02",
+      "name": "终端面板 · 开机",
+      "params": {
+        "title": "PROMPT",
+        "position": "0.06,0.62",
+        "width": 520,
+        "size": 21,
+        "lineHeight": 1.7,
+        "charDelay": 0.03,
+        "fill": "#0a0a0b",
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "lines": "> recording 1920x1080 30p\n> audio 48k stereo\n> duration 180s\n> status: SIGNAL LOCKED"
+      }
+    },
+    {
+      "template": "glitch-burst",
+      "start": 7.0,
+      "end": 7.45,
+      "opacity": 1,
+      "seed": "glitch-burst-03",
+      "name": "转场 · SIGNAL TRACKING",
+      "params": {}
+    },
+    {
+      "template": "kinetic-type",
+      "start": 7.45,
+      "end": 14.45,
+      "opacity": 1,
+      "seed": "kinetic-type-04",
+      "name": "卡点大字 · SIGNAL TRACKING",
+      "params": {
+        "text": "SIGNAL TRACKING\nESCAPE VELOCITY",
+        "mode": "slam",
+        "position": "0.5,0.52",
+        "size": 150,
+        "align": "center",
+        "fit": true,
+        "maxWidth": 0.8,
+        "ghost": true,
+        "beatsPerStep": 2
+      }
+    },
+    {
+      "template": "word-grid",
+      "start": 7.6,
+      "end": 25.367,
+      "opacity": 1,
+      "seed": "word-grid-05",
+      "name": "词块宫格 · SIGNAL TRACKING",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "text": "ESCAPE VELOCITY PERMANENT UNDERCLASS LOCK IN SIGNAL TRACKING",
+        "position": "0.5,0.47",
+        "fontSize": 40,
+        "cols": 4,
+        "cellW": 300,
+        "cellH": 84,
+        "beatsPerStep": 1
+      }
+    },
+    {
+      "template": "stat-counter",
+      "start": 14.433,
+      "end": 24.342,
+      "opacity": 1,
+      "seed": "stat-counter-06",
+      "name": "数字滚动计数 · SIGNAL TRACKING",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "position": "0.65,0.31",
+        "label": "SIGNAL SIGNAL",
+        "value": 60,
+        "suffix": "%",
+        "size": 104,
+        "bar": true
+      }
+    },
+    {
+      "template": "param-ticks",
+      "start": 21.267,
+      "end": 31.175,
+      "opacity": 1,
+      "seed": "param-ticks-07",
+      "name": "参数刻度簇 · SIGNAL TRACKING",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "position": "0.07,0.58",
+        "width": 330,
+        "rows": 4,
+        "live": true,
+        "frame": true
+      }
+    },
+    {
+      "template": "note-bubble",
+      "start": 28.1,
+      "end": 34.283,
+      "opacity": 1,
+      "seed": "note-bubble-08",
+      "name": "注释气泡 · SIGNAL TRACKING",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "text": "> escape\n> signal tracking",
+        "position": "0.61,0.62",
+        "width": 420,
+        "size": 19
+      }
+    },
+    {
+      "template": "shutter-wipe",
+      "start": 34.333,
+      "end": 34.783,
+      "opacity": 1,
+      "seed": "shutter-wipe-09",
+      "name": "转场 · SYSTEM DRIFT",
+      "params": {}
+    },
+    {
+      "template": "kinetic-type",
+      "start": 34.783,
+      "end": 41.783,
+      "opacity": 1,
+      "seed": "kinetic-type-10",
+      "name": "卡点大字 · SYSTEM DRIFT",
+      "params": {
+        "text": "SYSTEM DRIFT\nZERO-DAY STARGATE",
+        "mode": "slam",
+        "position": "0.5,0.52",
+        "size": 150,
+        "align": "center",
+        "fit": true,
+        "maxWidth": 0.8,
+        "ghost": true,
+        "beatsPerStep": 2
+      }
+    },
+    {
+      "template": "dial-gauge",
+      "start": 34.933,
+      "end": 44.842,
+      "opacity": 1,
+      "seed": "dial-gauge-11",
+      "name": "圆盘仪表 · SYSTEM DRIFT",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "position": "0.81,0.46",
+        "label": "SYSTEM",
+        "value": 0.49,
+        "radius": 96,
+        "showValue": true
+      }
+    },
+    {
+      "template": "look-card",
+      "start": 41.767,
+      "end": 51.675,
+      "opacity": 1,
+      "seed": "look-card-12",
+      "name": "编号卡片 · SYSTEM DRIFT",
+      "params": {
+        "accent": "#ff5a24",
+        "title": "LOOK",
+        "startIndex": 9,
+        "position": "0.07,0.58",
+        "width": 460,
+        "size": 22,
+        "stagger": 2,
+        "hold": true,
+        "items": "SYSTEM DRIFT\nSEQUENCE 02\nNO EXIT"
+      }
+    },
+    {
+      "template": "note-bubble",
+      "start": 48.6,
+      "end": 58.508,
+      "opacity": 1,
+      "seed": "note-bubble-13",
+      "name": "注释气泡 · SYSTEM DRIFT",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "text": "> zero-day\n> system drift",
+        "position": "0.61,0.62",
+        "width": 420,
+        "size": 19
+      }
+    },
+    {
+      "template": "terminal-prompt",
+      "start": 55.433,
+      "end": 61.617,
+      "opacity": 1,
+      "seed": "terminal-prompt-14",
+      "name": "终端面板 · SYSTEM DRIFT",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "title": "DVR LOG",
+        "position": "0.07,0.30",
+        "width": 500,
+        "size": 20,
+        "fill": "#0a0a0b",
+        "lines": "> segment 02\n> SYSTEM DRIFT\n> signal locked"
+      }
+    },
+    {
+      "template": "halftone-rise",
+      "start": 61.667,
+      "end": 62.117,
+      "opacity": 1,
+      "seed": "halftone-rise-15",
+      "name": "转场 · DVR REVIEW",
+      "params": {}
+    },
+    {
+      "template": "kinetic-type",
+      "start": 62.117,
+      "end": 69.117,
+      "opacity": 1,
+      "seed": "kinetic-type-16",
+      "name": "卡点大字 · DVR REVIEW",
+      "params": {
+        "text": "DVR REVIEW\nRECORDED BAYOU",
+        "mode": "slam",
+        "position": "0.5,0.52",
+        "size": 150,
+        "align": "center",
+        "fit": true,
+        "maxWidth": 0.8,
+        "ghost": true,
+        "beatsPerStep": 2
+      }
+    },
+    {
+      "template": "terminal-prompt",
+      "start": 62.267,
+      "end": 72.175,
+      "opacity": 1,
+      "seed": "terminal-prompt-17",
+      "name": "终端面板 · DVR REVIEW",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "title": "DVR LOG",
+        "position": "0.07,0.58",
+        "width": 500,
+        "size": 20,
+        "fill": "#0a0a0b",
+        "lines": "> segment 03\n> DVR REVIEW\n> signal locked"
+      }
+    },
+    {
+      "template": "ticker-strip",
+      "start": 69.1,
+      "end": 79.008,
+      "opacity": 1,
+      "seed": "ticker-strip-18",
+      "name": "跑马灯条 · DVR REVIEW",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "position": "0.08,0.81,0.84",
+        "size": 15,
+        "speed": 1.0,
+        "height": 34,
+        "text": "DVR REVIEW  ·  RECORDED  ·  BAYOU  ·  DUSK  ·  NO  ·  BOUNTY  ·  SIGNAL  ·  LOST"
+      }
+    },
+    {
+      "template": "param-ticks",
+      "start": 75.933,
+      "end": 85.842,
+      "opacity": 1,
+      "seed": "param-ticks-19",
+      "name": "参数刻度簇 · DVR REVIEW",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "position": "0.07,0.30",
+        "width": 330,
+        "rows": 4,
+        "live": true,
+        "frame": true
+      }
+    },
+    {
+      "template": "look-card",
+      "start": 82.767,
+      "end": 88.95,
+      "opacity": 1,
+      "seed": "look-card-20",
+      "name": "编号卡片 · DVR REVIEW",
+      "params": {
+        "accent": "#ff5a24",
+        "title": "LOOK",
+        "startIndex": 12,
+        "position": "0.63,0.34",
+        "width": 460,
+        "size": 22,
+        "stagger": 2,
+        "hold": true,
+        "items": "DVR REVIEW\nSEQUENCE 03\nNO EXIT"
+      }
+    },
+    {
+      "template": "scan-wipe",
+      "start": 89.0,
+      "end": 89.45,
+      "opacity": 1,
+      "seed": "scan-wipe-21",
+      "name": "转场 · HARD LOCK",
+      "params": {}
+    },
+    {
+      "template": "kinetic-type",
+      "start": 89.45,
+      "end": 96.45,
+      "opacity": 1,
+      "seed": "kinetic-type-22",
+      "name": "卡点大字 · HARD LOCK",
+      "params": {
+        "text": "HARD LOCK\nLOCKED IN",
+        "mode": "slam",
+        "position": "0.5,0.52",
+        "size": 150,
+        "align": "center",
+        "fit": true,
+        "maxWidth": 0.8,
+        "ghost": true,
+        "beatsPerStep": 2
+      }
+    },
+    {
+      "template": "stat-counter",
+      "start": 89.6,
+      "end": 99.508,
+      "opacity": 1,
+      "seed": "stat-counter-23",
+      "name": "数字滚动计数 · HARD LOCK",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "position": "0.63,0.59",
+        "label": "SIGNAL HARD",
+        "value": 81,
+        "suffix": "%",
+        "size": 104,
+        "bar": true
+      }
+    },
+    {
+      "template": "dial-gauge",
+      "start": 96.433,
+      "end": 106.342,
+      "opacity": 1,
+      "seed": "dial-gauge-24",
+      "name": "圆盘仪表 · HARD LOCK",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "position": "0.17,0.43",
+        "label": "HARD",
+        "value": 0.67,
+        "radius": 96,
+        "showValue": true
+      }
+    },
+    {
+      "template": "shipping-label",
+      "start": 103.267,
+      "end": 113.175,
+      "opacity": 1,
+      "seed": "shipping-label-25",
+      "name": "吊牌 / 条码卡 · HARD LOCK",
+      "params": {
+        "accent": "#ff5a24",
+        "product": "ESCAPE VELOCITY",
+        "sku": "HARD-04",
+        "care": "DO NOT PANIC / KEEP MOVING",
+        "width": 340,
+        "rotate": -2
+      }
+    },
+    {
+      "template": "word-grid",
+      "start": 110.1,
+      "end": 116.283,
+      "opacity": 1,
+      "seed": "word-grid-26",
+      "name": "词块宫格 · HARD LOCK",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "text": "LOCKED IN NO EXIT STAY DOWN FINAL CALL HARD LOCK",
+        "position": "0.5,0.47",
+        "fontSize": 40,
+        "cols": 4,
+        "cellW": 300,
+        "cellH": 84,
+        "beatsPerStep": 1
+      }
+    },
+    {
+      "template": "rgb-split",
+      "start": 116.333,
+      "end": 116.783,
+      "opacity": 1,
+      "seed": "rgb-split-27",
+      "name": "转场 · ZERO-DAY",
+      "params": {}
+    },
+    {
+      "template": "kinetic-type",
+      "start": 116.783,
+      "end": 123.783,
+      "opacity": 1,
+      "seed": "kinetic-type-28",
+      "name": "卡点大字 · ZERO-DAY",
+      "params": {
+        "text": "ZERO-DAY\nZERO-DAY PROTOCOL",
+        "mode": "slam",
+        "position": "0.5,0.52",
+        "size": 150,
+        "align": "center",
+        "fit": true,
+        "maxWidth": 0.8,
+        "ghost": true,
+        "beatsPerStep": 2
+      }
+    },
+    {
+      "template": "look-card",
+      "start": 116.933,
+      "end": 126.842,
+      "opacity": 1,
+      "seed": "look-card-29",
+      "name": "编号卡片 · ZERO-DAY",
+      "params": {
+        "accent": "#ff5a24",
+        "title": "LOOK",
+        "startIndex": 18,
+        "position": "0.07,0.30",
+        "width": 460,
+        "size": 22,
+        "stagger": 2,
+        "hold": true,
+        "items": "ZERO-DAY\nSEQUENCE 05\nNO EXIT"
+      }
+    },
+    {
+      "template": "stat-counter",
+      "start": 123.767,
+      "end": 133.675,
+      "opacity": 1,
+      "seed": "stat-counter-30",
+      "name": "数字滚动计数 · ZERO-DAY",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "position": "0.65,0.31",
+        "label": "SIGNAL ZERO-DAY",
+        "value": 88,
+        "suffix": "%",
+        "size": 104,
+        "bar": true
+      }
+    },
+    {
+      "template": "note-bubble",
+      "start": 130.6,
+      "end": 140.508,
+      "opacity": 1,
+      "seed": "note-bubble-31",
+      "name": "注释气泡 · ZERO-DAY",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "text": "> zero-day\n> zero-day",
+        "position": "0.07,0.58",
+        "width": 420,
+        "size": 19
+      }
+    },
+    {
+      "template": "ticker-strip",
+      "start": 137.433,
+      "end": 143.617,
+      "opacity": 1,
+      "seed": "ticker-strip-32",
+      "name": "跑马灯条 · ZERO-DAY",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "position": "0.08,0.81,0.84",
+        "size": 15,
+        "speed": 1.0,
+        "height": 34,
+        "text": "ZERO-DAY  ·  ZERO-DAY  ·  PROTOCOL  ·  BREACH  ·  SILENT  ·  RUN"
+      }
+    },
+    {
+      "template": "zoom-punch",
+      "start": 143.667,
+      "end": 144.117,
+      "opacity": 1,
+      "seed": "zoom-punch-33",
+      "name": "转场 · ESCAPE VELOCITY",
+      "params": {}
+    },
+    {
+      "template": "kinetic-type",
+      "start": 144.117,
+      "end": 151.117,
+      "opacity": 1,
+      "seed": "kinetic-type-34",
+      "name": "卡点大字 · ESCAPE VELOCITY",
+      "params": {
+        "text": "ESCAPE VELOCITY\nESCAPE VELOCITY",
+        "mode": "slam",
+        "position": "0.5,0.52",
+        "size": 150,
+        "align": "center",
+        "fit": true,
+        "maxWidth": 0.8,
+        "ghost": true,
+        "beatsPerStep": 2
+      }
+    },
+    {
+      "template": "word-grid",
+      "start": 144.267,
+      "end": 162.033,
+      "opacity": 1,
+      "seed": "word-grid-35",
+      "name": "词块宫格 · ESCAPE VELOCITY",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "text": "ESCAPE VELOCITY RUN FASTER BEYOND CONTROL ESCAPE VELOCITY",
+        "position": "0.5,0.47",
+        "fontSize": 40,
+        "cols": 4,
+        "cellW": 300,
+        "cellH": 84,
+        "beatsPerStep": 1
+      }
+    },
+    {
+      "template": "ticker-strip",
+      "start": 151.1,
+      "end": 161.008,
+      "opacity": 1,
+      "seed": "ticker-strip-36",
+      "name": "跑马灯条 · ESCAPE VELOCITY",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "position": "0.08,0.81,0.84",
+        "size": 15,
+        "speed": 1.0,
+        "height": 34,
+        "text": "ESCAPE VELOCITY  ·  ESCAPE  ·  VELOCITY  ·  RUN  ·  FASTER  ·  BEYOND  ·  CONTROL"
+      }
+    },
+    {
+      "template": "dial-gauge",
+      "start": 157.933,
+      "end": 167.842,
+      "opacity": 1,
+      "seed": "dial-gauge-37",
+      "name": "圆盘仪表 · ESCAPE VELOCITY",
+      "params": {
+        "color": "#efece4",
+        "accent": "#ff5a24",
+        "position": "0.81,0.74",
+        "label": "ESCAPE",
+        "value": 0.85,
+        "radius": 96,
+        "showValue": true
+      }
+    },
+    {
+      "template": "shipping-label",
+      "start": 164.767,
+      "end": 170.95,
+      "opacity": 1,
+      "seed": "shipping-label-38",
+      "name": "吊牌 / 条码卡 · ESCAPE VELOCITY",
+      "params": {
+        "accent": "#ff5a24",
+        "product": "ESCAPE VELOCITY",
+        "sku": "ESCAPE-06",
+        "care": "DO NOT PANIC / KEEP MOVING",
+        "width": 340,
+        "rotate": -2
+      }
+    },
+    {
+      "template": "title-mark",
+      "start": 171.0,
+      "end": 180.0,
+      "opacity": 1,
+      "seed": "title-mark-39",
+      "name": "标题定格 · 收尾",
+      "params": {
+        "title": "ESCAPE\nVELOCITY",
+        "kicker": "END OF TRANSMISSION",
+        "note": "128 BPM · 3:00 · SIGNAL LOCKED",
+        "position": "0.5,0.50",
+        "size": 150,
+        "fit": true,
+        "maxWidth": 0.8
+      }
+    }
+  ],
+  "fx": [
+    {
+      "type": "grain",
+      "amount": 0.12
+    },
+    {
+      "type": "scanlines",
+      "amount": 0.14,
+      "step": 3
+    },
+    {
+      "type": "chromatic",
+      "amount": 3,
+      "animated": true,
+      "jitter": 1.5
+    },
+    {
+      "type": "vignette",
+      "amount": 0.5
+    },
+    {
+      "type": "flash",
+      "fillColor": "#ffffff",
+      "hits": "beats",
+      "every": 2,
+      "duration": 0.06,
+      "amount": 0.18
+    }
+  ]
+}

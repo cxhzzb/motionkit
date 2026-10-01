@@ -51,6 +51,20 @@ python agent/fill.py --video 素材.mp4 --out projects/fill-1 --json-progress
 > 上面这一屏就是用 `presets/slopcore.json` 渲染出来的（叠加层铺在底图上）。
 > 视觉语言参考了 [SLOPCORE: ESCAPE VELOCITY](https://www.youtube.com/watch?v=C3fxudvU-UU) 那支片子。
 
+想要长的？同一套视觉有 **3 分钟版**：`presets/slopcore-3min.json`
+（180 秒 / 40 图层 / 18 个模板，6 个段落各配一记转场和卡点大字，卡点闪白走特效栈）。
+
+![Slopcore 3 分钟长片](docs/preview-slopcore-3min.png)
+
+> 0:05 开头 → 0:25 信息层 → 1:00 终端 → 1:30 / 2:05 段落大字 → 2:55 收尾。
+
+时长随便改，脚本会重新排版（分层错开、检查空档）：
+
+```bash
+python tools/make-long-preset.py --duration 300 --out presets/slopcore-5min.json
+python tools/make-long-preset.py --duration 180 --bpm 96 --title "LOW EARTH ORBIT" --out presets/slopcore-3min.json
+```
+
 ---
 
 ## 30 秒上手
@@ -620,7 +634,7 @@ export default [myEffect];
 │   ├─ srt.js              字幕解析 / 导出 / 切短句 / 词级时间估算
 │   └─ zip.js              ZIP 写入器（含流式版本，边渲染边落盘）
 ├─ templates/              46 个模板（hud / type / design / chaos / data / focus / mark / rock / panels / transitions / hits）
-├─ presets/                slopcore / demo-scene / transitions-demo / design-demo / rock-2min / focus-demo / data-demo / chaos-demo + index.json
+├─ presets/                slopcore / slopcore-3min / demo-scene / design-demo / rock-2min / focus-demo / data-demo / chaos-demo + index.json
 ├─ agent/                  AI 助手：分析 → 转写 → 文案 → 排布 → 成片
 │   ├─ autopilot.py        总入口（CLI 也是本地服务调的那支）
 │   ├─ analyze.py          拍点 / 镜头切点 / 亮度 / 运动量 / 人声段
