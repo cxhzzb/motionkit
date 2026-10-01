@@ -298,6 +298,36 @@ if (textPick) {
   sbox.dispatchEvent(new Event('input', { bubbles: true }));
   await sleep(60);
 
+  // ---------------------------------------------------------------- 11. 卡点重复动效：整组改
+  MK.rightTab('beat');
+  await sleep(80);
+  const nEvery2 = MK.beatFx.relay('flash-cut', 2);   // 每 2 拍铺
+  const nEvery1 = MK.beatFx.relay('flash-cut', 1);   // 改成每拍 → 应该更多
+  MK.beatFx.apply('flash-cut', { peak: 0.8, dur: 0.5 });
+  const fxList = MK.state.scene.layers.filter((L) => L.template === 'flash-cut');
+  const peaks = [...new Set(fxList.map((L) => Number(L.params.peak)) )];
+  const durs = [...new Set(fxList.map((L) => +(L.end - L.start).toFixed(2)) )];
+  // 末尾那几个会被工程时长截断（0.5 变成 0.22），这也是对的
+  const durOk = fxList.every((L) => Math.abs((L.end - L.start) - 0.5) < 0.02
+    || Math.abs(L.end - MK.state.scene.duration) < 0.02);
+  report.beatFx = { every2: nEvery2, every1: nEvery1, count: fxList.length, peaks, durs, grouped: fxList.every((L) => L.group === 'beat') };
+  report.checks.beatFxRelay = nEvery1 > nEvery2 && nEvery2 > 0;
+  report.checks.beatFxBulk = peaks.length === 1 && peaks[0] === 0.8 && durOk;
+  report.checks.beatFxGrouped = fxList.every((L) => L.group === 'beat');
+
+  // 面板上的三个按钮：全部关掉 / 全部打开 / 清空
+  const offBtn = [...document.querySelectorAll('#rightBody .fx-item button')].find((b) => b.textContent === '全部关掉');
+  const onBtn = [...document.querySelectorAll('#rightBody .fx-item button')].find((b) => b.textContent === '全部打开');
+  if (offBtn) offBtn.click();
+  await sleep(60);
+  const allOff = MK.state.scene.layers.filter((L) => L.template === 'flash-cut').every((L) => !L.enabled);
+  if (onBtn) onBtn.click();
+  await sleep(60);
+  const allOn = MK.state.scene.layers.filter((L) => L.template === 'flash-cut').every((L) => L.enabled);
+  const cleared = MK.beatFx.clear('flash-cut');
+  report.checks.beatFxButtons = !!offBtn && !!onBtn && allOff && allOn && cleared === fxList.length;
+  report.checks.beatFxCleared = MK.beatFx.list('flash-cut') === 0;
+
   // ---------------------------------------------------------------- 收尾：留个好看的演示状态
   // ---------------------------------------------------------------- 9. 时间轴上下滚动
   const tlEl = document.getElementById('timeline');

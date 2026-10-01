@@ -845,10 +845,16 @@ function rightPanelBeat(body) {
     }));
     const ba = document.createElement('div');
     ba.className = 'btn-row';
-    ba.appendChild(btn('一键卡点铺满(闪白)', () => autoBeatLayers('flash-cut', 1)));
-    ba.appendChild(btn('每 2 拍铺一个推近', () => autoBeatLayers('zoom-punch', 2)));
+    ba.appendChild(btn('一键铺满闪白（每拍）', () => { beatFxRelay('flash-cut', 1); renderRight(); }));
+    ba.appendChild(btn('每 2 拍一个推近', () => { beatFxRelay('zoom-punch', 2); renderRight(); }));
     gb.appendChild(ba);
+    const hint = document.createElement('div');
+    hint.className = 'fx-note';
+    hint.textContent = `当前工程有 ${state.scene.beat.hitsIn(0, state.scene.duration, 1).length} 个拍点`
+      + `（BPM ${state.scene.beat.bpm.toFixed(1)}）。下面那一栏可以把铺出来的动效整组改。`;
+    gb.appendChild(hint);
     body.appendChild(gb);
+    body.appendChild(buildBeatFxGroup());
   }
 }
 
@@ -880,6 +886,70 @@ function rightPanelSubs(body) {
 /** 特效页：整段画面的后期栈（「画面一直闪」就在这儿关） */
 function rightPanelFx(body) {
   body.appendChild(buildFxGroup());
+}
+
+/**
+ * 「卡点重复动效」整组控制。
+ * 一键铺出来的闪白/推近动不动十几个，一层层删太烦 —— 这里改一个等于改全部。
+ */
+function buildBeatFxGroup() {
+  const g = group('卡点重复动效（整组改）');
+  const note = document.createElement('div');
+  note.className = 'fx-note';
+  note.textContent = '强度 / 时长改一下立刻作用到全部；改频率会按新频率重铺，不用一层层删或加。';
+  g.appendChild(note);
+
+  for (const def of BEAT_FX) {
+    const list = beatFxList(def.tpl);
+    const box = document.createElement('div');
+    box.className = 'fx-item' + (list.length ? '' : ' off');
+    const head = document.createElement('div');
+    head.className = 'fx-head';
+    const nm = document.createElement('b');
+    nm.textContent = `${def.label}（${list.length} 个）`;
+    head.appendChild(nm);
+    box.appendChild(head);
+    const bump = () => { nm.textContent = `${def.label}（${beatFxList(def.tpl).length} 个）`; };
+
+    const curPeak = list.length ? (list[0].params[def.key] ?? def.peak) : def.peak;
+    box.appendChild(numField('强度', curPeak, def.min, def.max, def.step, (v) => {
+      beatFxApply(def.tpl, { peak: v });
+    }));
+    const curDur = list.length ? +(list[0].end - list[0].start).toFixed(3) : def.dur;
+    box.appendChild(numField('单次时长(秒)', curDur, 0.05, 1.5, 0.01, (v) => {
+      beatFxApply(def.tpl, { dur: v });
+    }));
+    box.appendChild(field('频率', () => {
+      const s = document.createElement('select');
+      for (const [v, t] of [['1', '每个拍点'], ['2', '每 2 拍'], ['4', '每 4 拍']]) {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = t;
+        if (String(state.beatFxEvery[def.tpl] || 2) === v) o.selected = true;
+        s.appendChild(o);
+      }
+      s.addEventListener('change', () => { beatFxRelay(def.tpl, Number(s.value)); renderRight(); });
+      return s;
+    }));
+
+    const row = document.createElement('div');
+    row.className = 'btn-row';
+    row.appendChild(btn(list.length ? '按当前设置重铺' : '按当前设置铺上', () => {
+      beatFxRelay(def.tpl, Number(state.beatFxEvery[def.tpl] || 2));
+      renderRight();
+    }));
+    row.appendChild(btn('全部关掉', () => {
+      beatFxList(def.tpl).forEach((L) => { L.enabled = false; });
+      drawTimeline(); renderAt(state.t); blit(); bump();
+    }));
+    row.appendChild(btn('全部打开', () => {
+      beatFxList(def.tpl).forEach((L) => { L.enabled = true; });
+      drawTimeline(); renderAt(state.t); blit(); bump();
+    }));
+    row.appendChild(btn('清空', () => { beatFxClear(def.tpl); renderRight(); }, 'danger'));
+    box.appendChild(row);
+    g.appendChild(box);
+  }
+  return g;
 }
 
 function group(title) {
@@ -1114,15 +1184,77 @@ function snapLayerToBeat(L) {
 }
 
 /** 卡点铺满：在每个（第 N 个）拍点上叠一个短图层 */
-function autoBeatLayers(templateId, everyN = 1) {
+/**
+ * 卡点重复动效：一键铺 / 一键改 / 一键清。
+ * 这些动效一铺就是十几个，一个个删太烦 —— 所以它们带 group="beat" 标记，
+ * 「卡点」页签里能整组改（强度、时长、频率、开关、清空）。
+ */
+const BEAT_FX = [
+  { tpl: 'flash-cut', label: '闪白硬切', key: 'peak', min: 0, max: 1, step: 0.02, peak: 0.42, dur: 0.26 },
+  { tpl: 'zoom-punch', label: '冲击推近', key: 'amount', min: 0, max: 2, step: 0.05, peak: 0.35, dur: 0.3 },
+];
+state.beatFxEvery = { 'flash-cut': 2, 'zoom-punch': 2 };
+
+/** 这一层算不算"卡点重复动效"（批量铺的，或者手动放的同款短效果） */
+function isBeatFx(L) {
+  const def = BEAT_FX.find((d) => d.tpl === L.template);
+  if (!def) return false;
+  return L.group === 'beat' || (L.end - L.start) <= 1.2;
+}
+
+function beatFxList(tpl) { return state.scene.layers.filter((L) => isBeatFx(L) && L.template === tpl); }
+
+/** 一次改掉整组：强度 / 时长 */
+function beatFxApply(tpl, { peak, dur } = {}) {
+  const def = BEAT_FX.find((d) => d.tpl === tpl);
+  if (!def) return;
+  const list = beatFxList(tpl);
+  for (const L of list) {
+    if (peak !== undefined) L.params[def.key] = peak;
+    if (dur !== undefined) L.end = Math.min(state.scene.duration, L.start + dur);
+  }
+  drawTimeline(); renderAt(state.t); blit();
+}
+
+/** 清空某一类 */
+function beatFxClear(tpl) {
+  const before = state.scene.layers.length;
+  state.scene.layers = state.scene.layers.filter((L) => !(isBeatFx(L) && L.template === tpl));
+  const n = before - state.scene.layers.length;
+  if (state.selection && !state.scene.layers.some((L) => L.id === state.selection)) state.selection = null;
+  markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
+  return n;
+}
+
+/** 按频率重铺（先清掉旧的，再按当前强度/时长铺一遍） */
+function beatFxRelay(tpl, everyN) {
+  const def = BEAT_FX.find((d) => d.tpl === tpl);
+  if (!def) return 0;
+  const list = beatFxList(tpl);
+  const peak = list.length ? list[0].params[def.key] : def.peak;
+  const dur = list.length ? (list[0].end - list[0].start) : def.dur;
+  beatFxClear(tpl);
+  state.beatFxEvery[tpl] = Math.max(1, everyN | 0);
+  autoBeatLayers(tpl, state.beatFxEvery[tpl], { peak, dur });
+  return beatFxList(tpl).length;
+}
+
+function autoBeatLayers(templateId, everyN = 1, extra = null) {
   const s = state.scene;
   const tpl = listTemplates().find((t) => t.id === templateId);
-  const dur = Math.max(0.12, s.beat.beatDur * 0.5);
+  const def = BEAT_FX.find((d) => d.tpl === templateId);
+  const dur = (extra && extra.dur) || Math.max(0.12, s.beat.beatDur * 0.5);
   const beats = s.beat.hitsIn(0, s.duration, 1).filter((_, i) => i % everyN === 0);
   for (const b of beats) {
-    s.add({ template: templateId, start: b, end: Math.min(s.duration, b + dur), seed: `${templateId}-${++state.layerSeq}`, name: tpl ? tpl.name : templateId });
+    s.add({
+      template: templateId, start: b, end: Math.min(s.duration, b + dur),
+      seed: `${templateId}-${++state.layerSeq}`, name: tpl ? tpl.name : templateId,
+      params: (extra && extra.peak !== undefined && def) ? { [def.key]: extra.peak } : {},
+      group: 'beat',
+    });
   }
-  drawTimeline();
+  if (state.beatFxEvery) state.beatFxEvery[templateId] = everyN;
+  markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
 }
 
 function updateBeatInfo() {
@@ -2724,6 +2856,12 @@ window.MotionKit = {
                        visible: Math.max(0, (tl.clientHeight - ROW_H - 8) - TRACK_TOP) }),
     tlRows: () => ({ count: tlRows().count, packed: state.tlPack !== false, layers: state.scene.layers.length }),
     rowOf: (id) => { const r = tlRows().place.get(id); return r === undefined ? -1 : r; },
+    beatFx: {
+      list: (tpl) => beatFxList(tpl).length,
+      apply: (tpl, o) => beatFxApply(tpl, o || {}),
+      relay: (tpl, n) => beatFxRelay(tpl, n),
+      clear: (tpl) => beatFxClear(tpl),
+    },
     rightTab: (t) => { if (t) setRightTab(t); return rightTab; },
     pickAt: (nx, ny) => pickLayerAt(nx, ny).map((l) => l.id),
     layerBox: (i) => { const L = layerArgOf(i); return L ? layerBoxFor(L) : null; },

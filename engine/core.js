@@ -192,7 +192,7 @@ export class BeatMap {
  * 模板只负责画自己的东西，时间的解释权全部交给引擎。
  */
 export class Layer {
-  constructor({ template, start = 0, end = 1, params = {}, seed = null, opacity = 1, blend = 'source-over', enabled = true, name = '', transform = null } = {}) {
+  constructor({ template, start = 0, end = 1, params = {}, seed = null, opacity = 1, blend = 'source-over', enabled = true, name = '', transform = null, group = '' } = {}) {
     this.id = Layer._id++;
     this.template = template;          // 模板 id 字符串
     this.start = start;
@@ -204,11 +204,14 @@ export class Layer {
     this.enabled = enabled;
     this.name = name || template;
     this.transform = normalizeTransform(transform);
+    this.group = group;                // 来源分组，比如 "beat" = 卡点批量铺出来的
   }
   get duration() { return Math.max(0, this.end - this.start); }
   covers(t) { return this.enabled && t >= this.start && t < this.end; }
   toJSON() {
-    return { template: this.template, start: this.start, end: this.end, params: this.params, seed: this.seed, opacity: this.opacity, blend: this.blend, enabled: this.enabled, name: this.name, transform: this.transform };
+    const o = { template: this.template, start: this.start, end: this.end, params: this.params, seed: this.seed, opacity: this.opacity, blend: this.blend, enabled: this.enabled, name: this.name, transform: this.transform };
+    if (this.group) o.group = this.group;   // 没分组就不落盘，免得工程文件里全是空字段
+    return o;
   }
 }
 Layer._id = 1;
