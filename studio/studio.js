@@ -1054,6 +1054,219 @@ function rightPanelSubs(body) {
     gc.appendChild(row);
     body.appendChild(gc);
   }
+  body.appendChild(buildCaptionReskinGroup());
+}
+
+// ---------------------------------------------------------------- 字幕换装
+/**
+ * 字幕换装：让每一句台词交给一个「已有的设计模板」来演。
+ *
+ * 为什么这么做：一条 subtitle-kinetic 从头铺到尾，四十分钟都是同一个样子，
+ * 而引擎里本来就有二十几个能装下一句台词的模板。这里把它们做成一个池子，
+ * 一句一个轮着发 —— 尽量不重复，也不会连着两句撞同一个。
+ *
+ * tier 分三档，UI 里就是「字幕感 / 混合 / 海报感」：
+ *   sub    贴着成片字幕的观感（黑条、等宽、逐词高亮、气泡、跑马灯、终端、编号卡、胶带）
+ *   mid    再加能当"一句话"的中等强度版式（卡点大字、标题定格、词块宫格、索引标注、名字条、吊牌、压扁大字）
+ *   poster 全屏海报级（杂志标题、摇滚大标题、系列编号）—— 一次别用太多，会盖住画面
+ */
+const CAPTION_LOOKS = [
+  // ---- tier 'sub'
+  { tpl: 'subtitle-kinetic', label: '字幕条', tier: 'sub',
+    params: (c) => ({ style: 'bar', position: '0.5,0.86', size: 44, maxWidth: 0.78, plate: true, pop: true }) },
+  { tpl: 'subtitle-kinetic', label: '等宽字幕', tier: 'sub',
+    params: (c) => ({ style: 'mono', position: '0.5,0.88', size: 34, maxWidth: 0.8, plate: true, pop: true }) },
+  { tpl: 'subtitle-kinetic', label: '逐词高亮', tier: 'sub',
+    params: (c) => ({ style: 'karaoke', position: '0.5,0.86', size: 46, maxWidth: 0.8, plate: true, pop: false }) },
+  { tpl: 'note-bubble', label: '注释气泡', tier: 'sub',
+    params: (c, i) => ({ text: c.text, position: ['0.08,0.72', '0.54,0.74', '0.08,0.28', '0.56,0.30'][i % 4], width: 520, size: 22 }) },
+  { tpl: 'ticker-strip', label: '跑马灯条', tier: 'sub',
+    params: (c, i) => ({ text: z2(i + 1) + '   ' + c.text, position: '0.06,0.78,0.88', height: 34, size: 17, speed: 1 }) },
+  { tpl: 'terminal-prompt', label: '终端面板', tier: 'sub',
+    params: (c, i) => ({ title: 'CAPTION ' + z2(i + 1), lines: '> ' + c.text, position: i % 2 ? '0.48,0.62' : '0.07,0.60', width: 520, size: 20, charDelay: 0.018 }) },
+  { tpl: 'look-card', label: '编号卡片', tier: 'sub',
+    params: (c, i) => ({ title: 'LINE', startIndex: i + 1, items: c.text, position: i % 2 ? '0.50,0.60' : '0.07,0.58', width: 520, size: 22, stagger: 1, hold: true }) },
+  { tpl: 'tape-label', label: '胶带标签', tier: 'sub', maxLen: 16,
+    params: (c, i) => ({ label: cutText(c.text, 16), note: 'LINE ' + z2(i + 1), position: i % 2 ? '0.5,0.78' : '0.5,0.24', size: 40, angle: i % 2 ? 4 : -4, inDur: 0.3, outDur: 0.25 }) },
+  // ---- tier 'mid'
+  { tpl: 'kinetic-type', label: '卡点大字', tier: 'mid',
+    params: (c) => ({ text: c.text, mode: 'slam', position: '0.5,0.56', size: 118, fit: true, maxWidth: 0.8, ghost: true, beatsPerStep: 2 }) },
+  { tpl: 'title-mark', label: '标题定格', tier: 'mid',
+    params: (c, i) => ({ title: c.text, kicker: 'LINE ' + z2(i + 1), note: '', position: '0.5,0.50', size: 118, fit: true, maxWidth: 0.82, rule: true }) },
+  { tpl: 'word-grid', label: '词块宫格', tier: 'mid',
+    params: (c) => ({ text: c.text, cols: 4, position: '0.5,0.54', cellW: 300, cellH: 84, fontSize: 34, beatsPerStep: 1 }) },
+  { tpl: 'callout-pin', label: '索引标注', tier: 'mid', maxLen: 16,
+    params: (c, i) => ({ index: String(i + 1), text: cutText(c.text, 16), point: '0.62,0.44', dir: ['tr', 'bl', 'tl', 'br'][i % 4], len: 190, size: 26, plate: '#0a0a0c', inDur: 0.35, outDur: 0.25 }) },
+  { tpl: 'name-bar', label: '名字条', tier: 'mid', maxLen: 12,
+    params: (c, i) => ({ name: cutText(c.text, 12), role: 'LINE ' + z2(i + 1), pos: ['bl', 'br', 'ml', 'mr'][i % 4], margin: 72, width: 0.42, size: 38, inDur: 0.3, outDur: 0.25 }) },
+  { tpl: 'shipping-label', label: '吊牌', tier: 'mid', maxLen: 18,
+    params: (c, i) => ({ product: cutText(c.text, 18), sku: 'LINE-' + z2(i + 1), care: '', position: i % 2 ? '0.62,0.30' : '0.08,0.32', width: 340, rotate: i % 2 ? 3 : -3 }) },
+  { tpl: 'type-stack', label: '压扁大字', tier: 'mid',
+    params: (c, i) => ({ text: c.text, mode: i % 2 ? 'inline' : 'stack', position: '0.5,0.56', size: 96, maxWidth: 0.7, align: 'center', period: true, inDur: 0.4, outDur: 0.3 }) },
+  { tpl: 'type-stack', label: '竖排大字', tier: 'mid', maxLen: 12,
+    params: (c) => ({ text: c.text, mode: 'vertical', position: '0.5,0.54', size: 84, align: 'center', period: true, inDur: 0.4, outDur: 0.3 }) },
+  // ---- tier 'poster'
+  { tpl: 'editorial-title', label: '杂志标题', tier: 'poster',
+    params: (c, i, n) => ({ title: c.text, kicker: 'LINE ' + z2(i + 1), note: '', index: z2(i + 1) + ' / ' + z2(n), position: '0.5,0.5', align: 'center', size: 110, maxWidth: 0.78, rule: true, plate: '', inDur: 0.4, outDur: 0.3 }) },
+  { tpl: 'rock-title', label: '摇滚大标题', tier: 'poster',
+    params: (c, i) => ({ text: c.text, sub: 'LINE ' + z2(i + 1), tag: '', position: '0.5,0.5', size: 132, maxWidth: 0.78, rotate: -1.4, band: true, inDur: 0.4, outDur: 0.3 }) },
+  { tpl: 'series-index', label: '系列编号', tier: 'poster',
+    params: (c, i) => ({ index: z2(i + 1), note: c.text, from: '', to: '', arrow: false, page: '/' + z2(i + 1), title: '', paper: false, frame: false, inDur: 0.4, outDur: 0.3 }) },
+];
+
+state.captionReskin = { tier: 'mid', lead: 0.15, tail: 0.35, replace: true, plan: null };
+
+const z2 = (n) => String(n).padStart(2, '0');
+const cutText = (s, n) => {
+  const t = String(s || '').trim();
+  return t.length > n ? t.slice(0, n - 1) + '…' : t;
+};
+
+function captionLookPool(tier) {
+  const keep = { sub: ['sub'], mid: ['sub', 'mid'], poster: ['sub', 'mid', 'poster'] }[tier] || ['sub', 'mid'];
+  return CAPTION_LOOKS.filter((k) => keep.includes(k.tier));
+}
+
+/** Fisher–Yates，rnd 传 Math.random 或带种子的随机函数 */
+function shuffledCopy(arr, rnd) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    const t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+
+/**
+ * 排"第几句用池子里第几个样子"。
+ *
+ * 两条规矩：
+ *   1) 用量少的先用 —— 一轮用完之前不会重复，也不会出现某几个反复用、另外几个从不露脸；
+ *   2) 连着两句不许撞样子。
+ * 外加一条：样子自己会声明"我这行最长放得下几个字"（maxLen）。长句子自动跳过
+ * 胶带标签 / 名字条 / 吊牌 / 竖排这种装不下的，免得台词被截成半句或者冲出画面。
+ */
+function planCaptionLooks(captions, pool, rnd) {
+  const rankOf = [];
+  shuffledCopy(pool.map((_, i) => i), rnd).forEach((j, k) => { rankOf[j] = k; });   // 平局时的先后
+  const used = pool.map(() => 0);
+  const plan = [];
+  for (let i = 0; i < captions.length; i++) {
+    const len = String((captions[i] && captions[i].text) || '').length;
+    let best = -1;
+    for (let j = 0; j < pool.length; j++) {
+      if (pool[j].maxLen && len > pool[j].maxLen) continue;
+      if (i > 0 && j === plan[i - 1]) continue;
+      if (best < 0 || used[j] < used[best] || (used[j] === used[best] && rankOf[j] < rankOf[best])) best = j;
+    }
+    if (best < 0) best = pool.findIndex((k) => !k.maxLen || len <= k.maxLen);   // 可用样子实在太少
+    if (best < 0) best = 0;
+    plan.push(best);
+    used[best]++;
+  }
+  return plan;
+}
+
+/** 这一批要用的模板（顺序固定，面板每次重画都读它，不会自己乱跳） */
+function captionPlanLooks() {
+  const p = state.captionReskin;
+  const pool = captionLookPool(p.tier);
+  const caps = state.scene.captions;
+  const n = caps.length;
+  const stale = !p.plan || p.plan.n !== n || p.plan.tier !== p.tier || !p.plan.picks;
+  if (stale) p.plan = { n, tier: p.tier, picks: planCaptionLooks(caps, pool, Math.random) };
+  return p.plan.picks.map((i) => pool[i]).filter(Boolean);
+}
+
+function applyCaptionReskin() {
+  const s = state.scene;
+  const p = state.captionReskin;
+  if (!s.captions.length) { alert('还没有字幕。先「导入 SRT / ASS / VTT」，再来换装。'); return; }
+  const looks = captionPlanLooks();
+  if (!looks.length) return;
+
+  s.layers = s.layers.filter((L) => L.group !== 'caption-reskin');            // 上一轮换装先撤掉
+  if (p.replace) {
+    // 导入字幕时自动挂的那条整段「卡点字幕」：换装之后留着只会和换装层打架
+    s.layers = s.layers.filter((L) => !(L.template === 'subtitle-kinetic' && /卡点字幕/.test(L.name || '')));
+  }
+
+  const n = s.captions.length;
+  s.captions.forEach((c, i) => {
+    const look = looks[i % looks.length];
+    // 字幕类模板自己按字幕时间做起落，多给的提前量反而会两句同时亮
+    const sub = look.tpl === 'subtitle-kinetic';
+    const a = Math.max(0, sub ? c.start : c.start - p.lead);
+    const b = Math.min(s.duration, sub ? c.end : c.end + p.tail);
+    s.add({
+      template: look.tpl,
+      start: +a.toFixed(3),
+      end: +Math.max(a + 0.2, b).toFixed(3),
+      seed: 'cap-' + (++state.layerSeq),
+      name: '字幕换装 ' + z2(i + 1) + ' · ' + look.label,
+      group: 'caption-reskin',
+      params: look.params(c, i, n),
+    });
+  });
+
+  markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
+  const used = new Set(s.layers.filter((L) => L.group === 'caption-reskin').map((L) => L.template));
+  toast(`换装完成：${n} 句台词 · ${used.size} 个不同模板`);
+}
+
+function clearCaptionReskin() {
+  const before = state.scene.layers.length;
+  state.scene.layers = state.scene.layers.filter((L) => L.group !== 'caption-reskin');
+  const gone = before - state.scene.layers.length;
+  markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
+  if (gone) toast(`清掉 ${gone} 个换装图层`);
+}
+
+function buildCaptionReskinGroup() {
+  const g = group('字幕换装（每句一个模板）');
+  const p = state.captionReskin;
+  const captions = state.scene.captions;
+  const mine = state.scene.layers.filter((L) => L.group === 'caption-reskin');
+
+  const note = document.createElement('div');
+  note.className = 'fx-note';
+  note.textContent = '把每一句台词交给一个已有的设计模板来演：池子轮着发，'
+    + '一轮用完之前不会重复，也不会连着两句撞同一个。不满意就「换一批」重新洗牌。';
+  g.appendChild(note);
+
+  g.appendChild(selectField('换装风格', p.tier, [
+    { value: 'sub', label: '字幕感 · 稳' },
+    { value: 'mid', label: '混合 · 推荐' },
+    { value: 'poster', label: '海报感 · 夸张' },
+  ], (v) => { p.tier = v; p.plan = null; renderRight(); }));
+
+  g.appendChild(numField('提前量(秒)', p.lead, 0, 1, 0.05, (v) => { p.lead = v; }));
+  g.appendChild(checkField('去掉原来那条整段「卡点字幕」', p.replace, (v) => { p.replace = v; }));
+
+  const row = document.createElement('div');
+  row.className = 'btn-row';
+  row.appendChild(btn('给每句字幕换模板', () => applyCaptionReskin()));
+  row.appendChild(btn('换一批（重新洗牌）', () => { p.plan = null; renderRight(); }));
+  row.appendChild(btn('清掉换装', () => clearCaptionReskin(), 'danger'));
+  g.appendChild(row);
+
+  const info = document.createElement('div');
+  info.className = 'empty';
+  info.style.whiteSpace = 'pre-line';
+  if (!captions.length) {
+    info.textContent = '还没有字幕。导入 SRT / ASS / VTT 之后，这里会列出一句台词配哪个模板。';
+  } else {
+    const looks = captionPlanLooks();
+    const counts = new Map();
+    for (const l of looks) counts.set(l.label, (counts.get(l.label) || 0) + 1);
+    const most = Math.max(...counts.values());
+    const order = looks.map((l, i) => `${z2(i + 1)} ${l.label}`).join('　→　');
+    info.textContent = `共 ${captions.length} 句 · 用到 ${counts.size} 个不同模板 · 最多的用了 ${most} 次\n`
+      + (mine.length ? `画面上已经是换装过的 ${mine.length} 层\n` : '')
+      + `这一批的顺序：\n${order}`;
+  }
+  g.appendChild(info);
+  return g;
 }
 
 /** 特效页：整段画面的后期栈（「画面一直闪」就在这儿关） */
@@ -1412,6 +1625,22 @@ function textField(labelText, value, onChange, multiline) {
     el.value = value ?? '';
     el.addEventListener('input', () => { onChange(el.value); renderAt(state.t); blit(); });
     return el;
+  });
+}
+/** 下拉框。options 是 [{value,label}]，也可以直接给字符串数组 */
+function selectField(labelText, value, options, onChange) {
+  return field(labelText, () => {
+    const s = document.createElement('select');
+    for (const o of options) {
+      const v = typeof o === 'string' ? o : o.value;
+      const op = document.createElement('option');
+      op.value = v;
+      op.textContent = typeof o === 'string' ? o : o.label;
+      if (v === value) op.selected = true;
+      s.appendChild(op);
+    }
+    s.addEventListener('change', () => onChange(s.value));
+    return s;
   });
 }
 function btn(text, onClick, cls = '') {

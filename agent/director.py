@@ -22,6 +22,7 @@ import json
 import math
 import os
 import re
+import random
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -336,6 +337,133 @@ class Layout:
             if best_cost is None or cost < best_cost:
                 best, best_cost = i, cost
         return (best if best is not None else 0), boxes[best if best is not None else 0]
+
+
+# ---------------------------------------------------------------- 字幕换装
+#
+# 字幕不再是一条 subtitle-kinetic 从头铺到尾 —— 那样四十分钟一个样。
+# 这里把引擎里"本来就能装下一句台词"的模板排成一个池子，一句一个轮着发：
+# 一轮用完之前不重复，换轮时也不跟上一句撞样子。
+# 工作室的「字幕换装」按钮（studio/studio.js 的 CAPTION_LOOKS）是同一套思路，
+# 那边是手动点，这边是自动生成时直接铺好。加新样子时记得两边一起改。
+def _cut_text(text, n):
+    t = (text or "").strip()
+    return t if len(t) <= n else t[: max(1, n - 1)] + "…"
+
+
+def _plan_looks(captions, pool, rnd):
+    """排"第几句用池子里第几个样子"。
+
+    用量少的先用（一轮用完之前不重复）+ 连着两句不撞样子；
+    另外每个样子可以声明"最长放得下几个字"(_maxlen)，长句子自动跳过装不下的那些，
+    免得台词被截成半句或者冲出画面。
+    """
+    rank = list(range(len(pool)))
+    rnd.shuffle(rank)
+    rank_of = {j: k for k, j in enumerate(rank)}
+    used = [0] * len(pool)
+    plan = []
+    for i, cap in enumerate(captions):
+        n_char = len((cap.get("text") or "").strip())
+        best = -1
+        for j, look in enumerate(pool):
+            if look[2] and n_char > look[2]:
+                continue
+            if i and j == plan[i - 1]:
+                continue
+            if best < 0 or (used[j], rank_of[j]) < (used[best], rank_of[best]):
+                best = j
+        if best < 0:
+            best = next((j for j, look in enumerate(pool) if not look[2] or n_char <= look[2]), 0)
+        plan.append(best)
+        used[best] += 1
+    return plan
+
+
+def caption_looks(W, H, ink, accent, k, base_style="bar"):
+    """字幕换装的样子池。返回 [(模板 id, 名字, 最长放得下几个字, 参数函数), ...]
+    （最长字数 0 = 不限）"""
+    size = round(min(W, H) * (0.036 + 0.012 * k))
+    small = round(size * 0.78)
+    big = round(size * 1.05)
+    style0 = base_style if base_style in ("bar", "mono", "hero", "karaoke") else "bar"
+    return [
+        # ---- 贴着成片字幕的观感
+        ("subtitle-kinetic", "字幕条", 0,
+         lambda c, i, n: {"style": style0, "position": "0.5,0.86", "size": size,
+                          "maxWidth": 0.78, "plate": True, "pop": True, "color": ink, "accent": accent}),
+        ("subtitle-kinetic", "等宽字幕", 0,
+         lambda c, i, n: {"style": "mono", "position": "0.5,0.88", "size": small,
+                          "maxWidth": 0.8, "plate": True, "pop": True, "color": ink, "accent": accent}),
+        ("subtitle-kinetic", "逐词高亮", 0,
+         lambda c, i, n: {"style": "karaoke", "position": "0.5,0.86", "size": big,
+                          "maxWidth": 0.8, "plate": True, "pop": False, "color": ink, "accent": accent}),
+        ("note-bubble", "注释气泡", 0,
+         lambda c, i, n: {"text": c["text"], "width": 520, "size": 22, "color": ink, "accent": accent,
+                          "position": ["0.08,0.72", "0.54,0.74", "0.08,0.28", "0.56,0.30"][i % 4]}),
+        ("ticker-strip", "跑马灯条", 0,
+         lambda c, i, n: {"text": "%02d   %s" % (i + 1, c["text"]), "position": "0.06,0.78,0.88",
+                          "height": 34, "size": 17, "speed": 1, "color": ink, "accent": accent}),
+        ("terminal-prompt", "终端面板", 0,
+         lambda c, i, n: {"title": "CAPTION %02d" % (i + 1), "lines": "> " + c["text"], "width": 520,
+                          "size": 20, "charDelay": 0.018, "color": ink, "accent": accent,
+                          "position": "0.48,0.62" if i % 2 else "0.07,0.60"}),
+        ("look-card", "编号卡片", 0,
+         lambda c, i, n: {"title": "LINE", "startIndex": i + 1, "items": c["text"], "width": 520,
+                          "size": 22, "stagger": 1, "hold": True, "accent": accent,
+                          "position": "0.50,0.60" if i % 2 else "0.07,0.58"}),
+        ("tape-label", "胶带标签", 16,
+         lambda c, i, n: {"label": _cut_text(c["text"], 16), "note": "LINE %02d" % (i + 1), "size": 40,
+                          "angle": 4 if i % 2 else -4, "accent": accent, "inDur": 0.3, "outDur": 0.25,
+                          "position": "0.5,0.78" if i % 2 else "0.5,0.24"}),
+        # ---- 中等强度：能当"一句话"的版式
+        ("kinetic-type", "卡点大字", 0,
+         lambda c, i, n: {"text": c["text"], "mode": "slam", "position": "0.5,0.56", "size": 118,
+                          "fit": True, "maxWidth": 0.8, "ghost": True, "beatsPerStep": 2,
+                          "color": ink, "accent": accent}),
+        ("title-mark", "标题定格", 0,
+         lambda c, i, n: {"title": c["text"], "kicker": "LINE %02d" % (i + 1), "note": "",
+                          "position": "0.5,0.50", "size": 118, "fit": True, "maxWidth": 0.82,
+                          "rule": True, "color": ink, "accent": accent}),
+        ("word-grid", "词块宫格", 0,
+         lambda c, i, n: {"text": c["text"], "cols": 4, "position": "0.5,0.54", "cellW": 300, "cellH": 84,
+                          "fontSize": 34, "beatsPerStep": 1, "color": ink, "accent": accent}),
+        ("callout-pin", "索引标注", 16,
+         lambda c, i, n: {"index": str(i + 1), "text": _cut_text(c["text"], 16), "point": "0.62,0.44",
+                          "dir": ["tr", "bl", "tl", "br"][i % 4], "len": 190, "size": 26,
+                          "plate": "#0a0a0c", "color": ink, "accent": accent,
+                          "inDur": 0.35, "outDur": 0.25}),
+        ("name-bar", "名字条", 12,
+         lambda c, i, n: {"name": _cut_text(c["text"], 12), "role": "LINE %02d" % (i + 1),
+                          "pos": ["bl", "br", "ml", "mr"][i % 4], "margin": 72, "width": 0.42,
+                          "size": 38, "color": ink, "accent": accent, "inDur": 0.3, "outDur": 0.25}),
+        ("shipping-label", "吊牌", 18,
+         lambda c, i, n: {"product": _cut_text(c["text"], 18), "sku": "LINE-%02d" % (i + 1), "care": "",
+                          "width": 340, "rotate": 3 if i % 2 else -3, "accent": accent,
+                          "position": "0.62,0.30" if i % 2 else "0.08,0.32"}),
+        ("type-stack", "压扁大字", 0,
+         lambda c, i, n: {"text": c["text"], "mode": "inline" if i % 2 else "stack",
+                          "position": "0.5,0.56", "size": 96, "maxWidth": 0.7, "align": "center",
+                          "period": True, "ink": ink, "accent": accent, "inDur": 0.4, "outDur": 0.3}),
+        ("type-stack", "竖排大字", 12,
+         lambda c, i, n: {"text": c["text"], "mode": "vertical", "position": "0.5,0.54",
+                          "size": 84, "align": "center", "period": True,
+                          "ink": ink, "accent": accent, "inDur": 0.4, "outDur": 0.3}),
+        # ---- 海报级：偶尔来一记，别太密
+        ("editorial-title", "杂志标题", 0,
+         lambda c, i, n: {"title": c["text"], "kicker": "LINE %02d" % (i + 1), "note": "",
+                          "index": "%02d / %02d" % (i + 1, n), "position": "0.5,0.5", "align": "center",
+                          "size": 110, "maxWidth": 0.78, "rule": True, "plate": "",
+                          "color": ink, "accent": accent, "inDur": 0.4, "outDur": 0.3}),
+        ("rock-title", "摇滚大标题", 0,
+         lambda c, i, n: {"text": c["text"], "sub": "LINE %02d" % (i + 1), "tag": "",
+                          "position": "0.5,0.5", "size": 132, "maxWidth": 0.78, "rotate": -1.4,
+                          "band": True, "color": ink, "accent": accent, "inDur": 0.4, "outDur": 0.3}),
+        ("series-index", "系列编号", 0,
+         lambda c, i, n: {"index": "%02d" % (i + 1), "note": c["text"], "from": "", "to": "",
+                          "arrow": False, "page": "/%02d" % (i + 1), "title": "", "paper": False,
+                          "frame": False, "ink": ink, "accent": accent, "inDur": 0.4, "outDur": 0.3}),
+    ]
 
 
 def fit_line(text, width_px, size_px, cjk_ratio=1.0):
@@ -704,15 +832,20 @@ def build_scene(analysis, brief, creative, styles=None, warnings=None):
                 captions.append({"start": round(s, 4), "end": round(e, 4),
                                  "text": piece, "style": brief["captionStyle"]})
         if captions:
-            cstyle = brief["captionStyle"]
-            add("subtitle-kinetic", captions[0]["start"] - 0.1, captions[-1]["end"] + 0.3, {
-                "style": cstyle, "position": "0.5,0.86",
-                "size": round(min(W, H) * (0.036 + 0.012 * k)),
-                "maxWidth": 0.78, "plate": cstyle in ("bar", "mono"),
-                "uppercase": False, "pop": True, "color": ink, "accent": accent,
-            }, "卡点字幕")
-        decisions.append({"stage": "字幕", "what": "%d 条（%s）" % (len(captions), brief["captionStyle"]),
-                          "why": "来自语音识别的时间轴，按标点切成短句"})
+            # 一句台词一个样子：从池子里轮着发，一轮用完之前不重复
+            pool = caption_looks(W, H, ink, accent, k, brief["captionStyle"])
+            picks = _plan_looks(captions, pool, random.Random(20261002))
+            for i, cap in enumerate(captions):
+                tid, label, _maxlen, make = pool[picks[i]]
+                sub = tid == "subtitle-kinetic"        # 字幕类自己按字幕时间做起落，不用给提前量
+                add(tid, cap["start"] - (0 if sub else 0.15), cap["end"] + (0 if sub else 0.35),
+                    make(cap, i, len(captions)), "字幕换装 %02d · %s" % (i + 1, label))
+            used = sorted({pool[j][1] for j in picks})
+            decisions.append({
+                "stage": "字幕",
+                "what": "%d 条 · %d 种样子（%s）" % (len(captions), len(used), "、".join(used[:5])),
+                "why": "来自语音识别的时间轴，按标点切成短句；每句换一个已有的设计模板，一轮用完之前不重复（工作室「字幕」页可以一键换一批）",
+            })
     elif brief["captions"] != "off":
         asr = analysis.get("asr") or {}
         if asr.get("provider"):
