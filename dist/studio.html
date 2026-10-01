@@ -761,7 +761,7 @@ input[type="color"]:disabled { cursor: not-allowed; }
     </button>
     <button data-ex="mp4" class="ex">
       <b>MP4（H.264 · 直接出片）</b>
-      <span>帧精确：导出多长就是工程多长，渲染多快就多快。无透明通道，透明区压黑底；无声</span>
+      <span>帧精确：导出多长就是工程多长，渲染多快就多快。可带声音（AAC）。无透明通道，透明区压黑底</span>
     </button>
     <button data-ex="mov" class="ex">
       <b>ProRes 4444（.mov 含 Alpha）</b>
@@ -2860,7 +2860,7 @@ return { makeZip, downloadBlob, createZipWriter, canvasToPngBytes };
 const __mod6 = (() => {
 let __default = undefined;
 // ============================================================================
-// 最小可用的 MP4 封装器：一条 H.264 视频轨，普通（非分片）.mp4。
+// 最小可用的 MP4 封装器：一条 H.264 视频轨 +（可选）一条 AAC 音频轨，普通（非分片）.mp4。
 //
 // 为什么自己写：
 //   浏览器录屏（MediaRecorder）是**按墙上时钟**给帧打时间戳的 —— 渲染一帧比 1/fps 慢，
@@ -2876,7 +2876,8 @@ let __default = undefined;
 function be(value, n) {
   const a = new Uint8Array(n);
   let v = Math.max(0, Math.floor(value));
-  for (let i = n - 1; i >= 0; i--) { a[i] = v & 255; v = Math.floor(v / 256); }
+  // 注意别用位运算：采样率 <<16 这类值会超过 2^31，位与会被截成负数
+  for (let i = n - 1; i >= 0; i--) { a[i] = v % 256; v = Math.floor(v / 256); }
   return a;
 }
 
@@ -2913,6 +2914,57 @@ const UNITY_MATRIX = join([
   be(0, 4), be(0, 4), be(0x40000000, 4),
 ]);
 
+/** MP4 的 descriptor（esds 里那套嵌套长度编码）：tag + 变长长度 + 内容 */
+function descriptor(tag, payload) {
+  const len = [];
+  let n = payload.length;
+  do { len.unshift(n & 0x7f); n >>= 7; } while (n > 0);
+  for (let i = 0; i < len.length - 1; i++) len[i] |= 0x80;
+  return join([new Uint8Array([tag]), new Uint8Array(len), payload]);
+}
+
+/** AAC 的 esds：告诉播放器"这是 MPEG-4 音频，SPS 在这儿"，缺了它多数播放器不出声 */
+function esds(description, sampleRate, channels, bitrate) {
+  const dsi = descriptor(0x05, description);
+  const dcd = descriptor(0x04, join([
+    new Uint8Array([0x40]),            // objectTypeIndication: MPEG-4 Audio
+    new Uint8Array([0x15]),            // streamType=5(audio) << 2 | 1
+    be(0, 3),                          // bufferSizeDB
+    be(bitrate, 4), be(bitrate, 4),    // max / avg bitrate
+    dsi,
+  ]));
+  const sl = descriptor(0x06, new Uint8Array([0x02]));   // SLConfigDescriptor: predefined
+  return fullBox('esds', 0, 0, descriptor(0x03, join([be(1, 2), new Uint8Array([0]), dcd, sl])));
+}
+
+/** 把"每段时长"折成 stts（相邻相同的合并成一条） */
+function timeToSampleTable(durations) {
+  const entries = [];
+  for (const d of durations) {
+    const last = entries[entries.length - 1];
+    if (last && last.delta === d) last.count++;
+    else entries.push({ count: 1, delta: d });
+  }
+  return fullBox('stts', 0, 0, be(entries.length, 4),
+    ...entries.flatMap((e) => [be(e.count, 4), be(e.delta, 4)]));
+}
+
+/** 一张轨的样本表（每个样本单独一个 chunk，stsc 就只有一条，够简单也够稳） */
+function sampleTable({ entry, durations, sizes, offsets, sync }) {
+  const stsd = fullBox('stsd', 0, 0, be(1, 4), entry);
+  const stts = timeToSampleTable(durations);
+  const stss = (sync && sync.length && sync.length < sizes.length)
+    ? fullBox('stss', 0, 0, be(sync.length, 4), ...sync.map((k) => be(k, 4)))
+    : null;
+  const stsc = fullBox('stsc', 0, 0, be(1, 4), be(1, 4), be(1, 4), be(1, 4));
+  const stsz = fullBox('stsz', 0, 0, be(0, 4), be(sizes.length, 4), ...sizes.map((s) => be(s, 4)));
+  const use64 = offsets.some((o) => o > 0xfffffff0);
+  const stco = use64
+    ? fullBox('co64', 0, 0, be(offsets.length, 4), ...offsets.map((o) => be(o, 8)))
+    : fullBox('stco', 0, 0, be(offsets.length, 4), ...offsets.map((o) => be(o, 4)));
+  return box('stbl', stsd, stts, ...(stss ? [stss] : []), stsc, stsz, stco);
+}
+
 function ftyp() {
   return box('ftyp', ascii('isom'), be(0x200, 4), ascii('isomavc1iso2mp41'));
 }
@@ -2932,26 +2984,64 @@ function sampleEntry(width, height, avcC) {
     avcC);
 }
 
+const MOVIE_TIMESCALE = 1000;      // mvhd/tkhd 用毫秒级的时基，够用也不会有小数
+
+/** mp4a 样本描述：一段固定字段 + esds（AudioSpecificConfig） */
+function audioEntry(channels, sampleRate, esdsBox) {
+  return box('mp4a',
+    new Uint8Array(6),                                 // reserved
+    be(1, 2),                                          // data_reference_index
+    be(0, 2), be(0, 2), be(0, 4),                      // version / revision / vendor
+    be(channels, 2), be(16, 2),                        // channelcount / samplesize
+    be(0, 2), be(0, 2),                                // pre_defined / reserved
+    be(sampleRate * 65536, 4),                         // samplerate（16.16 定点）
+    esdsBox);
+}
+
+/** 一条轨的外壳（tkhd + mdia），视频和音频只差中间那几样 */
+function trak({ id, durationMovie, handler, mdhdTimescale, mdhdDuration, mediaHeader, stbl,
+  width = 0, height = 0, volume = 0 }) {
+  const dref = fullBox('dref', 0, 0, be(1, 4), fullBox('url ', 0, 1));
+  const hdlr = fullBox('hdlr', 0, 0, be(0, 4), ascii(handler),
+    new Uint8Array(12), ascii(handler === 'vide' ? 'VideoHandler\0' : 'SoundHandler\0'));
+  const mdhd = fullBox('mdhd', 0, 0, be(0, 4), be(0, 4),
+    be(mdhdTimescale, 4), be(mdhdDuration, 4), be(0x55c4, 2), be(0, 2));
+  const mdia = box('mdia', mdhd, hdlr, box('minf', mediaHeader, box('dinf', dref), stbl));
+  const tkhd = fullBox('tkhd', 0, 7,
+    be(0, 4), be(0, 4), be(id, 4), be(0, 4), be(durationMovie, 4),
+    new Uint8Array(8), be(0, 2), be(0, 2), be(volume, 2), be(0, 2),
+    UNITY_MATRIX, be(width * 65536, 4), be(height * 65536, 4));
+  return box('trak', tkhd, mdia);
+}
+
 /**
  * @param {object} o
  *   width, height, fps     画面信息
  *   samples                [{ data: Uint8Array, key: boolean }] 按顺序的编码帧
  *   description            avcC 内容（VideoEncoder 的 decoderConfig.description）
+ *   audio                  { sampleRate, channels, samples: [{data, frames}], description, bitrate }
+ *                          不传 = 只有画面（导出的 MP4 就是无声的）
  * @returns {Uint8Array} 完整的 .mp4
  */
-function muxMp4({ width, height, fps, samples, description }) {
+function muxMp4({ width, height, fps, samples, description, audio }) {
   const n = samples.length;
   if (!n) throw new Error('没有帧可以封装');
   if (!description || !description.length) throw new Error('缺少 avcC（SPS/PPS），封装不了 MP4');
+  if (audio && (!audio.description || !audio.samples || !audio.samples.length)) audio = null;
 
-  // 时间基：用 fps*1000，每帧就是整数刻度，不会因为除不尽而累积漂移
+  // 时间基：视频用 fps*1000，每帧就是整数刻度，不会因为除不尽而累积漂移
   const timescale = Math.max(1, Math.round(fps * 1000));
   const frameDur = Math.max(1, Math.round(timescale / fps));
-  const duration = frameDur * n;
+  const videoDuration = frameDur * n;
+  const audioFrames = audio ? audio.samples.reduce((s, c) => s + (c.frames || 0), 0) : 0;
+  const audioDuration = audio ? audioFrames : 0;
+  const audioSeconds = audio ? audioFrames / audio.sampleRate : 0;
+  const movieDuration = Math.round(Math.max(videoDuration / timescale, audioSeconds) * MOVIE_TIMESCALE);
 
-  // ---- mdat：样本数据挨着放，顺便记住每个样本的偏移（stco/co64 用）
+  // ---- mdat：视频样本在前、音频样本在后，顺便记住偏移（stco/co64 用）
+  const all = samples.concat(audio ? audio.samples : []);
   let dataSize = 0;
-  for (const s of samples) dataSize += s.data.length;
+  for (const s of all) dataSize += s.data.length;
   const needLarge = dataSize + 8 > 0xfffffff0;
   const mdatHead = needLarge
     ? join([be(1, 4), ascii('mdat'), be(dataSize + 16, 8)])
@@ -2960,55 +3050,53 @@ function muxMp4({ width, height, fps, samples, description }) {
   const base = head.length + mdatHead.length;
   const offsets = [];
   let at = base;
-  for (const s of samples) { offsets.push(at); at += s.data.length; }
-  const mdat = join([mdatHead, ...samples.map((s) => s.data)]);
+  for (const s of all) { offsets.push(at); at += s.data.length; }
+  const mdat = join([mdatHead, ...all.map((s) => s.data)]);
 
-  // ---- 索引表
-  const stsd = fullBox('stsd', 0, 0, be(1, 4), sampleEntry(width, height, box('avcC', description)));
-  const stts = fullBox('stts', 0, 0, be(1, 4), be(n, 4), be(frameDur, 4));
-  const stsc = fullBox('stsc', 0, 0, be(1, 4), be(1, 4), be(1, 4), be(1, 4));
-  const stsz = fullBox('stsz', 0, 0, be(0, 4), be(n, 4), ...samples.map((s) => be(s.data.length, 4)));
-  const use64 = offsets.some((o) => o > 0xfffffff0);
-  const stco = use64
-    ? fullBox('co64', 0, 0, be(offsets.length, 4), ...offsets.map((o) => be(o, 8)))
-    : fullBox('stco', 0, 0, be(offsets.length, 4), ...offsets.map((o) => be(o, 4)));
-
-  // 关键帧表：不全都是关键帧才需要写
-  const keys = [];
-  samples.forEach((s, i) => { if (s.key) keys.push(i + 1); });
-  const stss = keys.length === n ? null
-    : fullBox('stss', 0, 0, be(keys.length, 4), ...keys.map((k) => be(k, 4)));
-
-  const stbl = box('stbl', stsd, stts, ...(stss ? [stss] : []), stsc, stsz, stco);
+  // ---- 视频轨
+  const vEntry = sampleEntry(width, height, box('avcC', description));
+  const videoStbl = sampleTable({
+    entry: vEntry,
+    durations: new Array(n).fill(frameDur),
+    sizes: samples.map((s) => s.data.length),
+    offsets: offsets.slice(0, n),
+    sync: samples.map((s, i) => (s.key ? i + 1 : 0)).filter(Boolean),
+  });
   const vmhd = fullBox('vmhd', 0, 1, be(0, 2), be(0, 2), be(0, 2), be(0, 2));
-  const dref = fullBox('dref', 0, 0, be(1, 4), fullBox('url ', 0, 1));
-  const dinf = box('dinf', dref);
-  const minf = box('minf', vmhd, dinf, stbl);
-  const hdlr = fullBox('hdlr', 0, 0, be(0, 4), ascii('vide'), new Uint8Array(12), ascii('VideoHandler\0'));
-  const mdhd = fullBox('mdhd', 0, 0, be(0, 4), be(0, 4), be(timescale, 4), be(duration, 4), be(0x55c4, 2), be(0, 2));
-  const mdia = box('mdia', mdhd, hdlr, minf);
-  const tkhd = fullBox('tkhd', 0, 7,
-    be(0, 4), be(0, 4), be(1, 4), be(0, 4), be(duration, 4),
-    new Uint8Array(8), be(0, 2), be(0, 2), be(0, 2), be(0, 2),
-    UNITY_MATRIX, be(width << 16, 4), be(height << 16, 4));
-  const trak = box('trak', tkhd, mdia);
+  const vTrak = trak({
+    id: 1, durationMovie: Math.round((videoDuration / timescale) * MOVIE_TIMESCALE),
+    handler: 'vide', mdhdTimescale: timescale, mdhdDuration: videoDuration,
+    mediaHeader: vmhd, stbl: videoStbl, width, height, volume: 0,
+  });
+
+  // ---- 音频轨（可选）：soun + smhd + mp4a/esds
+  let aTrak = null;
+  if (audio) {
+    const aEntry = audioEntry(audio.channels, audio.sampleRate,
+      esds(audio.description, audio.sampleRate, audio.channels, audio.bitrate || 192000));
+    const aStbl = sampleTable({
+      entry: aEntry,
+      durations: audio.samples.map((s) => Math.max(1, s.frames || 0)),
+      sizes: audio.samples.map((s) => s.data.length),
+      offsets: offsets.slice(n),
+    });
+    const smhd = fullBox('smhd', 0, 0, be(0, 2), be(0, 2));
+    aTrak = trak({
+      id: 2, durationMovie: Math.round(audioSeconds * MOVIE_TIMESCALE),
+      handler: 'soun', mdhdTimescale: audio.sampleRate, mdhdDuration: audioDuration,
+      mediaHeader: smhd, stbl: aStbl, volume: 0x0100,
+    });
+  }
+
+  // ---- moov
   const mvhd = fullBox('mvhd', 0, 0,
-    be(0, 4), be(0, 4), be(timescale, 4), be(duration, 4),
+    be(0, 4), be(0, 4), be(MOVIE_TIMESCALE, 4), be(movieDuration, 4),
     be(0x00010000, 4), be(0x0100, 2), be(0, 2), new Uint8Array(8),
-    UNITY_MATRIX, new Uint8Array(24), be(2, 4));
-  const moov = box('moov', mvhd, trak);
-
-  return join([head, mdat, moov]);
+    UNITY_MATRIX, new Uint8Array(24), be(audio ? 3 : 2, 4));
+  return join([head, mdat, box('moov', mvhd, vTrak, ...(aTrak ? [aTrak] : []))]);
 }
 
-/** 给界面用：这组样本封装出来大概多长（秒） */
-function mp4Duration(frameCount, fps) {
-  const timescale = Math.max(1, Math.round(fps * 1000));
-  const frameDur = Math.max(1, Math.round(timescale / fps));
-  return (frameDur * frameCount) / timescale;
-}
-
-return { muxMp4, mp4Duration };
+return { muxMp4 };
 })();
 
 // ===== templates/_lib.js =====
@@ -8268,7 +8356,7 @@ const state = {
   lastFrameTs: 0,
     media: {
       video: null, audio: null, videoName: '', audioName: '',
-      videoFile: null, videoMeta: null, audioMeta: null,   // 后三个给「自动保存」用
+      videoFile: null, audioFile: null, videoMeta: null, audioMeta: null,   // 后几个给「自动保存 / 导出音轨」用
       videoDur: 0, audioDur: 0, peaks: null,               // 素材时长 + 音频波形（时间轴那两条轨用）
     },
   analysis: null,
@@ -10537,7 +10625,12 @@ async function loadAudioFile(file, opts = {}) {
   const a = document.createElement('audio');
   a.src = url; a.preload = 'auto';
   state.media.audio = a; state.media.audioName = file.name;
+  state.media.audioFile = file;          // 导出 MP4 时要拿它重新解码出音轨
   state.media.audioMeta = { name: file.name, type: file.type, size: file.size };
+  // 元数据到了就把时长记下来（走 opts.analyze === false 恢复工程时也能填上）
+  a.addEventListener('loadedmetadata', () => {
+    if (!state.media.audioDur && a.duration) state.media.audioDur = a.duration;
+  });
   persistMedia('audio', file);
   a.muted = state.muted;
   applyAudio();          // 载入音乐后视频原声自动让位
@@ -10702,7 +10795,7 @@ function pickVideoMime(want) {
  * 时长就被拖长（2:40 的工程能录成 6:00）。这里每一帧的时间戳是 i/fps，导出多长就是多长，
  * 而且不用等实时 —— 渲染多快就多快。
  */
-async function renderMp4Blob(includeMedia) {
+async function renderMp4Blob(includeMedia, withAudio) {
   if (typeof window.VideoEncoder === 'undefined') {
     const e = new Error('这个浏览器没有 WebCodecs（VideoEncoder），用 Chrome / Edge 打开就能直接出 MP4。');
     e.code = 'unsupported';
@@ -10766,20 +10859,96 @@ async function renderMp4Blob(includeMedia) {
   enc.close();
   if (encError) throw encError;
 
-  const data = muxMp4({ width: s.width, height: s.height, fps, samples, description });
-  return { blob: new Blob([data], { type: 'video/mp4' }), mime: 'video/mp4', ext: 'mp4', label: 'MP4（H.264）' };
+  // 音轨：勾了"带声音"而且真的载入了音频才编
+  let audio = null;
+  if (withAudio && state.media.audioFile) {
+    showBusy('编码音轨…', 0.75);
+    try {
+      audio = await encodeAudioTrack((s.duration * total) / fps);
+    } catch (e) {
+      console.warn('音轨编码失败，这次只出画面：', e);
+      audio = null;
+    }
+  }
+
+  const data = muxMp4({ width: s.width, height: s.height, fps, samples, description, audio });
+  return {
+    blob: new Blob([data], { type: 'video/mp4' }), mime: 'video/mp4', ext: 'mp4',
+    label: audio ? 'MP4（H.264 + AAC）' : 'MP4（H.264）',
+    audio: !!audio,
+  };
 }
 
 /**
- * 把工程录成一个视频 Blob（画面层，不含声音 —— 和 WebM 那条路一样）。
- * 录法是逐帧渲染 + 推帧给 canvas 流，所以合成结果和无头渲染是同一套引擎。
+ * 把载入的音乐编成 AAC 音轨（给 MP4 用）。
+ * 返回 { sampleRate, channels, samples, description, bitrate }，交给 engine/mp4.js 封装。
  */
-async function renderVideoBlob(want, includeMedia) {
+async function encodeAudioTrack(limitSec) {
+  const file = state.media.audioFile;
+  if (!file || typeof window.AudioEncoder === 'undefined') return null;
+  const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 48000);
+  const buf = await ctx.decodeAudioData(await file.arrayBuffer());
+  const sampleRate = buf.sampleRate;
+  const channels = Math.min(2, buf.numberOfChannels);
+  const bitrate = 192_000;
+  const cfg = { codec: 'mp4a.40.2', sampleRate, numberOfChannels: channels, bitrate };
+  let picked = null;
+  try {
+    const sup = await AudioEncoder.isConfigSupported(cfg);
+    if (sup && sup.supported) picked = sup.config || cfg;
+  } catch (_) {}
+  if (!picked) return null;
+
+  const totalFrames = Math.max(1, Math.round(Math.min(buf.duration, limitSec) * sampleRate));
+  const planes = [];
+  for (let ch = 0; ch < channels; ch++) planes.push(buf.getChannelData(ch));
+  const chunks = [];
+  let description = null;
+  let encErr = null;
+  const enc = new AudioEncoder({
+    output: (chunk, meta) => {
+      const c = meta && meta.decoderConfig;
+      if (c && c.description && !description) description = new Uint8Array(c.description);
+      const data = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(data);
+      const frames = chunk.duration ? Math.round((chunk.duration * sampleRate) / 1e6) : 1024;
+      chunks.push({ data, frames: Math.max(1, frames) });
+    },
+    error: (e) => { encErr = e; },
+  });
+  enc.configure(picked);
+
+  const BLOCK = 8192;
+  for (let at = 0; at < totalFrames; at += BLOCK) {
+    if (encErr) break;
+    const n = Math.min(BLOCK, totalFrames - at);
+    const data = new Float32Array(n * channels);
+    for (let ch = 0; ch < channels; ch++) data.set(planes[ch].subarray(at, at + n), ch * n);
+    const ad = new AudioData({
+      format: 'f32-planar', sampleRate, numberOfFrames: n, numberOfChannels: channels,
+      timestamp: Math.round((at / sampleRate) * 1e6), data,
+    });
+    enc.encode(ad);
+    ad.close();
+    showBusy(`编码音轨 ${Math.round((at / totalFrames) * 100)}%`, (at / totalFrames) * 0.5);
+    if (enc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 2));
+  }
+  await enc.flush();
+  enc.close();
+  if (encErr) throw encErr;
+  if (!chunks.length || !description) return null;
+  return { sampleRate, channels, samples: chunks, description, bitrate };
+}
+
+/**
+ * 把工程录成一个视频 Blob（画面层；MP4 可以带音轨）。
+ */
+async function renderVideoBlob(want, includeMedia, opts) {
   const fmt = VIDEO_FORMATS[want] ? want : 'webm';
   if (fmt === 'mp4') {
     // 优先走帧精确那条路；浏览器不支持再退回实时录制
     try {
-      return await renderMp4Blob(includeMedia);
+      return await renderMp4Blob(includeMedia, !!(opts && opts.audio));
     } catch (err) {
       if (err && err.code === 'unsupported' && pickVideoMime('mp4')) {
         console.warn('WebCodecs 走不通，退回实时录制：', err.message);
@@ -10829,10 +10998,10 @@ async function renderVideoBlob(want, includeMedia) {
   return { blob: new Blob(chunks, { type: mime }), mime, ext: VIDEO_FORMATS[fmt].ext, label };
 }
 
-async function exportVideo(want, includeMedia) {
-  const r = await renderVideoBlob(want, includeMedia);
+async function exportVideo(want, includeMedia, opts) {
+  const r = await renderVideoBlob(want, includeMedia, opts);
   downloadBlob(r.blob, `motionkit_${Date.now()}.${r.ext}`);
-  toast(`${r.label} 导出完成（${(r.blob.size / 1048576).toFixed(1)} MB，无声）`);
+  toast(`${r.label} 导出完成（${(r.blob.size / 1048576).toFixed(1)} MB${r.audio ? '' : '，无声'}）`);
   return r;
 }
 
@@ -11464,28 +11633,36 @@ optRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:12px;
 optRow.innerHTML = '<input type="checkbox" id="chkIncludeMedia" /> 导出画面时把底下的视频/图片一起渲染进去（不勾选 = 只导出带透明的叠加层）';
 dlg.querySelector('.dlg-grid').after(optRow);
 
-// 这里导出的都是"画面层"，没有声音这一轨；把这句话写在面板上，省得误会
+// 声音：MP4 能带走，其它导出项都是画面层
+const audioRow = document.createElement('label');
+audioRow.className = 'mini';
+audioRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:6px;color:#8b929e';
+audioRow.innerHTML = '<input type="checkbox" id="chkExportAudio" checked /> 导出 MP4 时带上声音（需要先「载入音频」；其它导出项都是画面层）';
+optRow.after(audioRow);
+
+// 把"哪些导出项有声音"写在面板上，省得误会
 const soundNote = document.createElement('div');
 soundNote.className = 'mini';
 soundNote.style.cssText = 'margin-top:8px;color:#8b929e;line-height:1.7;font-size:11px';
 soundNote.innerHTML =
-  '上面这些导出的都是<b>画面层，不含声音</b>（MP4 也一样；连底片一起渲进去也不含）。' +
-  'MP4 是<b>帧精确</b>的：每帧时间戳按工程帧率写，工程多长就导出多长，渲染多快就多快（WebCodecs + 自带的 H.264）。' +
-  'WebM 是实时录制，渲染一帧比 1/fps 慢就会把时长拖长。' +
-  '要带声音的成片：① 用 AI 助手跑 <code>--render</code>，它会输出带原声的 <code>final.mp4</code>；' +
-  '② 或者用 <code>tools/encode.py --overlay 原片.mp4</code> 把叠加层烧到原片上，声音跟着原片走。';
-optRow.after(soundNote);
+  '<b>MP4 可以带声音</b>（勾上面那个开关，带的是「载入音频」那一轨，编成 AAC）。' +
+  'MP4 还是<b>帧精确</b>的：每帧时间戳按工程帧率写，工程多长就导出多长，渲染多快就多快（WebCodecs + 自带的 H.264）。<br>' +
+  'PNG 序列 / WebM / ProRes 导的都是<b>画面层，不含声音</b>；WebM 还是实时录制，渲染一帧比 1/fps 慢就会把时长拖长。<br>' +
+  '要"原片原声 + 叠加层"的成片：用 <code>tools/encode.py --overlay 原片.mp4 --audio 音乐.wav</code>，' +
+  '或者 AI 助手跑 <code>--render</code>。';
+audioRow.after(soundNote);
 
 dlg.addEventListener('click', async (e) => {
   const b = e.target.closest('.ex');
   if (!b) return;
   const kind = b.dataset.ex;
   const includeMedia = $('chkIncludeMedia').checked;
+  const withAudio = $('chkExportAudio') ? $('chkExportAudio').checked : true;
   dlg.close();
   try {
     if (kind === 'png') await exportPngSequence(includeMedia);
     else if (kind === 'webm') await exportVideo('webm', includeMedia);
-    else if (kind === 'mp4') await exportVideo('mp4', includeMedia);
+    else if (kind === 'mp4') await exportVideo('mp4', includeMedia, { audio: withAudio });
     else if (kind === 'json') exportProject();
     else if (kind === 'beats') exportBeats();
     else if (kind === 'srt') exportSrt();
@@ -12314,7 +12491,8 @@ window.MotionKit = {
       return L.transform;
     },
   // 导出：录一段视频（自检里会用，用来确认 MP4 这条线真的能出文件）
-  renderVideoBlob: (want, includeMedia) => renderVideoBlob(want, includeMedia),
+  renderVideoBlob: (want, includeMedia, opts) => renderVideoBlob(want, includeMedia, opts),
+  loadAudioFile: (file) => loadAudioFile(file, { analyze: false }),
   videoSupport: () => ({ mp4: pickVideoMime('mp4'), webm: pickVideoMime('webm') }),
   registerTemplate,
   version: '1.0.0',

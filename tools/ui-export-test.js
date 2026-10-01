@@ -33,6 +33,21 @@ document.getElementById('exportDlg').close();
 const sup = MK.videoSupport();
 report.support = sup;
 report.checks.browserMp4 = !!sup.mp4;
+report.checks.browserAudio = typeof window.AudioEncoder !== 'undefined';
+
+// 现造一段 1 秒的 WAV（440Hz 正弦）当"音乐"，不用往仓库里塞测试音频
+function toneFile(seconds, rate) {
+  const n = Math.round(seconds * rate);
+  const buf = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.sin((i / rate) * 440 * Math.PI * 2) * 12000, true);
+  return new File([buf], 'tone.wav', { type: 'audio/wav' });
+}
 
 const S = MK.state.scene;
 function resetScene(dur, fps, layers) {
@@ -115,6 +130,37 @@ const b = await inspect(r2.blob, 0.5);
 report.clean = { corner: b.corner, bright: b.bright, dur: b.meta && b.meta.dur, size: r2.blob.size };
 report.checks.mp4BlackBackdrop = b.corner[0] < 60 && b.corner[1] < 60 && b.corner[2] < 60;
 report.checks.cleanDurationExact = !!b.meta && Math.abs(b.meta.dur - 0.5) <= 0.08;
+
+// ---- ③ 带声音：丢一段 1 秒正弦进去，导出的 MP4 里应该多一条 soun/mp4a 轨
+await MK.loadAudioFile(toneFile(1.0, 48000));
+await sleep(300);
+report.checks.audioLoaded = !!MK.state.media.audioFile && MK.state.media.audioDur > 0.5;
+
+resetScene(0.5, 10, [
+  { template: 'kinetic-type', params: { text: 'ABC', mode: 'slam', size: 120, position: '0.5,0.5' } },
+]);
+await sleep(200);
+const r3 = await MK.renderVideoBlob('mp4', false, { audio: true });
+const t3 = await head(r3.blob, 0);      // 只为了拿底层字节
+const bytes3 = new Uint8Array(await r3.blob.arrayBuffer());
+const latin = Array.from(bytes3, (x) => String.fromCharCode(x)).join('');
+const c3 = await inspect(r3.blob, 0.5);
+report.withAudio = {
+  size: r3.blob.size, label: r3.label, audioFlag: !!r3.audio,
+  traks: (latin.match(/trak/g) || []).length,
+  soun: latin.includes('soun'), mp4a: latin.includes('mp4a'), esds: latin.includes('esds'),
+  dur: c3.meta && c3.meta.dur,
+};
+report.checks.audioTrackMuxed = (latin.match(/trak/g) || []).length === 2
+  && latin.includes('soun') && latin.includes('mp4a') && latin.includes('esds');
+report.checks.audioDurationExact = !!c3.meta && Math.abs(c3.meta.dur - 0.5) <= 0.08;
+void t3;
+
+// 不勾"带声音"的时候还得是单轨
+const r4 = await MK.renderVideoBlob('mp4', false, { audio: false });
+const bytes4 = new Uint8Array(await r4.blob.arrayBuffer());
+const latin4 = Array.from(bytes4, (x) => String.fromCharCode(x)).join('');
+report.checks.audioOffStaysSingle = (latin4.match(/trak/g) || []).length === 1 && !latin4.includes('soun');
 
 // ---- WebM 那条老路也得还在
 resetScene(0.5, 10, [

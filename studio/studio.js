@@ -31,7 +31,7 @@ const state = {
   lastFrameTs: 0,
     media: {
       video: null, audio: null, videoName: '', audioName: '',
-      videoFile: null, videoMeta: null, audioMeta: null,   // 后三个给「自动保存」用
+      videoFile: null, audioFile: null, videoMeta: null, audioMeta: null,   // 后几个给「自动保存 / 导出音轨」用
       videoDur: 0, audioDur: 0, peaks: null,               // 素材时长 + 音频波形（时间轴那两条轨用）
     },
   analysis: null,
@@ -2300,7 +2300,12 @@ async function loadAudioFile(file, opts = {}) {
   const a = document.createElement('audio');
   a.src = url; a.preload = 'auto';
   state.media.audio = a; state.media.audioName = file.name;
+  state.media.audioFile = file;          // 导出 MP4 时要拿它重新解码出音轨
   state.media.audioMeta = { name: file.name, type: file.type, size: file.size };
+  // 元数据到了就把时长记下来（走 opts.analyze === false 恢复工程时也能填上）
+  a.addEventListener('loadedmetadata', () => {
+    if (!state.media.audioDur && a.duration) state.media.audioDur = a.duration;
+  });
   persistMedia('audio', file);
   a.muted = state.muted;
   applyAudio();          // 载入音乐后视频原声自动让位
@@ -2465,7 +2470,7 @@ function pickVideoMime(want) {
  * 时长就被拖长（2:40 的工程能录成 6:00）。这里每一帧的时间戳是 i/fps，导出多长就是多长，
  * 而且不用等实时 —— 渲染多快就多快。
  */
-async function renderMp4Blob(includeMedia) {
+async function renderMp4Blob(includeMedia, withAudio) {
   if (typeof window.VideoEncoder === 'undefined') {
     const e = new Error('这个浏览器没有 WebCodecs（VideoEncoder），用 Chrome / Edge 打开就能直接出 MP4。');
     e.code = 'unsupported';
@@ -2529,20 +2534,96 @@ async function renderMp4Blob(includeMedia) {
   enc.close();
   if (encError) throw encError;
 
-  const data = muxMp4({ width: s.width, height: s.height, fps, samples, description });
-  return { blob: new Blob([data], { type: 'video/mp4' }), mime: 'video/mp4', ext: 'mp4', label: 'MP4（H.264）' };
+  // 音轨：勾了"带声音"而且真的载入了音频才编
+  let audio = null;
+  if (withAudio && state.media.audioFile) {
+    showBusy('编码音轨…', 0.75);
+    try {
+      audio = await encodeAudioTrack((s.duration * total) / fps);
+    } catch (e) {
+      console.warn('音轨编码失败，这次只出画面：', e);
+      audio = null;
+    }
+  }
+
+  const data = muxMp4({ width: s.width, height: s.height, fps, samples, description, audio });
+  return {
+    blob: new Blob([data], { type: 'video/mp4' }), mime: 'video/mp4', ext: 'mp4',
+    label: audio ? 'MP4（H.264 + AAC）' : 'MP4（H.264）',
+    audio: !!audio,
+  };
 }
 
 /**
- * 把工程录成一个视频 Blob（画面层，不含声音 —— 和 WebM 那条路一样）。
- * 录法是逐帧渲染 + 推帧给 canvas 流，所以合成结果和无头渲染是同一套引擎。
+ * 把载入的音乐编成 AAC 音轨（给 MP4 用）。
+ * 返回 { sampleRate, channels, samples, description, bitrate }，交给 engine/mp4.js 封装。
  */
-async function renderVideoBlob(want, includeMedia) {
+async function encodeAudioTrack(limitSec) {
+  const file = state.media.audioFile;
+  if (!file || typeof window.AudioEncoder === 'undefined') return null;
+  const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 48000);
+  const buf = await ctx.decodeAudioData(await file.arrayBuffer());
+  const sampleRate = buf.sampleRate;
+  const channels = Math.min(2, buf.numberOfChannels);
+  const bitrate = 192_000;
+  const cfg = { codec: 'mp4a.40.2', sampleRate, numberOfChannels: channels, bitrate };
+  let picked = null;
+  try {
+    const sup = await AudioEncoder.isConfigSupported(cfg);
+    if (sup && sup.supported) picked = sup.config || cfg;
+  } catch (_) {}
+  if (!picked) return null;
+
+  const totalFrames = Math.max(1, Math.round(Math.min(buf.duration, limitSec) * sampleRate));
+  const planes = [];
+  for (let ch = 0; ch < channels; ch++) planes.push(buf.getChannelData(ch));
+  const chunks = [];
+  let description = null;
+  let encErr = null;
+  const enc = new AudioEncoder({
+    output: (chunk, meta) => {
+      const c = meta && meta.decoderConfig;
+      if (c && c.description && !description) description = new Uint8Array(c.description);
+      const data = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(data);
+      const frames = chunk.duration ? Math.round((chunk.duration * sampleRate) / 1e6) : 1024;
+      chunks.push({ data, frames: Math.max(1, frames) });
+    },
+    error: (e) => { encErr = e; },
+  });
+  enc.configure(picked);
+
+  const BLOCK = 8192;
+  for (let at = 0; at < totalFrames; at += BLOCK) {
+    if (encErr) break;
+    const n = Math.min(BLOCK, totalFrames - at);
+    const data = new Float32Array(n * channels);
+    for (let ch = 0; ch < channels; ch++) data.set(planes[ch].subarray(at, at + n), ch * n);
+    const ad = new AudioData({
+      format: 'f32-planar', sampleRate, numberOfFrames: n, numberOfChannels: channels,
+      timestamp: Math.round((at / sampleRate) * 1e6), data,
+    });
+    enc.encode(ad);
+    ad.close();
+    showBusy(`编码音轨 ${Math.round((at / totalFrames) * 100)}%`, (at / totalFrames) * 0.5);
+    if (enc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 2));
+  }
+  await enc.flush();
+  enc.close();
+  if (encErr) throw encErr;
+  if (!chunks.length || !description) return null;
+  return { sampleRate, channels, samples: chunks, description, bitrate };
+}
+
+/**
+ * 把工程录成一个视频 Blob（画面层；MP4 可以带音轨）。
+ */
+async function renderVideoBlob(want, includeMedia, opts) {
   const fmt = VIDEO_FORMATS[want] ? want : 'webm';
   if (fmt === 'mp4') {
     // 优先走帧精确那条路；浏览器不支持再退回实时录制
     try {
-      return await renderMp4Blob(includeMedia);
+      return await renderMp4Blob(includeMedia, !!(opts && opts.audio));
     } catch (err) {
       if (err && err.code === 'unsupported' && pickVideoMime('mp4')) {
         console.warn('WebCodecs 走不通，退回实时录制：', err.message);
@@ -2592,10 +2673,10 @@ async function renderVideoBlob(want, includeMedia) {
   return { blob: new Blob(chunks, { type: mime }), mime, ext: VIDEO_FORMATS[fmt].ext, label };
 }
 
-async function exportVideo(want, includeMedia) {
-  const r = await renderVideoBlob(want, includeMedia);
+async function exportVideo(want, includeMedia, opts) {
+  const r = await renderVideoBlob(want, includeMedia, opts);
   downloadBlob(r.blob, `motionkit_${Date.now()}.${r.ext}`);
-  toast(`${r.label} 导出完成（${(r.blob.size / 1048576).toFixed(1)} MB，无声）`);
+  toast(`${r.label} 导出完成（${(r.blob.size / 1048576).toFixed(1)} MB${r.audio ? '' : '，无声'}）`);
   return r;
 }
 
@@ -3227,28 +3308,36 @@ optRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:12px;
 optRow.innerHTML = '<input type="checkbox" id="chkIncludeMedia" /> 导出画面时把底下的视频/图片一起渲染进去（不勾选 = 只导出带透明的叠加层）';
 dlg.querySelector('.dlg-grid').after(optRow);
 
-// 这里导出的都是"画面层"，没有声音这一轨；把这句话写在面板上，省得误会
+// 声音：MP4 能带走，其它导出项都是画面层
+const audioRow = document.createElement('label');
+audioRow.className = 'mini';
+audioRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:6px;color:#8b929e';
+audioRow.innerHTML = '<input type="checkbox" id="chkExportAudio" checked /> 导出 MP4 时带上声音（需要先「载入音频」；其它导出项都是画面层）';
+optRow.after(audioRow);
+
+// 把"哪些导出项有声音"写在面板上，省得误会
 const soundNote = document.createElement('div');
 soundNote.className = 'mini';
 soundNote.style.cssText = 'margin-top:8px;color:#8b929e;line-height:1.7;font-size:11px';
 soundNote.innerHTML =
-  '上面这些导出的都是<b>画面层，不含声音</b>（MP4 也一样；连底片一起渲进去也不含）。' +
-  'MP4 是<b>帧精确</b>的：每帧时间戳按工程帧率写，工程多长就导出多长，渲染多快就多快（WebCodecs + 自带的 H.264）。' +
-  'WebM 是实时录制，渲染一帧比 1/fps 慢就会把时长拖长。' +
-  '要带声音的成片：① 用 AI 助手跑 <code>--render</code>，它会输出带原声的 <code>final.mp4</code>；' +
-  '② 或者用 <code>tools/encode.py --overlay 原片.mp4</code> 把叠加层烧到原片上，声音跟着原片走。';
-optRow.after(soundNote);
+  '<b>MP4 可以带声音</b>（勾上面那个开关，带的是「载入音频」那一轨，编成 AAC）。' +
+  'MP4 还是<b>帧精确</b>的：每帧时间戳按工程帧率写，工程多长就导出多长，渲染多快就多快（WebCodecs + 自带的 H.264）。<br>' +
+  'PNG 序列 / WebM / ProRes 导的都是<b>画面层，不含声音</b>；WebM 还是实时录制，渲染一帧比 1/fps 慢就会把时长拖长。<br>' +
+  '要"原片原声 + 叠加层"的成片：用 <code>tools/encode.py --overlay 原片.mp4 --audio 音乐.wav</code>，' +
+  '或者 AI 助手跑 <code>--render</code>。';
+audioRow.after(soundNote);
 
 dlg.addEventListener('click', async (e) => {
   const b = e.target.closest('.ex');
   if (!b) return;
   const kind = b.dataset.ex;
   const includeMedia = $('chkIncludeMedia').checked;
+  const withAudio = $('chkExportAudio') ? $('chkExportAudio').checked : true;
   dlg.close();
   try {
     if (kind === 'png') await exportPngSequence(includeMedia);
     else if (kind === 'webm') await exportVideo('webm', includeMedia);
-    else if (kind === 'mp4') await exportVideo('mp4', includeMedia);
+    else if (kind === 'mp4') await exportVideo('mp4', includeMedia, { audio: withAudio });
     else if (kind === 'json') exportProject();
     else if (kind === 'beats') exportBeats();
     else if (kind === 'srt') exportSrt();
@@ -4077,7 +4166,8 @@ window.MotionKit = {
       return L.transform;
     },
   // 导出：录一段视频（自检里会用，用来确认 MP4 这条线真的能出文件）
-  renderVideoBlob: (want, includeMedia) => renderVideoBlob(want, includeMedia),
+  renderVideoBlob: (want, includeMedia, opts) => renderVideoBlob(want, includeMedia, opts),
+  loadAudioFile: (file) => loadAudioFile(file, { analyze: false }),
   videoSupport: () => ({ mp4: pickVideoMime('mp4'), webm: pickVideoMime('webm') }),
   registerTemplate,
   version: '1.0.0',
