@@ -28,6 +28,24 @@ python agent/autopilot.py --video 素材.mp4 --out projects/demo --render
 界面上在顶栏 **✨ AI 助手**（双击 `启动工作室.bat` 就是带后端的开发模式）。
 细节看 [agent/README.md](agent/README.md)。
 
+### ⚡ 一键铺满（先铺后改）
+
+不想一上来就全自动？AI 助手面板里第一个按钮就是 **一键铺满**：
+它先花几秒粗看一遍素材（亮度 / 运动量 / 镜头切点 / 卡点），
+然后**按素材时长把整条时间轴铺满**——
+
+- 全程一条 HUD 底噪（保证不留空）
+- 每个镜头按内容配一个图层：暗且静→参数刻度、暗且动→数字计数、亮且动→圆盘仪表、
+  长镜头→终端面板、亮且静→吊牌/编号卡
+- 卡点补大字与闪白（强度越高越密），片头片尾各一记标题
+
+铺完**自动载进工作室**，你在这基础上删多余的、改文字、拖位置。
+和「开始生成」的区别：它不转写语音、不叫大模型，**几秒出结果**，目标是"先铺满、人来精修"。
+
+```bash
+python agent/fill.py --video 素材.mp4 --out projects/fill-1 --json-progress
+```
+
 ![Slopcore 预设预览](docs/preview-slopcore.png)
 
 > 上面这一屏就是用 `presets/slopcore.json` 渲染出来的（叠加层铺在底图上）。

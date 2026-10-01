@@ -154,7 +154,8 @@ function agentRun(req, res) {
     if (brief.render) args.push('--render');
     if (brief.llm === false) args.push('--no-llm');
 
-    const p = spawn('python', args, { cwd: ROOT });
+    // PYTHONIOENCODING：Windows 下 python 默认按 GBK 输出，遇到 ✓ 这类字符会直接崩
+    const p = spawn('python', args, { cwd: ROOT, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
     let tail = '';
     p.stdout.on('data', (d) => {
       // python 侧就是按行输出 NDJSON，原样转发给浏览器
@@ -170,6 +171,66 @@ function agentRun(req, res) {
     p.on('error', (e) => { send({ type: 'error', msg: '启动 python 失败：' + e.message }); res.end(); });
     p.on('close', (code) => {
       if (code !== 0) send({ type: 'error', msg: '流程失败（退出码 ' + code + '）', detail: tail.slice(-1200) });
+      try { res.end(); } catch (_) {}
+    });
+  });
+}
+
+// ============================================================================
+// 一键铺满：存下上传的视频 → 跑 agent/fill.py（纯本地分析，不叫大模型）
+// ============================================================================
+function fillRun(req, res) {
+  const rawName = decodeURIComponent(String(req.headers['x-file-name'] || 'input.mp4'));
+  const safe = rawName.replace(/[\\/:*?"<>|]/g, '_').slice(-60) || 'input.mp4';
+  let brief = {};
+  try { brief = JSON.parse(decodeURIComponent(String(req.headers['x-brief'] || '%7B%7D'))); } catch (_) {}
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const workDir = path.join(ROOT, 'projects', 'fill-' + stamp);
+  fs.mkdirSync(workDir, { recursive: true });
+  const upload = path.join(workDir, 'source_' + safe);
+  const sink = fs.createWriteStream(upload);
+
+  res.writeHead(200, {
+    'Content-Type': 'application/x-ndjson; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Accel-Buffering': 'no',
+  });
+  const send = (obj) => { try { res.write(JSON.stringify(obj) + '\n'); } catch (_) {} };
+  send({ type: 'progress', step: 'upload', progress: 0.02, msg: '正在保存上传的素材…' });
+
+  req.pipe(sink);
+  req.on('aborted', () => { try { sink.close(); } catch (_) {} });
+  sink.on('error', (e) => { send({ type: 'error', msg: '写入素材失败：' + e.message }); res.end(); });
+  sink.on('finish', () => {
+    const args = [
+      path.join(ROOT, 'agent/fill.py'),
+      '--video', upload,
+      '--out', workDir,
+      '--json-progress',
+      '--style', String(brief.style || 'slopcore'),
+      '--intensity', String(brief.intensity ?? 0.6),
+      '--width', String(brief.width ?? 1920),
+      '--height', String(brief.height ?? 1080),
+      '--fps', String(brief.fps ?? 30),
+    ];
+    if (brief.title) args.push('--title', String(brief.title));
+    if (brief.duration) args.push('--duration', String(brief.duration));
+
+    const p = spawn('python', args, { cwd: ROOT, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+    let tail = '';
+    p.stdout.on('data', (d) => {
+      res.write(d);                       // python 侧就是 NDJSON，原样转发
+      tail = (tail + d.toString('utf8')).slice(-3000);
+    });
+    p.stderr.on('data', (d) => {
+      const s = d.toString('utf8');
+      tail = (tail + s).slice(-3000);
+      send({ type: 'log', msg: s.trim().slice(0, 300) });
+    });
+    p.on('error', (e) => { send({ type: 'error', msg: '启动 python 失败：' + e.message }); res.end(); });
+    p.on('close', (code) => {
+      if (code !== 0) send({ type: 'error', msg: '铺满失败（退出码 ' + code + '）', detail: tail.slice(-1200) });
       try { res.end(); } catch (_) {}
     });
   });
@@ -395,6 +456,7 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/ping') { json(res, { app: 'motionkit-studio', ok: true }); return; }
   if (p === '/api/agent/status') { agentStatus(res); return; }
   if (p === '/api/agent/run' && req.method === 'POST') { agentRun(req, res); return; }
+  if (p === '/api/agent/fill' && req.method === 'POST') { fillRun(req, res); return; }
   if (p.startsWith('/api/git/')) {
     try { if (await gitApi(p, req, res)) return; } catch (e) { json(res, { ok: false, error: e.message }, 500); return; }
   }

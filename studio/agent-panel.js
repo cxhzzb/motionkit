@@ -106,6 +106,92 @@ function setRunning(v) {
   running = v;
   $('agentRun').disabled = v;
   $('agentRun').textContent = v ? '生成中…' : '开始生成';
+  const f = $('agentFill');
+  if (f) { f.disabled = v; f.textContent = v ? '铺满中…' : '⚡ 一键铺满（先铺后改）'; }
+}
+
+/** 一键铺满：结果直接载进工作室，剩下的交给人改 */
+function onFillResult(r) {
+  lastResult = { scene: r.scene, fill: true };
+  const counts = {};
+  for (const l of r.scene.layers) counts[l.template] = (counts[l.template] || 0) + 1;
+  const gaps = (r.gaps || []).length;
+  const rows = [
+    ['图层', r.scene.layers.length + ' 层'],
+    ['时长', Number(r.scene.duration).toFixed(2) + 's'],
+    ['空隙', gaps ? (gaps + ' 处') : '无（整条铺满）'],
+    ['配色', r.style || ''],
+  ];
+  $('agentReport').innerHTML =
+    '<div class="agent-report-title">铺满结果</div>' +
+    rows.map((kv) => '<div class="agent-kv"><b>' + kv[0] + '</b><span>' + kv[1] + '</span></div>').join('') +
+    '<div class="agent-report-title">各模板用量</div>' +
+    Object.entries(counts).sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => '<div class="agent-dec"><b>' + k + '</b><span>× ' + v + '</span></div>').join('');
+  $('agentResult').classList.remove('hidden');
+  if (r.scene) {
+    ctx.loadScene(r.scene);
+    log('已经铺进工作室了 —— 关掉这个窗口就能开始改（删多余的层、双击改字、拖到别处）。', 'ok');
+  }
+}
+
+/** ⚡ 一键铺满 */
+async function runFill() {
+  if (running) return;
+  if (!status) { log('需要先以开发模式启动（双击 启动工作室.bat）。', 'bad'); return; }
+  const file = ctx.getFile && ctx.getFile();
+  if (!file) { log('先把视频拖进工作室（或者在上面选素材），再点一键铺满。', 'bad'); return; }
+
+  const brief = {
+    style: currentStyle(),
+    intensity: Number($('agentIntensity').value),
+    width: ctx.getSize ? ctx.getSize().w : 1920,
+    height: ctx.getSize ? ctx.getSize().h : 1080,
+    fps: ctx.getSize ? ctx.getSize().fps : 30,
+    title: $('agentNotes').value.trim().split('\n')[0].slice(0, 28),
+  };
+  setRunning(true);
+  $('agentResult').classList.add('hidden');
+  $('agentLog').innerHTML = '';
+  log('一键铺满：' + file.name + ' · 风格 ' + brief.style + '（只看素材，不转写不叫大模型）');
+  setBar(0.02);
+
+  try {
+    const res = await fetch('/api/agent/fill', {
+      method: 'POST',
+      headers: {
+        'x-file-name': encodeURIComponent(file.name),
+        'x-brief': encodeURIComponent(JSON.stringify(brief)),
+      },
+      body: file,
+    });
+    if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const step = await reader.read();
+      if (step.done) break;
+      buf += dec.decode(step.value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const lineTxt = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!lineTxt) continue;
+        let msg = null;
+        try { msg = JSON.parse(lineTxt); } catch (_) { log(lineTxt, 'dim'); continue; }
+        if (msg.type === 'progress') { log(msg.msg); setBar(msg.progress); }
+        else if (msg.type === 'log') log(msg.msg, 'dim');
+        else if (msg.type === 'error') { log('出错：' + msg.msg, 'bad'); if (msg.detail) log(msg.detail, 'dim'); }
+        else if (msg.type === 'result') onFillResult(msg.result || msg);
+      }
+    }
+  } catch (e) {
+    log('请求失败：' + e.message, 'bad');
+  } finally {
+    setRunning(false);
+    setBar(null);
+  }
 }
 
 function onResult(r) {
@@ -225,6 +311,7 @@ export function initAgentPanel(options) {
   if (new URLSearchParams(location.search).get('agent') === '1') setTimeout(open, 60);
   $('agentClose').addEventListener('click', () => $('agentDlg').close());
   $('agentRun').addEventListener('click', runAgent);
+  if ($('agentFill')) $('agentFill').addEventListener('click', runFill);
   $('agentLoad').addEventListener('click', loadIntoStudio);
   $('agentIntensity').addEventListener('input', (e) => {
     $('agentIntensityVal').textContent = Number(e.target.value).toFixed(2);
