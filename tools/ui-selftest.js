@@ -328,6 +328,35 @@ if (textPick) {
   report.checks.beatFxButtons = !!offBtn && !!onBtn && allOff && allOn && cleared === fxList.length;
   report.checks.beatFxCleared = MK.beatFx.list('flash-cut') === 0;
 
+  // 12. 顺手做的三件：渐入整组改 / 随机差异 / 文字类也能整组改
+  MK.beatFx.relay('flash-cut', 2);
+  MK.beatFx.apply('flash-cut', { peak: 0.5, dur: 0.3 });    // 先给一组确定值
+  const baseFx = MK.beatFx.base('flash-cut');
+  baseFx.fadeIn = 0.12;                                     // 渐入也归整组管
+  MK.beatFx.apply('flash-cut', {});
+  const fades = [...new Set(MK.state.scene.layers.filter((L) => L.template === 'flash-cut').map((L) => Number(L.params.fadeIn)))];
+  report.fadeIn = fades;
+  report.checks.fadeInBulk = fades.length === 1 && Math.abs(fades[0] - 0.12) < 0.001;
+
+  // 随机差异：把 jitter 拉满重铺一遍，各层强度不该再是同一个数
+  baseFx.jitter = 1;
+  MK.beatFx.relay('flash-cut', 2);
+  const peaksJit = MK.state.scene.layers.filter((L) => L.template === 'flash-cut').map((L) => Number(L.params.peak));
+  report.jitter = { n: peaksJit.length, uniq: new Set(peaksJit.map((v) => v.toFixed(3))).size };
+  report.checks.jitterVaries = peaksJit.length > 3 && report.jitter.uniq > 1;
+  baseFx.jitter = 0;                                        // 恢复整齐，后面截图好看
+  MK.beatFx.relay('flash-cut', 2);
+
+  // 文字类：把已有的卡点大字重新按频率排一遍（内容保留）
+  MK.beatFx.relay('flash-cut', 2);              // 恢复一点闪白，方便后面截图
+  const bigTexts = MK.state.scene.layers.filter((L) => L.template === 'kinetic-type');
+  const beforeStarts = bigTexts.map((L) => L.start);
+  const moved = MK.beatFx.retime('kinetic-type', 8);
+  const afterStarts = MK.state.scene.layers.filter((L) => L.template === 'kinetic-type').map((L) => L.start);
+  report.retime = { count: bigTexts.length, moved, changed: beforeStarts.join() !== afterStarts.join() };
+  report.checks.retimeText = bigTexts.length === 0 || (moved > 0 && report.retime.changed);
+  report.checks.subtitleGroup = MK.beatFx.base('subtitle-kinetic') !== null;
+
   // ---------------------------------------------------------------- 收尾：留个好看的演示状态
   // ---------------------------------------------------------------- 9. 时间轴上下滚动
   const tlEl = document.getElementById('timeline');
