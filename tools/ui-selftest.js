@@ -358,6 +358,36 @@ if (textPick) {
   report.checks.subtitleGroup = MK.beatFx.base('subtitle-kinetic') !== null;
 
   // ---------------------------------------------------------------- 收尾：留个好看的演示状态
+  // ---------------------------------------------------------------- 13. 模板库：缩略图 + 分类折叠
+  await sleep(900);                         // 缩略图是分帧画的，等一下
+  const tplItems = [...document.querySelectorAll('#templateList .tpl')];
+  let withThumb = 0, drawn = 0;
+  for (const el of tplItems) {
+    const c = el.querySelector('canvas.tpl-thumb');
+    if (!c) continue;
+    withThumb++;
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (Math.abs(d[i] - 14) > 6 || Math.abs(d[i + 1] - 16) > 6 || Math.abs(d[i + 2] - 19) > 6) n++;
+    }
+    if (n > c.width * c.height * 0.2) drawn++;
+  }
+  report.tplLib = { items: tplItems.length, withThumb, drawn };
+  report.checks.tplThumbs = tplItems.length > 20 && withThumb === tplItems.length && drawn >= tplItems.length - 1;
+
+  const foldBtn = document.getElementById('btnTplFold');
+  foldBtn.click();
+  await sleep(300);
+  const collapsedN = document.querySelectorAll('#templateList .tpl').length;
+  const catsN = document.querySelectorAll('#templateList .tpl-cat').length;
+  foldBtn.click();
+  await sleep(300);
+  const expandedN = document.querySelectorAll('#templateList .tpl').length;
+  report.tplFold = { collapsedN, catsN, expandedN };
+  report.checks.tplFold = collapsedN === 0 && catsN > 3 && expandedN === tplItems.length;
+
+  // ---------------------------------------------------------------- 收尾：留个好看的演示状态
   // ---------------------------------------------------------------- 9. 时间轴上下滚动
   const tlEl = document.getElementById('timeline');
   tlEl.dispatchEvent(new WheelEvent('wheel', { deltaY: -4000, bubbles: true, cancelable: true }));

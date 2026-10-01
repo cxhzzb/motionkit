@@ -363,9 +363,22 @@ textarea.sync-input { resize: vertical; line-height: 1.45; }
 }
 .tpl-tip b { color: var(--accent); font-weight: 600; }
 .tpl {
-  border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; margin-bottom: 6px;
+  border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; margin-bottom: 6px;
   cursor: grab; background: var(--bg3); transition: border-color .12s, background .12s;
+  display: flex; gap: 8px; align-items: flex-start;
 }
+.tpl .tpl-body { min-width: 0; flex: 1 1 auto; }
+.tpl canvas.tpl-thumb {
+  flex: 0 0 auto; width: 88px; height: 50px; border-radius: 3px;
+  border: 1px solid #23262d; background: #0e1013; display: block;
+}
+.tpl-cat { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+.tpl-cat:hover { color: var(--ink); }
+.tpl-cat .caret { width: 9px; display: inline-block; opacity: .8; }
+.tpl-cat .cnt {
+  font-size: 10px; padding: 0 5px; border-radius: 8px; background: #23262d; color: var(--dim); letter-spacing: 0;
+}
+.tpl-cat.collapsed { opacity: .75; }
 .tpl:active { cursor: grabbing; }
 .tpl:hover { border-color: #4a505b; background: #1c1f25; }
 .tpl b { display: block; font-size: 12.5px; margin-bottom: 3px; }
@@ -596,6 +609,7 @@ textarea.sync-input { resize: vertical; line-height: 1.45; }
     <div id="paneTpl" class="pane">
       <div class="idx-bar">
         <input id="searchTpl" class="search wide" placeholder="搜索模板…" />
+        <button id="btnTplFold" class="ghost" title="把分类全部折叠/展开">折叠</button>
       </div>
       <div class="tpl-tip">点一下只是选中 · <b>拖到右边画面里</b>才加进去</div>
       <div id="templateList" class="tpl-list"></div>
@@ -7151,6 +7165,7 @@ const state = {
   layerSeq: 0,
   muted: false,          // 预览总静音（走带栏那个喇叭）
     tplPick: null,         // 模板库里点选中的模板（只是选中，拖着往画面里放才会加图层）
+    tplCollapsed: {},      // 模板库哪些分类是折叠的
     durationAuto: true,    // 工程时长是否跟着素材走（手动改过时长就关掉）
     tlScroll: 0,           // 时间轴图层区的上下滚动量（层数多的时候用）
     tlPack: true,          // 并轨：时间上不重叠的图层共用一行（省地方）
@@ -7695,16 +7710,32 @@ function buildTemplateList(filter = '') {
   for (const [cat, tpls] of Object.entries(cats)) {
     const shown = tpls.filter((t) => !f || (t.name + t.id + (t.hint || '')).toLowerCase().includes(f));
     if (!shown.length) continue;
+    const collapsed = !f && !!state.tplCollapsed[cat];     // 搜索时强制展开，别把结果藏起来
     const h = document.createElement('div');
-    h.className = 'tpl-cat';
-    h.textContent = CATEGORIES[cat] || cat;
+    h.className = 'tpl-cat' + (collapsed ? ' collapsed' : '');
+    h.innerHTML = `<span class="caret">${collapsed ? '▸' : '▾'}</span>`
+      + `<span>${CATEGORIES[cat] || cat}</span><span class="cnt">${shown.length}</span>`;
+    h.title = collapsed ? '点开这一组' : '收起这一组';
+    h.addEventListener('click', () => {
+      state.tplCollapsed[cat] = !state.tplCollapsed[cat];
+      try { localStorage.setItem('motionkit.tplCollapsed', JSON.stringify(state.tplCollapsed)); } catch (_) {}
+      buildTemplateList($('searchTpl').value || '');
+    });
     box.appendChild(h);
+    if (collapsed) continue;
     for (const t of shown) {
       const d = document.createElement('div');
       d.className = 'tpl' + (state.tplPick === t.id ? ' sel' : '');
       d.dataset.tid = t.id;
       d.draggable = true;
-      d.innerHTML = `<b>${t.name}</b><span>${t.hint || ''}</span><div class="tag">${t.category} · ${t.id}</div>`;
+      const cv = document.createElement('canvas');
+      cv.className = 'tpl-thumb';
+      cv.width = 176; cv.height = 100;
+      const body = document.createElement('div');
+      body.className = 'tpl-body';
+      body.innerHTML = `<b>${t.name}</b><span>${t.hint || ''}</span><div class="tag">${t.category} · ${t.id}</div>`;
+      d.appendChild(cv); d.appendChild(body);
+      queueThumb(t, cv);
       d.addEventListener('click', () => pickTemplate(t));
       d.addEventListener('dragstart', (e) => {
         e.dataTransfer.setData(TPL_MIME, t.id);
@@ -7720,6 +7751,109 @@ function buildTemplateList(filter = '') {
       });
       box.appendChild(d);
     }
+  }
+}
+
+// ---------------------------------------------------------------- 模板缩略图
+// 用引擎真渲一遍再缩小（默认参数、入场结束那一刻），所以"看到的就是拿到的"。
+// 分帧慢慢填，避免一次性卡住界面。
+let tplScratch = null;
+let thumbQueue = [];
+let thumbScheduled = false;
+const thumbCache = new Map();      // 已经渲过的模板 → 小画布（换分类后不用重渲）
+
+function queueThumb(t, cv) {
+  if (thumbCache.has(t.id)) { paintThumbFrom(t.id, cv); return; }
+  thumbQueue.push({ t, cv });
+  if (!thumbScheduled) {
+    thumbScheduled = true;
+    requestAnimationFrame(() => { thumbScheduled = false; pumpThumbs(); });
+  }
+}
+
+function pumpThumbs() {
+  const batch = thumbQueue.splice(0, 2);
+  for (const it of batch) paintThumb(it.t, it.cv);
+  if (thumbQueue.length) {
+    thumbScheduled = true;
+    requestAnimationFrame(() => { thumbScheduled = false; pumpThumbs(); });
+  }
+}
+
+function paintThumbFrom(id, cv) {
+  const src = thumbCache.get(id);
+  if (!src) return;
+  const c = cv.getContext('2d');
+  c.clearRect(0, 0, cv.width, cv.height);
+  c.fillStyle = '#0e1013';
+  c.fillRect(0, 0, cv.width, cv.height);
+  c.drawImage(src, 0, 0, cv.width, cv.height);
+}
+
+/** 缩略图底下垫的"合成画面"：有明暗、有结构，转场/调色类模板才作用得出来 */
+function drawThumbBase(c, W, H) {
+  const g = c.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, '#22293a');
+  g.addColorStop(0.55, '#2b2436');
+  g.addColorStop(1, '#3a2b2f');
+  c.fillStyle = g;
+  c.fillRect(0, 0, W, H);
+  // 一点亮块，让故障/像素化/放大这类效果看得出来
+  const blocks = [[0.10, 0.52, 0.16, 0.34, 'rgba(120,200,255,0.30)'],
+                  [0.34, 0.30, 0.20, 0.44, 'rgba(255,190,120,0.26)'],
+                  [0.62, 0.58, 0.14, 0.30, 'rgba(255,120,190,0.24)'],
+                  [0.78, 0.24, 0.12, 0.26, 'rgba(150,255,200,0.20)']];
+  for (const b of blocks) {
+    c.fillStyle = b[4];
+    c.fillRect(W * b[0], H * b[1], W * b[2], H * b[3]);
+  }
+  c.fillStyle = 'rgba(255,255,255,0.05)';
+  c.fillRect(0, H * 0.46, W, H * 0.012);
+}
+
+function paintThumb(t, cv) {
+  try {
+    const s = state.scene;
+    const W = Math.max(320, Math.round(s.width));
+    const H = Math.max(180, Math.round(s.height));
+    if (!tplScratch) tplScratch = makeCanvas(W, H, 1);
+    if (tplScratch.canvas.width !== W || tplScratch.canvas.height !== H) {
+      tplScratch.canvas.width = W; tplScratch.canvas.height = H;
+    }
+    const ctx = tplScratch.ctx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    // 单层场景 + 默认参数，取"入场已经结束"的时刻
+    const mini = Scene.fromJSON({
+      width: W, height: H, fps: s.fps, duration: 3,
+      bg: null, transparent: true, fx: [],
+      beat: { bpm: 120, offset: 0, duration: 3 },
+      // 给字幕类模板一点内容，不然缩略图是空的
+      captions: [
+        { start: 0.4, end: 1.6, text: '示例字幕' },
+        { start: 1.7, end: 3, text: '第二句' },
+      ],
+      layers: [{ template: t.id, start: 0, end: 3, seed: 'thumb-' + t.id, name: t.name, params: {} }],
+    });
+    // 垫一张"合成画面"：转场类模板是把当前帧抓下来做变形，底下空的话它们什么都画不出来
+    renderFrame(ctx, mini, 2.2, {
+      silent: true,
+      before: (c, sc) => drawThumbBase(c, sc.width, sc.height),
+    });
+    // 缓存一张小图（回填时用）
+    const small = document.createElement('canvas');
+    small.width = cv.width; small.height = cv.height;
+    const sc = small.getContext('2d');
+    sc.fillStyle = '#0e1013';
+    sc.fillRect(0, 0, small.width, small.height);
+    sc.drawImage(tplScratch.canvas, 0, 0, small.width, small.height);
+    thumbCache.set(t.id, small);
+    paintThumbFrom(t.id, cv);
+  } catch (_) {
+    const c = cv.getContext('2d');
+    c.fillStyle = '#0e1013'; c.fillRect(0, 0, cv.width, cv.height);
+    c.fillStyle = '#4a505b'; c.font = '10px monospace';
+    c.fillText('预览失败', 6, cv.height / 2 + 3);
   }
 }
 
@@ -9253,6 +9387,31 @@ $('btnRestoreDrop').addEventListener('click', () => {
   newProject(true);
 });
 $('searchTpl').addEventListener('input', (e) => buildTemplateList(e.target.value));
+// 全部折叠 / 全部展开
+{
+  try {
+    const saved = localStorage.getItem('motionkit.tplCollapsed');
+    if (saved) state.tplCollapsed = JSON.parse(saved) || {};
+  } catch (_) {}
+  const b = $('btnTplFold');
+  if (b) {
+    const sync = () => {
+      const anyOpen = Object.keys(CATEGORIES).some((c) => !state.tplCollapsed[c]);
+      b.textContent = anyOpen ? '折叠' : '展开';
+      b.title = anyOpen ? '把分类全部折叠' : '把分类全部展开';
+    };
+    b.addEventListener('click', () => {
+      const anyOpen = Object.keys(CATEGORIES).some((c) => !state.tplCollapsed[c]);
+      const next = {};
+      for (const c of Object.keys(CATEGORIES)) next[c] = anyOpen;
+      state.tplCollapsed = next;
+      try { localStorage.setItem('motionkit.tplCollapsed', JSON.stringify(next)); } catch (_) {}
+      buildTemplateList($('searchTpl').value || '');
+      sync();
+    });
+    sync();
+  }
+}
 $('tplBarCancel').addEventListener('click', () => pickTemplate(null));
 // 右侧标签页
 for (const b of document.querySelectorAll('#rightTabs .rtab')) {

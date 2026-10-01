@@ -356,9 +356,22 @@ textarea.sync-input { resize: vertical; line-height: 1.45; }
 }
 .tpl-tip b { color: var(--accent); font-weight: 600; }
 .tpl {
-  border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; margin-bottom: 6px;
+  border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; margin-bottom: 6px;
   cursor: grab; background: var(--bg3); transition: border-color .12s, background .12s;
+  display: flex; gap: 8px; align-items: flex-start;
 }
+.tpl .tpl-body { min-width: 0; flex: 1 1 auto; }
+.tpl canvas.tpl-thumb {
+  flex: 0 0 auto; width: 88px; height: 50px; border-radius: 3px;
+  border: 1px solid #23262d; background: #0e1013; display: block;
+}
+.tpl-cat { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+.tpl-cat:hover { color: var(--ink); }
+.tpl-cat .caret { width: 9px; display: inline-block; opacity: .8; }
+.tpl-cat .cnt {
+  font-size: 10px; padding: 0 5px; border-radius: 8px; background: #23262d; color: var(--dim); letter-spacing: 0;
+}
+.tpl-cat.collapsed { opacity: .75; }
 .tpl:active { cursor: grabbing; }
 .tpl:hover { border-color: #4a505b; background: #1c1f25; }
 .tpl b { display: block; font-size: 12.5px; margin-bottom: 3px; }
