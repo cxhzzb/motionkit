@@ -135,7 +135,7 @@ node tools/serve.mjs --open # 起服务并自动开浏览器（bat 里用的就�
 **直接在预览里改**：不用去右边翻参数。在预览上点一下图层就选中（选择框和手柄出来），
 拖动挪位置、拉四个角缩放、转上面那个圆手柄旋转、**双击直接改文字**（浮窗里边打边看）。
 位置 / 缩放 / 旋转记在图层自己的变换上，不去动模板的 `position` 参数，
-所以 33 个模板——包括根本没有位置参数的全屏 HUD、字幕层、转场层——都能这么调；
+所以 39 个模板——包括根本没有位置参数的全屏 HUD、字幕层、转场层——都能这么调；
 而且导出和无头渲染走的是同一个引擎，界面里摆成什么样，导出来就是什么样。
 
 **图层索引**（左栏第二个页签，快捷键 `I`）：图层一多，光看时间轴上的色条不知道谁是谁。
@@ -255,7 +255,7 @@ python tools/beatmap.py --in music.mp3 --out beats.json --markers beats.txt --fp
 
 ---
 
-## 模板总览（33 个）
+## 模板总览（39 个）
 
 ### 叠加层 / HUD
 
@@ -304,6 +304,33 @@ python tools/beatmap.py --in music.mp3 --out beats.json --markers beats.txt --fp
 | `magnifier` | 放大镜 | 圆形镜片把画面某处**真的放大**（镜片里是画面本身），带准星与倍率角标 |
 
 预设 `presets/focus-demo.json`（载入预设 → 聚焦标注）一次看完四款。
+
+### 数据 / 图表〔新增〕
+
+讲解、汇报、趋势对比用。两款都做"从零长出来"的入场，数据直接写参数里。
+
+| id | 名称 | 说明 |
+| --- | --- | --- |
+| `bar-chart` | 柱状图 | 每行写「名字\|数值」，柱子错峰长出来，最高的一根自动高亮，带数值和网格 |
+| `line-chart` | 折线图 | 数据逗号或换行都行，折线从左往右画出来，末端跟一个数值角标，可填面积 |
+
+### 分屏与章节〔新增〕
+
+| id | 名称 | 说明 |
+| --- | --- | --- |
+| `split-compare` | 分屏对比 | 中间一条分隔线 + 把手，两侧挂标签（原片 / 成片），可以**自动扫过去**做前后对比 |
+| `chapter-bar` | 章节进度 | 底部细进度条 + 章节刻度 + 当前章节名 + 时间码，长视频一眼看出"现在到哪了" |
+
+### 手绘与定位〔新增〕
+
+| id | 名称 | 说明 |
+| --- | --- | --- |
+| `hand-mark` | 手绘圈注 | 手绘感的**圈选 / 下划线 / 箭头**，笔迹会自己画出来，线条带手抖（每层都不一样） |
+| `locator` | 地图定位 | 定位框 + 地名 + 坐标 + 比例尺 + 指北针，压在地图上用 |
+
+![数据 / 标注 / 版式六款](docs/preview-data.png)
+
+预设 `presets/data-demo.json`（载入预设 → 数据标注）一次看完这六款。
 
 ### 摇滚 / 海报
 
@@ -545,8 +572,8 @@ export default [myEffect];
 │   ├─ audio.js            卡点分析（STFT 分频段通量 → 自相关 → 最小二乘精修）
 │   ├─ srt.js              字幕解析 / 导出 / 切短句 / 词级时间估算
 │   └─ zip.js              ZIP 写入器（含流式版本，边渲染边落盘）
-├─ templates/              33 个模板（hud / type / design / focus / rock / panels / transitions / hits）
-├─ presets/                slopcore / demo-scene / transitions-demo / design-demo / rock-2min / focus-demo + index.json
+├─ templates/              39 个模板（hud / type / design / data / focus / mark / rock / panels / transitions / hits）
+├─ presets/                slopcore / demo-scene / transitions-demo / design-demo / rock-2min / focus-demo / data-demo + index.json
 ├─ agent/                  AI 助手：分析 → 转写 → 文案 → 排布 → 成片
 │   ├─ autopilot.py        总入口（CLI 也是本地服务调的那支）
 │   ├─ analyze.py          拍点 / 镜头切点 / 亮度 / 运动量 / 人声段
@@ -554,7 +581,7 @@ export default [myEffect];
 │   ├─ llm.py              文案与定调（DeepSeek / OpenAI / 本地 Ollama 都行）
 │   ├─ director.py         导演：把分析 + 选择 + 文案排成图层栈（含占位避让）
 │   ├─ styles.json         6 套配色风格预设
-│   ├─ schema.json         从 33 个模板导出的参数表，用来校验生成结果
+│   ├─ schema.json         从 39 个模板导出的参数表，用来校验生成结果
 │   └─ _mock_api.py        离线自检用的假接口
 ├─ tools/
 │   ├─ serve.mjs           零依赖静态服务器
@@ -638,7 +665,7 @@ AI 助手要调 python、ffmpeg 和无头浏览器，只有带后端的开发模
 
 **它会不会写出引擎不认的工程？**
 
-不会。生成之后会拿 `agent/schema.json`（从 33 个模板导出的参数表）逐字段校验：
+不会。生成之后会拿 `agent/schema.json`（从 39 个模板导出的参数表）逐字段校验：
 不认识的键丢掉、越界数字钳回范围、非法选项退回默认，越界的情况会记在 `report.md` 里。
 
 **为什么导出的 PNG 这么大？**

@@ -1,0 +1,26 @@
+{
+  "name": "data-demo",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "duration": 16,
+  "bg": null,
+  "transparent": true,
+  "beat": { "bpm": 120, "offset": 0, "duration": 16, "source": "manual" },
+  "captions": [],
+  "layers": [
+    { "template": "bar-chart", "start": 0.2, "end": 3.6, "opacity": 1, "seed": "dm-1", "name": "柱状图",
+      "params": { "position": "0.5,0.5" } },
+    { "template": "line-chart", "start": 4.0, "end": 7.4, "opacity": 1, "seed": "dm-2", "name": "折线图",
+      "params": { "position": "0.5,0.5" } },
+    { "template": "hand-mark", "start": 7.8, "end": 10.2, "opacity": 1, "seed": "dm-3", "name": "手绘圈注",
+      "params": { "mode": "circle", "region": "0.36,0.38,0.28,0.24" } },
+    { "template": "locator", "start": 7.8, "end": 10.2, "opacity": 1, "seed": "dm-4", "name": "地图定位",
+      "params": { "region": "0.36,0.38,0.28,0.24", "cardPos": "br" } },
+    { "template": "split-compare", "start": 10.6, "end": 13.4, "opacity": 1, "seed": "dm-5", "name": "分屏对比",
+      "params": { "auto": true, "sweep": 2.2 } },
+    { "template": "chapter-bar", "start": 13.8, "end": 16, "opacity": 1, "seed": "dm-6", "name": "章节进度",
+      "params": { "chapters": "0|开场\n5|走访\n9|发现\n13|收尾" } }
+  ],
+  "fx": []
+}

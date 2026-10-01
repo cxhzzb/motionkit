@@ -1,6 +1,6 @@
 {
   "generatedBy": "tools/schema.mjs",
-  "count": 33,
+  "count": 39,
   "categories": {
     "overlay": "叠加层 / HUD",
     "typography": "动态排版",
@@ -8,6 +8,7 @@
     "panel": "面板卡片",
     "design": "设计排版",
     "focus": "聚焦 / 标注",
+    "data": "数据 / 图表",
     "rock": "摇滚 / 海报",
     "transition": "转场 / 冲击"
   },
@@ -1193,6 +1194,258 @@
         }
       ]
     },
+    "bar-chart": {
+      "id": "bar-chart",
+      "name": "柱状图",
+      "category": "data",
+      "categoryLabel": "数据 / 图表",
+      "desc": "",
+      "params": [
+        {
+          "key": "title",
+          "label": "标题",
+          "type": "string",
+          "default": "每周训练量"
+        },
+        {
+          "key": "items",
+          "label": "数据(每行 名字|数值)",
+          "type": "multiline",
+          "default": "周一|32\n周二|58\n周三|41\n周四|76\n周五|95\n周六|63\n周日|28"
+        },
+        {
+          "key": "position",
+          "label": "位置 X,Y",
+          "type": "string",
+          "default": "0.5,0.56"
+        },
+        {
+          "key": "width",
+          "label": "宽度[0-1]",
+          "type": "number",
+          "default": 0.62,
+          "min": 0.2,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "height",
+          "label": "高度[0-1]",
+          "type": "number",
+          "default": 0.34,
+          "min": 0.1,
+          "max": 0.8,
+          "step": 0.02
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 20,
+          "min": 10,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "gap",
+          "label": "柱间距[0-1]",
+          "type": "number",
+          "default": 0.34,
+          "min": 0.05,
+          "max": 0.7,
+          "step": 0.02
+        },
+        {
+          "key": "grid",
+          "label": "网格线",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "max": 8,
+          "step": 1
+        },
+        {
+          "key": "stagger",
+          "label": "错峰(秒/根)",
+          "type": "number",
+          "default": 0.07,
+          "min": 0,
+          "max": 0.5,
+          "step": 0.01
+        },
+        {
+          "key": "color",
+          "label": "文字色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "柱子色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "plate",
+          "label": "垫底色(空=无)",
+          "type": "color",
+          "default": "#0a0a0c"
+        },
+        {
+          "key": "plateOpacity",
+          "label": "垫底不透明度",
+          "type": "number",
+          "default": 0.66,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.9,
+          "min": 0.1,
+          "max": 4,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.35,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "line-chart": {
+      "id": "line-chart",
+      "name": "折线图",
+      "category": "data",
+      "categoryLabel": "数据 / 图表",
+      "desc": "",
+      "params": [
+        {
+          "key": "title",
+          "label": "标题",
+          "type": "string",
+          "default": "播放量趋势"
+        },
+        {
+          "key": "values",
+          "label": "数据(逗号或换行)",
+          "type": "multiline",
+          "default": "12,18,15,26,31,28,44,52,61,58,72,86"
+        },
+        {
+          "key": "labels",
+          "label": "横轴标签(可空)",
+          "type": "string",
+          "default": "1月,4月,7月,10月"
+        },
+        {
+          "key": "unit",
+          "label": "单位后缀",
+          "type": "string",
+          "default": "万"
+        },
+        {
+          "key": "position",
+          "label": "位置 X,Y",
+          "type": "string",
+          "default": "0.5,0.56"
+        },
+        {
+          "key": "width",
+          "label": "宽度[0-1]",
+          "type": "number",
+          "default": 0.64,
+          "min": 0.2,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "height",
+          "label": "高度[0-1]",
+          "type": "number",
+          "default": 0.32,
+          "min": 0.1,
+          "max": 0.8,
+          "step": 0.02
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 20,
+          "min": 10,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "grid",
+          "label": "网格线",
+          "type": "number",
+          "default": 3,
+          "min": 0,
+          "max": 8,
+          "step": 1
+        },
+        {
+          "key": "area",
+          "label": "填充面积",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "color",
+          "label": "文字色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "线色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "plate",
+          "label": "垫底色(空=无)",
+          "type": "color",
+          "default": "#0a0a0c"
+        },
+        {
+          "key": "plateOpacity",
+          "label": "垫底不透明度",
+          "type": "number",
+          "default": 0.66,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "inDur",
+          "label": "画线时长(秒)",
+          "type": "number",
+          "default": 1.6,
+          "min": 0.2,
+          "max": 8,
+          "step": 0.1
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.35,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
     "focus-box": {
       "id": "focus-box",
       "name": "聚焦框",
@@ -1621,6 +1874,426 @@
           "label": "出场(秒)",
           "type": "number",
           "default": 0.35,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "hand-mark": {
+      "id": "hand-mark",
+      "name": "手绘圈注",
+      "category": "focus",
+      "categoryLabel": "聚焦 / 标注",
+      "desc": "",
+      "params": [
+        {
+          "key": "mode",
+          "label": "样式",
+          "type": "select",
+          "default": "circle",
+          "options": [
+            "circle",
+            "underline",
+            "arrow"
+          ]
+        },
+        {
+          "key": "region",
+          "label": "区域 x,y,w,h",
+          "type": "string",
+          "default": "0.34,0.36,0.32,0.26"
+        },
+        {
+          "key": "point",
+          "label": "箭头指向 x,y",
+          "type": "string",
+          "default": "0.62,0.46"
+        },
+        {
+          "key": "arrowLen",
+          "label": "箭头长度(px)",
+          "type": "number",
+          "default": 210,
+          "min": 60,
+          "max": 700,
+          "step": 10
+        },
+        {
+          "key": "color",
+          "label": "笔色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "width",
+          "label": "笔宽",
+          "type": "number",
+          "default": 7,
+          "min": 1,
+          "max": 30,
+          "step": 0.5
+        },
+        {
+          "key": "jitter",
+          "label": "手抖程度",
+          "type": "number",
+          "default": 6,
+          "min": 0,
+          "max": 30,
+          "step": 1
+        },
+        {
+          "key": "double",
+          "label": "描两道",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "inDur",
+          "label": "画出来用时(秒)",
+          "type": "number",
+          "default": 0.7,
+          "min": 0.1,
+          "max": 4,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.3,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "locator": {
+      "id": "locator",
+      "name": "地图定位",
+      "category": "focus",
+      "categoryLabel": "聚焦 / 标注",
+      "desc": "",
+      "params": [
+        {
+          "key": "place",
+          "label": "地名",
+          "type": "string",
+          "default": "外滩"
+        },
+        {
+          "key": "placeEn",
+          "label": "副标 / 外文名",
+          "type": "string",
+          "default": "THE BUND · SHANGHAI"
+        },
+        {
+          "key": "coord",
+          "label": "坐标",
+          "type": "string",
+          "default": "31°14′N 121°29′E"
+        },
+        {
+          "key": "region",
+          "label": "定位框 x,y,w,h",
+          "type": "string",
+          "default": "0.40,0.42,0.20,0.18"
+        },
+        {
+          "key": "cardPos",
+          "label": "信息卡位置",
+          "type": "select",
+          "default": "br",
+          "options": [
+            "tl",
+            "tr",
+            "bl",
+            "br"
+          ]
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 30,
+          "min": 12,
+          "max": 90,
+          "step": 2
+        },
+        {
+          "key": "showScale",
+          "label": "比例尺",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "scaleText",
+          "label": "比例尺文字",
+          "type": "string",
+          "default": "2 KM"
+        },
+        {
+          "key": "showNorth",
+          "label": "指北针",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "color",
+          "label": "文字色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.5,
+          "min": 0.1,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.35,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "split-compare": {
+      "id": "split-compare",
+      "name": "分屏对比",
+      "category": "panel",
+      "categoryLabel": "面板卡片",
+      "desc": "",
+      "params": [
+        {
+          "key": "dir",
+          "label": "方向",
+          "type": "select",
+          "default": "v",
+          "options": [
+            "v",
+            "h"
+          ]
+        },
+        {
+          "key": "pos",
+          "label": "位置[0-1]",
+          "type": "number",
+          "default": 0.5,
+          "min": 0.05,
+          "max": 0.95,
+          "step": 0.01
+        },
+        {
+          "key": "auto",
+          "label": "自动扫过",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "key": "sweep",
+          "label": "扫过用时(秒)",
+          "type": "number",
+          "default": 2.5,
+          "min": 0.4,
+          "max": 10,
+          "step": 0.1
+        },
+        {
+          "key": "dim",
+          "label": "压暗一侧",
+          "type": "number",
+          "default": 0.3,
+          "min": 0,
+          "max": 0.85,
+          "step": 0.02
+        },
+        {
+          "key": "dimSide",
+          "label": "压哪侧",
+          "type": "select",
+          "default": "b",
+          "options": [
+            "b",
+            "a",
+            "none"
+          ]
+        },
+        {
+          "key": "labelA",
+          "label": "左 / 上标签",
+          "type": "string",
+          "default": "原片"
+        },
+        {
+          "key": "labelB",
+          "label": "右 / 下标签",
+          "type": "string",
+          "default": "成片"
+        },
+        {
+          "key": "handle",
+          "label": "显示把手",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 26,
+          "min": 12,
+          "max": 70,
+          "step": 1
+        },
+        {
+          "key": "color",
+          "label": "文字色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "线色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.4,
+          "min": 0.05,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.3,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "chapter-bar": {
+      "id": "chapter-bar",
+      "name": "章节进度",
+      "category": "panel",
+      "categoryLabel": "面板卡片",
+      "desc": "",
+      "params": [
+        {
+          "key": "chapters",
+          "label": "章节(每行 时间|名字)",
+          "type": "multiline",
+          "default": "0|开场\n18|第一次交手\n46|转场\n72|高潮\n98|收尾"
+        },
+        {
+          "key": "pos",
+          "label": "位置",
+          "type": "select",
+          "default": "bottom",
+          "options": [
+            "bottom",
+            "top"
+          ]
+        },
+        {
+          "key": "margin",
+          "label": "左右边距(px)",
+          "type": "number",
+          "default": 120,
+          "min": 20,
+          "max": 600,
+          "step": 10
+        },
+        {
+          "key": "thick",
+          "label": "轨道粗细",
+          "type": "number",
+          "default": 4,
+          "min": 1,
+          "max": 20,
+          "step": 0.5
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 20,
+          "min": 10,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "showName",
+          "label": "显示章节名",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "showTime",
+          "label": "显示时间码",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "color",
+          "label": "文字色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "进度色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "plate",
+          "label": "垫底色(空=无)",
+          "type": "color",
+          "default": "#0a0a0c"
+        },
+        {
+          "key": "plateOpacity",
+          "label": "垫底不透明度",
+          "type": "number",
+          "default": 0.6,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.4,
+          "min": 0.05,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.3,
           "min": 0,
           "max": 3,
           "step": 0.05
