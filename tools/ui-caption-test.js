@@ -105,6 +105,49 @@ if (grp) {
     && mine().every((L) => !L.transform && Math.abs(L.opacity - 1) < 1e-6);
 }
 
+// ---- ①c 单个字幕换模式：换了模板，台词不能丢
+const rows = [...document.querySelectorAll('#rightBody .cap-row')];
+report.checks.capRows = rows.length === n;
+const cap0 = S.captions[0].text;
+const sel0 = rows[0].querySelector('select');
+// 挑一个"能装台词"的样子（字幕条那种读字幕轨的，参数里本来就没有文本）
+const TEXTY = ['卡点大字', '标题定格', '词块宫格', '注释气泡', '跑马灯条', '终端面板', '编号卡片', '胶带标签', '压扁大字', '杂志标题', '摇滚大标题', '系列编号', '索引标注'];
+const opt = [...sel0.options].find((o) => TEXTY.includes(o.textContent));
+const wantLabel = opt.textContent;
+sel0.value = opt.value;
+sel0.dispatchEvent(new Event('change', { bubbles: true }));
+await sleep(300);
+const L0 = mine()[0];
+report.singleSwitch = { cap0, layerName: L0.name, params: JSON.stringify(L0.params) };
+report.checks.singleSwitchKeepsText = JSON.stringify(L0.params).includes(cap0);
+report.checks.singleSwitchChanged = L0.name.includes(wantLabel);
+
+// 图层页那个「模板」下拉也得把台词带过去（这是最容易丢字的地方）
+const Lx = mine()[1];
+const cap1 = S.captions[1].text;
+document.getElementById('tabLayers').click();     // 左栏切到「图层索引」，点一行等于选中那层
+await sleep(250);
+const rowEl = document.querySelector(`.lrow[data-id="${Lx.id}"]`);
+report.checks.layerRowFound = !!rowEl;
+if (rowEl) {
+  rowEl.click();
+  await sleep(300);
+  const tf = [...document.querySelectorAll('#rightBody .field')].find((f) => f.querySelector('label').textContent === '模板');
+  const tsel = tf && tf.querySelector('select');
+  report.checks.layerPanelShown = !!tsel;
+  if (tsel) {
+    tsel.value = 'title-mark';
+    tsel.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(300);
+    report.panelSwitch = { template: Lx.template, params: JSON.stringify(Lx.params) };
+    report.checks.panelSwitchKeepsText = Lx.template === 'title-mark' && JSON.stringify(Lx.params).includes(cap1);
+  }
+}
+
+// 回到字幕页继续后面的检查
+document.querySelector('#rightTabs .rtab[data-tab="subs"]').click();
+await sleep(150);
+
 // ---- ② 换一批：重新洗牌之后顺序应该和上一批不一样
 b = byText(/换一批/);
 b.click();

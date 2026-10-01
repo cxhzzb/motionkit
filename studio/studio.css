@@ -456,6 +456,18 @@ input[type="color"]:disabled { cursor: not-allowed; }
 .layer-item .eye.off { color: #4a505b; }
 .empty { color: var(--dim); font-size: 12px; line-height: 1.6; padding: 6px 0; }
 
+/* ---------- 字幕换装：一句一行的单独换样子 ---------- */
+.cap-list { margin-top: 6px; border-top: 1px solid var(--line); }
+.cap-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0; border-bottom: 1px solid #1e2126;
+}
+.cap-tx {
+  flex: 1 1 auto; min-width: 0; font-size: 11px; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cap-row select { flex: 0 0 108px; }
+
 /* ---------- 弹窗 ---------- */
 .dlg {
   border: 1px solid var(--line); border-radius: 8px; background: var(--bg2); color: var(--ink);

@@ -463,6 +463,18 @@ input[type="color"]:disabled { cursor: not-allowed; }
 .layer-item .eye.off { color: #4a505b; }
 .empty { color: var(--dim); font-size: 12px; line-height: 1.6; padding: 6px 0; }
 
+/* ---------- 字幕换装：一句一行的单独换样子 ---------- */
+.cap-list { margin-top: 6px; border-top: 1px solid var(--line); }
+.cap-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0; border-bottom: 1px solid #1e2126;
+}
+.cap-tx {
+  flex: 1 1 auto; min-width: 0; font-size: 11px; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cap-row select { flex: 0 0 108px; }
+
 /* ---------- 弹窗 ---------- */
 .dlg {
   border: 1px solid var(--line); border-radius: 8px; background: var(--bg2); color: var(--ink);
@@ -8974,7 +8986,7 @@ function rightPanelLayer(body, L) {
         if (tt.id === L.template) o.selected = true;
         sel.appendChild(o);
       }
-      sel.addEventListener('change', () => { L.template = sel.value; renderRight(); drawTimeline(); });
+      sel.addEventListener('change', () => switchLayerTemplate(L, sel.value));
       return sel;
     }));
     g0.appendChild(numField('开始(秒)', L.start, 0, state.scene.duration, 0.01, (v) => { L.start = Math.min(v, L.end - 0.04); drawTimeline(); }));
@@ -9125,6 +9137,108 @@ function rightPanelSubs(body) {
 }
 
 // ---------------------------------------------------------------- 字幕换装
+/**
+ * 换模板时把"这句话"搬过去。
+ *
+ * 模板参数是各写各的：同一个 id 改名会丢东西 —— 字幕条的字在字幕轨上、
+ * 卡点大字的字在 text、编号卡片的在 items、终端的在 lines。直接换 id 的话
+ * 新模板读不到参数，画面上那句台词就没了。所以换之前先把文本抠出来，
+ * 换完写进新模板对应的那个参数里。
+ */
+const TEXT_KEYS = ['text', 'lines', 'items', 'content', 'label', 'product', 'name', 'note', 'title', 'chapters'];
+
+/** 新模板把"一句台词"放哪个参数里（不在表里 = 这个模板不放台词） */
+const TEXT_SLOT = {
+  'kinetic-type': 'text', 'word-grid': 'text', 'note-bubble': 'text', 'ticker-strip': 'text',
+  'type-stack': 'text', 'callout-pin': 'text', 'rock-title': 'text', 'gig-poster': 'title',
+  'title-mark': 'title', 'editorial-title': 'title',
+  'terminal-prompt': 'lines', 'credits-roll': 'lines', 'look-card': 'items', 'index-list': 'items',
+  'tape-label': 'label', 'shipping-label': 'product', 'name-bar': 'name',
+  'series-index': 'note', 'stat-counter': 'label', 'dial-gauge': 'label', 'magnifier': 'label',
+  'focus-box': 'label', 'split-compare': 'labelA', 'letterbox-push': 'caption',
+  'subtitle-kinetic': null,   // 台词来自字幕轨，不用搬
+};
+
+/** 从图层参数里抠出台词。优先级按"这个键更像正文"排，title 排后面（编号卡片的 title 只是前缀） */
+function readLayerText(L) {
+  for (const k of TEXT_KEYS) {
+    const v = L.params && L.params[k];
+    if (typeof v === 'string' && v.trim()) return cleanCarriedText(v);
+  }
+  return '';
+}
+
+/** 去掉搬运路上的装饰：终端面板的 "> "、跑马灯的序号前缀 */
+function cleanCarriedText(s) {
+  return String(s).split('\n')
+    .map((ln) => ln.replace(/^\s*>\s?/, '').replace(/^\s*\d{2}\s{2,}/, '').trim())
+    .filter(Boolean).join('\n').trim();
+}
+
+/** 图层压着的那几句字幕（一条盖住整条轨时，最多取前 6 句当多行） */
+function captionTextForLayer(L) {
+  const caps = state.scene.captions || [];
+  if (!caps.length) return '';
+  const hit = caps.filter((c) => c.start >= L.start - 0.35 && c.end <= L.end + 0.35);
+  if (!hit.length) return '';
+  return hit.slice(0, 6).map((c) => c.text).join('\n');
+}
+
+/** 字幕类图层（换装出来的 / 字幕轨那条 / 名字里带字幕的）才允许回字幕轨找台词 */
+function isCaptionLayer(L) {
+  return L.group === 'caption-reskin' || L.template === 'subtitle-kinetic' || /字幕/.test(L.name || '');
+}
+
+/**
+ * 换模板：台词、位置、颜色、字号这些能对上的参数都跟着走。
+ * extra 是新样式自己算好的参数（换装池切换单个样子时用），优先级最高。
+ */
+function switchLayerTemplate(L, tpl, extra, label) {
+  if (!L || L.template === tpl) return;
+  const src = readLayerText(L) || (isCaptionLayer(L) ? captionTextForLayer(L) : '');
+  const spec = listTemplates().find((t) => t.id === tpl);
+  const keys = new Set(((spec && spec.params) || []).map((p) => p.key));
+  const keep = {};
+  // 字号不跟着走：各模板的字号不是一个量纲（字幕条 44、卡点大字 118），
+  // 搬过去只会把版式弄坏 —— 这点和「整组改」用倍数是一个道理。
+  for (const k of ['position', 'color', 'accent', 'speed']) {
+    if (keys.has(k) && L.params && L.params[k] !== undefined && L.params[k] !== '') keep[k] = L.params[k];
+  }
+  L.template = tpl;
+  L.params = Object.assign(keep, extra || {});
+  const slot = TEXT_SLOT[tpl];
+  if (src && slot) L.params[slot] = src;
+  if (/^字幕换装 /.test(L.name || '')) L.name = L.name.replace(/·.*$/, '· ' + (label || (spec ? spec.name : tpl)));
+  invalidateLayerBox(L.id);
+  markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
+
+  if (src && slot) toast('台词跟着搬过来了：' + (src.length > 16 ? src.slice(0, 16) + '…' : src));
+  else if (src && slot === null) toast('这个模板不放台词，台词还在字幕轨上');
+}
+
+/** 字幕页里单独给第 i 句换个样子（池子里的第 poolIdx 个） */
+function switchCaptionLook(i, poolIdx) {
+  const caps = state.scene.captions;
+  const L = captionLayerFor(i);
+  const pool = captionLookPool(state.captionReskin.tier);
+  const look = pool[Number(poolIdx)];
+  if (!L || !caps[i] || !look) return;
+  switchLayerTemplate(L, look.tpl, look.params(caps[i], i, caps.length), look.label);
+  renderRight();
+}
+
+/** 第 i 句台词是哪个图层在演（按时间重叠最多的那个找，删过层也不会错位） */
+function captionLayerFor(i) {
+  const c = state.scene.captions[i];
+  if (!c) return null;
+  let best = null, bestOv = 0;
+  for (const L of captionGroupList()) {
+    const ov = Math.min(L.end, c.end) - Math.max(L.start, c.start);
+    if (ov > bestOv) { bestOv = ov; best = L; }
+  }
+  return best;
+}
+
 /**
  * 字幕换装：让每一句台词交给一个「已有的设计模板」来演。
  *
@@ -9328,12 +9442,54 @@ function buildCaptionReskinGroup() {
     const counts = new Map();
     for (const l of looks) counts.set(l.label, (counts.get(l.label) || 0) + 1);
     const most = Math.max(...counts.values());
-    const order = looks.map((l, i) => `${z2(i + 1)} ${l.label}`).join('　→　');
-    info.textContent = `共 ${captions.length} 句 · 用到 ${counts.size} 个不同模板 · 最多的用了 ${most} 次\n`
-      + (mine.length ? `画面上已经是换装过的 ${mine.length} 层\n` : '')
-      + `这一批的顺序：\n${order}`;
+    info.textContent = `共 ${captions.length} 句 · 用到 ${counts.size} 个不同样子 · 最多的用了 ${most} 次\n`
+      + (mine.length
+        ? `画面上已经是换装过的 ${mine.length} 层 —— 下面每句都能单独换个样子，台词不会丢`
+        : '点上面的按钮铺上去之后，下面每句都能单独换样子');
   }
   g.appendChild(info);
+
+  // 每句一行：想单独改哪句就改哪句，换过去台词照搬
+  const pool = captionLookPool(p.tier);
+  if (mine.length && captions.length) {
+    const listBox = document.createElement('div');
+    listBox.className = 'cap-list';
+    captions.forEach((c, i) => {
+      const L = captionLayerFor(i);
+      const row = document.createElement('div');
+      row.className = 'cap-row';
+      const tx = document.createElement('div');
+      tx.className = 'cap-tx';
+      tx.textContent = z2(i + 1) + ' ' + c.text;
+      tx.title = c.text;
+      const sel = document.createElement('select');
+      const cur = L ? String(L.name).split('·').pop().trim() : '';
+      let matched = false;
+      pool.forEach((look, j) => {
+        const o = document.createElement('option');
+        o.value = String(j);
+        o.textContent = look.label;
+        if (!matched && look.label === cur) { o.selected = true; matched = true; }
+        sel.appendChild(o);
+      });
+      if (!matched) {
+        // 当前这个样子不在这档池子里（比如换过档 / 手动换过模板），补一个出来免得显示错
+        const o = document.createElement('option');
+        o.value = '-1';
+        o.textContent = (cur || L.template) + '（当前）';
+        o.selected = true;
+        sel.insertBefore(o, sel.firstChild);
+      }
+      sel.addEventListener('change', () => {
+        if (sel.value === '-1') return;
+        switchCaptionLook(i, Number(sel.value));
+      });
+      row.appendChild(tx);
+      row.appendChild(sel);
+      listBox.appendChild(row);
+    });
+    g.appendChild(listBox);
+  }
   return g;
 }
 
