@@ -150,7 +150,7 @@ node tools/serve.mjs --open # 起服务并自动开浏览器（bat 里用的就�
 **直接在预览里改**：不用去右边翻参数。在预览上点一下图层就选中（选择框和手柄出来），
 拖动挪位置、拉四个角缩放、转上面那个圆手柄旋转、**双击直接改文字**（浮窗里边打边看）。
 位置 / 缩放 / 旋转记在图层自己的变换上，不去动模板的 `position` 参数，
-所以 39 个模板——包括根本没有位置参数的全屏 HUD、字幕层、转场层——都能这么调；
+所以 42 个模板——包括根本没有位置参数的全屏 HUD、字幕层、转场层——都能这么调；
 而且导出和无头渲染走的是同一个引擎，界面里摆成什么样，导出来就是什么样。
 
 **图层索引**（左栏第二个页签，快捷键 `I`）：图层一多，光看时间轴上的色条不知道谁是谁。
@@ -270,7 +270,7 @@ python tools/beatmap.py --in music.mp3 --out beats.json --markers beats.txt --fp
 
 ---
 
-## 模板总览（39 个）
+## 模板总览（42 个）
 
 ### 叠加层 / HUD
 
@@ -320,7 +320,24 @@ python tools/beatmap.py --in music.mp3 --out beats.json --markers beats.txt --fp
 
 预设 `presets/focus-demo.json`（载入预设 → 聚焦标注）一次看完四款。
 
-### 数据 / 图表〔新增〕
+### 秩序 / 混沌〔新增〕
+
+按一张参考海报（5 屏序列：网格一步步崩坏）做的一整套。纸白底、墨黑线、一记橙红，
+Swiss 海报那套语言。
+
+![秩序 / 混沌 五屏序列](docs/preview-chaos.png)
+
+| id | 名称 | 说明 |
+| --- | --- | --- |
+| `grid-field` | 网格场 | 规整网格 → 扭曲 → 断裂 → 爆散，**一个 `chaos` 参数驱动全过程**，也能勾「自动崩坏」让它自己演进；散落的方块随 chaos 变多，混一两个橙的 |
+| `series-index` | 系列编号 | 左上大编号 + 右上小注脚 + 左下 `ORDER → CHAOS` + 右下页码 + 中间大字标题（末尾橙点会弹一下）；带纸白底和细边框 |
+| `ink-scatter` | 墨迹与碎块 | 墨团（多层灰晕 + 墨芯）+ 细线 + 散落方块，一块块弹出来；可以单独叠在实拍上当"混沌质感" |
+
+预设 `presets/chaos-demo.json`（载入预设 → **秩序 / 混沌**）就是那 5 屏序列，
+20 秒，每屏 4 秒：`01 THE GRID IS REAL.` → `02 CONTROL IS AN ILLUSION.` →
+`03 THE LINES START TO BREAK.` → `04 STRUCTURE SURRENDERS.` → `05 CHAOS.`
+
+### 数据 / 图表
 
 讲解、汇报、趋势对比用。两款都做"从零长出来"的入场，数据直接写参数里。
 
@@ -587,8 +604,8 @@ export default [myEffect];
 │   ├─ audio.js            卡点分析（STFT 分频段通量 → 自相关 → 最小二乘精修）
 │   ├─ srt.js              字幕解析 / 导出 / 切短句 / 词级时间估算
 │   └─ zip.js              ZIP 写入器（含流式版本，边渲染边落盘）
-├─ templates/              39 个模板（hud / type / design / data / focus / mark / rock / panels / transitions / hits）
-├─ presets/                slopcore / demo-scene / transitions-demo / design-demo / rock-2min / focus-demo / data-demo + index.json
+├─ templates/              42 个模板（hud / type / design / chaos / data / focus / mark / rock / panels / transitions / hits）
+├─ presets/                slopcore / demo-scene / transitions-demo / design-demo / rock-2min / focus-demo / data-demo / chaos-demo + index.json
 ├─ agent/                  AI 助手：分析 → 转写 → 文案 → 排布 → 成片
 │   ├─ autopilot.py        总入口（CLI 也是本地服务调的那支）
 │   ├─ analyze.py          拍点 / 镜头切点 / 亮度 / 运动量 / 人声段
@@ -596,7 +613,7 @@ export default [myEffect];
 │   ├─ llm.py              文案与定调（DeepSeek / OpenAI / 本地 Ollama 都行）
 │   ├─ director.py         导演：把分析 + 选择 + 文案排成图层栈（含占位避让）
 │   ├─ styles.json         6 套配色风格预设
-│   ├─ schema.json         从 39 个模板导出的参数表，用来校验生成结果
+│   ├─ schema.json         从 42 个模板导出的参数表，用来校验生成结果
 │   └─ _mock_api.py        离线自检用的假接口
 ├─ tools/
 │   ├─ serve.mjs           零依赖静态服务器
@@ -680,7 +697,7 @@ AI 助手要调 python、ffmpeg 和无头浏览器，只有带后端的开发模
 
 **它会不会写出引擎不认的工程？**
 
-不会。生成之后会拿 `agent/schema.json`（从 39 个模板导出的参数表）逐字段校验：
+不会。生成之后会拿 `agent/schema.json`（从 42 个模板导出的参数表）逐字段校验：
 不认识的键丢掉、越界数字钳回范围、非法选项退回默认，越界的情况会记在 `report.md` 里。
 
 **为什么导出的 PNG 这么大？**

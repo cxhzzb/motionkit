@@ -14,10 +14,11 @@ import rock from './rock.js';
 import focus from './focus.js';
 import data from './data.js';
 import mark from './mark.js';
+import chaos from './chaos.js';
 
 // 顺序 = 模板库里的分组顺序：叠加层 → 动态排版 → 设计排版 → 面板卡片 → 转场
 // 顺序 = 模板库里的分组顺序
-export const ALL = [...hud, ...type, ...design, ...data, ...focus, ...mark, ...rock, ...panels, ...transitions, ...hits];
+export const ALL = [...hud, ...type, ...design, ...chaos, ...data, ...focus, ...mark, ...rock, ...panels, ...transitions, ...hits];
 
 let registered = false;
 export function registerAll(force = false) {
@@ -36,6 +37,7 @@ export const CATEGORIES = {
   design: '设计排版',
   focus: '聚焦 / 标注',
   data: '数据 / 图表',
+  chaos: '秩序 / 混沌',
   rock: '摇滚 / 海报',
   transition: '转场 / 冲击',
 };

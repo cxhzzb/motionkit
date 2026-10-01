@@ -1,0 +1,46 @@
+{
+  "name": "chaos-demo",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "duration": 20,
+  "bg": null,
+  "transparent": true,
+  "beat": { "bpm": 96, "offset": 0, "duration": 20, "source": "manual" },
+  "captions": [],
+  "layers": [
+    { "template": "series-index", "start": 0, "end": 4, "opacity": 1, "seed": "cs-1", "name": "01 · 秩序",
+      "params": { "index": "01", "note": "THE GRID\nIS REAL.", "from": "ORDER", "to": "CHAOS", "page": "/01", "title": "THE GRID\nIS REAL", "titlePos": "0.075,0.66", "titleSize": 88, "inDur": 0.7 } },
+    { "template": "grid-field", "start": 0, "end": 4, "opacity": 1, "seed": "cg-1", "name": "网格 · 干净",
+      "params": { "chaos": 0.06, "mode": "grid", "cols": 18, "rows": 11, "blocks": 6 } },
+
+    { "template": "series-index", "start": 4, "end": 8, "opacity": 1, "seed": "cs-2", "name": "02 · 扭曲",
+      "params": { "index": "02", "note": "CONTROL\nIS AN ILLUSION.", "from": "ORDER", "to": "CHAOS", "page": "/02", "title": "", "inDur": 0.7 } },
+    { "template": "grid-field", "start": 4, "end": 8, "opacity": 1, "seed": "cg-2", "name": "网格 · 扭曲",
+      "params": { "chaos": 0.42, "mode": "warp", "cols": 18, "rows": 11, "blocks": 10 } },
+
+    { "template": "series-index", "start": 8, "end": 12, "opacity": 1, "seed": "cs-3", "name": "03 · 断裂",
+      "params": { "index": "03", "note": "THE LINES\nSTART TO BREAK.", "from": "ORDER", "to": "CHAOS", "page": "/03", "title": "THE GRID\nIS LYING", "titlePos": "0.075,0.60", "titleSize": 92, "inDur": 0.7 } },
+    { "template": "grid-field", "start": 8, "end": 12, "opacity": 1, "seed": "cg-3", "name": "网格 · 断裂",
+      "params": { "chaos": 0.68, "mode": "break", "cols": 18, "rows": 11, "blocks": 22 } },
+    { "template": "ink-scatter", "start": 8.4, "end": 12, "opacity": 0.55, "seed": "ci-3", "name": "碎块",
+      "params": { "mode": "blocks", "count": 14, "inkBlobs": 0, "lines": 4, "drift": 0.2 } },
+
+    { "template": "series-index", "start": 12, "end": 16, "opacity": 1, "seed": "cs-4", "name": "04 · 爆散",
+      "params": { "index": "04", "note": "STRUCTURE\nSURRENDERS.", "from": "ORDER", "to": "CHAOS", "page": "/04", "title": "", "inDur": 0.7 } },
+    { "template": "grid-field", "start": 12, "end": 16, "opacity": 1, "seed": "cg-4", "name": "网格 · 爆散",
+      "params": { "chaos": 0.95, "mode": "burst", "cols": 18, "rows": 11, "blocks": 40, "blockScale": 1.3 } },
+    { "template": "ink-scatter", "start": 12.6, "end": 16, "opacity": 0.8, "seed": "ci-4", "name": "墨点",
+      "params": { "mode": "blocks", "count": 22, "inkBlobs": 0, "lines": 10, "drift": 0.35 } },
+
+    { "template": "series-index", "start": 16.2, "end": 20, "opacity": 1, "seed": "cs-5", "name": "05 · 混沌即创造",
+      "params": { "index": "05", "note": "BEAUTY LIVES\nBEYOND CONTROL.", "page": "/05", "paper": true, "frame": false,
+        "from": "CHAOS.", "to": "That's where creation happens.", "arrow": false, "title": "", "inDur": 0.9 } },
+    { "template": "ink-scatter", "start": 16, "end": 20, "opacity": 1, "seed": "ci-5", "name": "05 · 墨（压在纸面上）",
+      "params": { "mode": "ink", "count": 18, "inkBlobs": 6, "size": 1.15, "drift": 0.4, "accentCount": 1 } }
+  ],
+  "fx": [
+    { "type": "grain", "amount": 0.06 },
+    { "type": "vignette", "amount": 0.12 }
+  ]
+}

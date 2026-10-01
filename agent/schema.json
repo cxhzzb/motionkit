@@ -1,6 +1,6 @@
 {
   "generatedBy": "tools/schema.mjs",
-  "count": 39,
+  "count": 42,
   "categories": {
     "overlay": "叠加层 / HUD",
     "typography": "动态排版",
@@ -9,6 +9,7 @@
     "design": "设计排版",
     "focus": "聚焦 / 标注",
     "data": "数据 / 图表",
+    "chaos": "秩序 / 混沌",
     "rock": "摇滚 / 海报",
     "transition": "转场 / 冲击"
   },
@@ -1190,6 +1191,404 @@
           "default": 0.6,
           "min": 0,
           "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "grid-field": {
+      "id": "grid-field",
+      "name": "网格场",
+      "category": "chaos",
+      "categoryLabel": "秩序 / 混沌",
+      "desc": "",
+      "params": [
+        {
+          "key": "mode",
+          "label": "崩坏方式",
+          "type": "select",
+          "default": "warp",
+          "options": [
+            "grid",
+            "warp",
+            "break",
+            "burst"
+          ]
+        },
+        {
+          "key": "region",
+          "label": "网格区域 x,y,w,h",
+          "type": "string",
+          "default": "0.08,0.22,0.84,0.60"
+        },
+        {
+          "key": "cols",
+          "label": "竖线数",
+          "type": "number",
+          "default": 16,
+          "min": 2,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "rows",
+          "label": "横线数",
+          "type": "number",
+          "default": 10,
+          "min": 2,
+          "max": 60,
+          "step": 1
+        },
+        {
+          "key": "chaos",
+          "label": "混沌程度[0-1]",
+          "type": "number",
+          "default": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "auto",
+          "label": "自动崩坏",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "key": "autoDur",
+          "label": "崩坏用时(秒)",
+          "type": "number",
+          "default": 6,
+          "min": 0.5,
+          "max": 60,
+          "step": 0.5
+        },
+        {
+          "key": "lineW",
+          "label": "线宽",
+          "type": "number",
+          "default": 1.2,
+          "min": 0.4,
+          "max": 6,
+          "step": 0.2
+        },
+        {
+          "key": "blocks",
+          "label": "散落方块数",
+          "type": "number",
+          "default": 14,
+          "min": 0,
+          "max": 80,
+          "step": 1
+        },
+        {
+          "key": "blockScale",
+          "label": "方块大小",
+          "type": "number",
+          "default": 1,
+          "min": 0.4,
+          "max": 3,
+          "step": 0.1
+        },
+        {
+          "key": "paper",
+          "label": "纸白底",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "ink",
+          "label": "墨色",
+          "type": "color",
+          "default": "#111214"
+        },
+        {
+          "key": "paperColor",
+          "label": "纸色",
+          "type": "color",
+          "default": "#f2f0ea"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "#ff4a1c"
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.6,
+          "min": 0,
+          "max": 4,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.4,
+          "min": 0,
+          "max": 4,
+          "step": 0.05
+        }
+      ]
+    },
+    "series-index": {
+      "id": "series-index",
+      "name": "系列编号",
+      "category": "chaos",
+      "categoryLabel": "秩序 / 混沌",
+      "desc": "",
+      "params": [
+        {
+          "key": "index",
+          "label": "大编号",
+          "type": "string",
+          "default": "03"
+        },
+        {
+          "key": "note",
+          "label": "右上小字（换行=多行）",
+          "type": "multiline",
+          "default": "THE LINES\nSTART TO BREAK."
+        },
+        {
+          "key": "from",
+          "label": "左下前段",
+          "type": "string",
+          "default": "ORDER"
+        },
+        {
+          "key": "to",
+          "label": "左下后段",
+          "type": "string",
+          "default": "CHAOS"
+        },
+        {
+          "key": "arrow",
+          "label": "两段之间画箭头",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "page",
+          "label": "右下页码",
+          "type": "string",
+          "default": "/03"
+        },
+        {
+          "key": "title",
+          "label": "大字标题（空=不显示）",
+          "type": "multiline",
+          "default": "THE GRID\nIS LYING"
+        },
+        {
+          "key": "titlePos",
+          "label": "标题位置 X,Y",
+          "type": "string",
+          "default": "0.075,0.62"
+        },
+        {
+          "key": "titleSize",
+          "label": "标题字号",
+          "type": "number",
+          "default": 96,
+          "min": 24,
+          "max": 260,
+          "step": 2
+        },
+        {
+          "key": "margin",
+          "label": "边距(px)",
+          "type": "number",
+          "default": 54,
+          "min": 16,
+          "max": 200,
+          "step": 2
+        },
+        {
+          "key": "idxSize",
+          "label": "编号字号",
+          "type": "number",
+          "default": 62,
+          "min": 20,
+          "max": 200,
+          "step": 2
+        },
+        {
+          "key": "small",
+          "label": "小字号",
+          "type": "number",
+          "default": 15,
+          "min": 8,
+          "max": 40,
+          "step": 1
+        },
+        {
+          "key": "frame",
+          "label": "细边框",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "paper",
+          "label": "纸白底",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "ink",
+          "label": "墨色",
+          "type": "color",
+          "default": "#111214"
+        },
+        {
+          "key": "paperColor",
+          "label": "纸色",
+          "type": "color",
+          "default": "#f2f0ea"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "#ff4a1c"
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.8,
+          "min": 0.05,
+          "max": 4,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.35,
+          "min": 0,
+          "max": 4,
+          "step": 0.05
+        }
+      ]
+    },
+    "ink-scatter": {
+      "id": "ink-scatter",
+      "name": "墨迹与碎块",
+      "category": "chaos",
+      "categoryLabel": "秩序 / 混沌",
+      "desc": "",
+      "params": [
+        {
+          "key": "mode",
+          "label": "形态",
+          "type": "select",
+          "default": "mix",
+          "options": [
+            "mix",
+            "blocks",
+            "ink"
+          ]
+        },
+        {
+          "key": "region",
+          "label": "范围 x,y,w,h",
+          "type": "string",
+          "default": "0.05,0.15,0.90,0.72"
+        },
+        {
+          "key": "count",
+          "label": "元素数量",
+          "type": "number",
+          "default": 26,
+          "min": 2,
+          "max": 120,
+          "step": 1
+        },
+        {
+          "key": "inkBlobs",
+          "label": "墨团数",
+          "type": "number",
+          "default": 4,
+          "min": 0,
+          "max": 12,
+          "step": 1
+        },
+        {
+          "key": "lines",
+          "label": "细线数",
+          "type": "number",
+          "default": 8,
+          "min": 0,
+          "max": 40,
+          "step": 1
+        },
+        {
+          "key": "size",
+          "label": "元素大小",
+          "type": "number",
+          "default": 1,
+          "min": 0.3,
+          "max": 3,
+          "step": 0.1
+        },
+        {
+          "key": "accentCount",
+          "label": "橙色元素数",
+          "type": "number",
+          "default": 2,
+          "min": 0,
+          "max": 8,
+          "step": 1
+        },
+        {
+          "key": "stagger",
+          "label": "错峰(秒/个)",
+          "type": "number",
+          "default": 0.035,
+          "min": 0,
+          "max": 0.4,
+          "step": 0.005
+        },
+        {
+          "key": "drift",
+          "label": "缓慢漂移",
+          "type": "number",
+          "default": 0.25,
+          "min": 0,
+          "max": 2,
+          "step": 0.05
+        },
+        {
+          "key": "ink",
+          "label": "墨色",
+          "type": "color",
+          "default": "#111214"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "#ff4a1c"
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.5,
+          "min": 0.05,
+          "max": 4,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.4,
+          "min": 0,
+          "max": 4,
           "step": 0.05
         }
       ]
