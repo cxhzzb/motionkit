@@ -276,6 +276,28 @@ if (textPick) {
     report.checks.tplClickNoAdd = report.checks.tplDropAdds = report.checks.tplDropAt = false;
   }
 
+  // ---------------------------------------------------------------- 10. 并轨（省地方）+ 搜索联动
+  const rowsPacked = MK.tlRows();
+  const chk = document.getElementById('chkPack');
+  chk.click();
+  await sleep(80);
+  const rowsFlat = MK.tlRows();
+  report.pack = { packed: rowsPacked.count, flat: rowsFlat.count, layers: rowsPacked.layers };
+  report.checks.packOn = rowsPacked.packed === true && rowsPacked.count < rowsPacked.layers;
+  report.checks.packSaves = rowsPacked.count <= Math.ceil(rowsPacked.layers * 0.8);
+  report.checks.packToggle = rowsFlat.count === rowsFlat.layers && rowsFlat.packed === false;
+  chk.click();                        // 切回并轨
+  await sleep(60);
+
+  const sbox = document.getElementById('searchLayer');
+  sbox.value = '刻度';
+  sbox.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(80);
+  report.checks.findLink = MK.state.tlFind === '刻度';
+  sbox.value = '';
+  sbox.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(60);
+
   // ---------------------------------------------------------------- 收尾：留个好看的演示状态
   // ---------------------------------------------------------------- 9. 时间轴上下滚动
   const tlEl = document.getElementById('timeline');
@@ -289,15 +311,19 @@ if (textPick) {
   report.checks.tlScrollable = s1.max > 0;
   report.checks.tlWheel = s1.y > s0.y;
 
-  // 选中最下面那层 → 应该自动滚到可见区
-  const lastL = S2.layers[S2.layers.length - 1];
+  // 选中"排在最下面那行"的图层 → 应该自动滚到可见区
+  // （并轨之后栈序 ≠ 行序，得按真实行号挑，不能拿最后一层当最下面）
+  let lastL = S2.layers[0], bestRow = -1;
+  for (const L2 of S2.layers) {
+    const r = MK.rowOf(L2.id);
+    if (r > bestRow) { bestRow = r; lastL = L2; }
+  }
   MK.selectLayer(lastL.id);
   await sleep(80);
   const s2 = MK.tlScroll();
-  const idx = S2.layers.indexOf(lastL);
-  const rowTop = s2.top + idx * (s2.rowH + s2.gap) - s2.y;
+  const rowTop = s2.top + bestRow * (s2.rowH + s2.gap) - s2.y;
   const areaTop = s2.top;
-  report.scroll.auto = { y: s2.y, rowTop, areaTop, visible: s2.visible };
+  report.scroll.auto = { y: s2.y, bestRow, rowTop, areaTop, visible: s2.visible };
   report.checks.tlAutoScroll = s2.y > 0 && rowTop >= areaTop - 1 && rowTop + s2.rowH <= areaTop + s2.visible + 1;
 
   // ---------------------------------------------------------------- 收尾：留个好看的演示状态

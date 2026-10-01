@@ -38,6 +38,8 @@ const state = {
     tplPick: null,         // 模板库里点选中的模板（只是选中，拖着往画面里放才会加图层）
     durationAuto: true,    // 工程时长是否跟着素材走（手动改过时长就关掉）
     tlScroll: 0,           // 时间轴图层区的上下滚动量（层数多的时候用）
+    tlPack: true,          // 并轨：时间上不重叠的图层共用一行（省地方）
+    tlFind: '',            // 图层索引里的搜索词，时间轴也跟着高亮
 };
 state.scene.addFx({ type: 'chromatic', amount: 0, enabled: false });
 
@@ -323,23 +325,31 @@ function drawTimeline() {
   // ---- 图层（可上下滚动）----
   const capY = h - ROW_H - 4;
   const areaTop = TRACK_TOP, areaBot = capY - 4;
-  const contentH = s.layers.length * (ROW_H + ROW_GAP) - ROW_GAP;
+  const rows = tlRows();
+  const contentH = rows.count * (ROW_H + ROW_GAP) - ROW_GAP;
   const maxScroll = Math.max(0, contentH - (areaBot - areaTop));
   state.tlScroll = clamp(state.tlScroll || 0, 0, maxScroll);
+  const rowsEl = $('tlRows');
+  if (rowsEl) rowsEl.textContent = `${rows.count} 行 / ${s.layers.length} 层`;
   rowMap = new Map();
   tlCtx.save();
   tlCtx.beginPath();
   tlCtx.rect(x0, areaTop, x1 - x0, Math.max(0, areaBot - areaTop));
   tlCtx.clip();
+  const find = (state.tlFind || '').trim().toLowerCase();
   s.layers.forEach((L, i) => {
-    const y = TRACK_TOP + i * (ROW_H + ROW_GAP) - state.tlScroll;
+    const y = TRACK_TOP + rows.place.get(L.id) * (ROW_H + ROW_GAP) - state.tlScroll;
     if (y + ROW_H < areaTop - 2 || y > areaBot + 2) return;
     const bx = sx(L.start), bw = Math.max(3, sx(L.end) - sx(L.start));
     rowMap.set(L.id, { y, x: bx, w: bw });
     const tpl = listTemplates().find((t) => t.id === L.template);
     const isSel = L.id === state.selection;
+    const hit = !find || (tpl ? tpl.name : L.template).toLowerCase().includes(find)
+      || String(L.template).toLowerCase().includes(find) || String(L.name || '').toLowerCase().includes(find);
     tlCtx.fillStyle = !L.enabled ? '#2a2d34' : isSel ? '#ff4b1f' : 'rgba(255,75,31,0.55)';
+    tlCtx.globalAlpha = (!find || hit) ? 1 : 0.22;     // 搜索时，没中的层淡下去
     roundRectPath(tlCtx, bx, y, bw, ROW_H, 3); tlCtx.fill();
+    tlCtx.globalAlpha = 1;
     tlCtx.fillStyle = isSel ? '#1a0a04' : '#e9ecf1';
     tlCtx.font = '600 11px ' + getComputedStyle(document.body).getPropertyValue('--sans');
     const nm = (tpl ? tpl.name : L.template) + '  ' + L.start.toFixed(2) + 's→' + L.end.toFixed(2) + 's';
@@ -350,6 +360,11 @@ function drawTimeline() {
       tlCtx.fillStyle = '#ffffff';
       tlCtx.fillRect(bx - 2, y, 4, ROW_H);
       tlCtx.fillRect(bx + bw - 2, y, 4, ROW_H);
+    }
+    if (find && hit && !isSel) {      // 搜到的层描个亮边，一眼能找到
+      tlCtx.strokeStyle = '#00e5ff'; tlCtx.lineWidth = 1.5;
+      roundRectPath(tlCtx, bx + 0.75, y + 0.75, Math.max(2, bw - 1.5), ROW_H - 1.5, 3);
+      tlCtx.stroke();
     }
   });
   tlCtx.restore();
@@ -385,11 +400,36 @@ function drawTimeline() {
 }
 
 /** 图层区能滚多远（层数装不下时 > 0） */
+/**
+ * 时间轴的行分配。
+ *   并轨模式（默认）：时间上不重叠的图层共用一行 —— 一个动效一行太浪费，
+ *   13 层经常能压到 3~4 行，不用滚动就看全。
+ *   关掉就是原来的"一层一行"，方便按栈序对照。
+ */
+function tlRows() {
+  const ls = state.scene.layers;
+  if (state.tlPack === false) {
+    const place = new Map();
+    ls.forEach((L, i) => place.set(L.id, i));
+    return { place, count: Math.max(1, ls.length) };
+  }
+  const ends = [];
+  const place = new Map();
+  const sorted = ls.slice().sort((a, b) => a.start - b.start || a.end - b.end);
+  for (const L of sorted) {
+    let r = ends.findIndex((e) => L.start >= e - 0.001);
+    if (r < 0) { ends.push(L.end); r = ends.length - 1; }
+    else ends[r] = Math.max(ends[r], L.end);
+    place.set(L.id, r);
+  }
+  return { place, count: Math.max(1, ends.length) };
+}
+
 function tlScrollMax() {
   const h = tl.clientHeight;
   const capY = h - ROW_H - 4;
   const areaH = Math.max(0, (capY - 4) - TRACK_TOP);
-  const contentH = state.scene.layers.length * (ROW_H + ROW_GAP) - ROW_GAP;
+  const contentH = tlRows().count * (ROW_H + ROW_GAP) - ROW_GAP;
   return Math.max(0, contentH - areaH);
 }
 
@@ -406,7 +446,8 @@ function tlScrollBy(dy) {
 
 /** 选中某层时把它滚进可见区（不然点了下面那层也不知道在哪） */
 function scrollLayerIntoView(id) {
-  const i = state.scene.layers.findIndex((L) => L.id === id);
+  const rows = tlRows();
+  const i = rows.place.has(id) ? rows.place.get(id) : -1;
   if (i < 0) return;
   const h = tl.clientHeight;
   const capY = h - ROW_H - 4;
@@ -1837,7 +1878,26 @@ $('chkFlash').addEventListener('change', (e) => {
 $('tabTpl').addEventListener('click', () => setIndexTab('tpl'));
 $('tabLayers').addEventListener('click', () => setIndexTab('layers'));
 $('sortLayers').addEventListener('change', () => { markIndexDirty(); rebuildLayerIndex(); });
-$('searchLayer').addEventListener('input', () => rebuildLayerIndex());
+$('searchLayer').addEventListener('input', (e) => {
+  state.tlFind = e.target.value || '';   // 时间轴同步高亮（搜到的亮、其余淡）
+  rebuildLayerIndex();
+  drawTimeline();
+});
+// 并轨开关（默认开，省地方）
+{
+  const saved = localStorage.getItem('motionkit.tlPack');
+  if (saved === '0') state.tlPack = false;
+  const cb = $('chkPack');
+  if (cb) {
+    cb.checked = state.tlPack;
+    cb.addEventListener('change', () => {
+      state.tlPack = cb.checked;
+      try { localStorage.setItem('motionkit.tlPack', state.tlPack ? '1' : '0'); } catch (_) {}
+      state.tlScroll = 0;
+      drawTimeline();
+    });
+  }
+}
 $('btnOpenVideo').addEventListener('click', () => $('fileVideo').click());
 $('btnOpenAudio').addEventListener('click', () => $('fileAudio').click());
 $('btnOpenSubs').addEventListener('click', () => $('fileSubs').click());
@@ -2662,6 +2722,8 @@ window.MotionKit = {
     followMedia: (on) => { state.durationAuto = on !== false; return applyAutoDuration(true); },
     tlScroll: () => ({ y: state.tlScroll || 0, max: tlScrollMax(), rowH: ROW_H, gap: ROW_GAP, top: TRACK_TOP,
                        visible: Math.max(0, (tl.clientHeight - ROW_H - 8) - TRACK_TOP) }),
+    tlRows: () => ({ count: tlRows().count, packed: state.tlPack !== false, layers: state.scene.layers.length }),
+    rowOf: (id) => { const r = tlRows().place.get(id); return r === undefined ? -1 : r; },
     rightTab: (t) => { if (t) setRightTab(t); return rightTab; },
     pickAt: (nx, ny) => pickLayerAt(nx, ny).map((l) => l.id),
     layerBox: (i) => { const L = layerArgOf(i); return L ? layerBoxFor(L) : null; },
