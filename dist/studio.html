@@ -757,11 +757,11 @@ input[type="color"]:disabled { cursor: not-allowed; }
     </button>
     <button data-ex="webm" class="ex">
       <b>WebM（VP9 含透明）</b>
-      <span>一个文件搞定，Premiere 2020+ / 剪映可直接读</span>
+      <span>一个文件搞定，Premiere 2020+ / 剪映可直接读。实时录制：机器渲染慢会把时长拖长，要准的用 MP4</span>
     </button>
     <button data-ex="mp4" class="ex">
       <b>MP4（H.264 · 直接出片）</b>
-      <span>点一下直接下载一个能播的 .mp4（Chrome / Edge 自带编码）。无透明通道，透明区压黑底；无声</span>
+      <span>帧精确：导出多长就是工程多长，渲染多快就多快。无透明通道，透明区压黑底；无声</span>
     </button>
     <button data-ex="mov" class="ex">
       <b>ProRes 4444（.mov 含 Alpha）</b>
@@ -2856,8 +2856,163 @@ async function canvasToPngBytes(canvas) {
 return { makeZip, downloadBlob, createZipWriter, canvasToPngBytes };
 })();
 
-// ===== templates/_lib.js =====
+// ===== engine/mp4.js =====
 const __mod6 = (() => {
+let __default = undefined;
+// ============================================================================
+// 最小可用的 MP4 封装器：一条 H.264 视频轨，普通（非分片）.mp4。
+//
+// 为什么自己写：
+//   浏览器录屏（MediaRecorder）是**按墙上时钟**给帧打时间戳的 —— 渲染一帧比 1/fps 慢，
+//   录出来的时长就被拖长（实测 2 分 40 秒的工程导出成 6 分钟）。WebCodecs 的 VideoEncoder
+//   能一帧一帧拿到编码结果，时间戳由我们说了算，代价就是得自己把样本装进 MP4。
+//   零依赖，和 engine/zip.js（自己写 ZIP 写入器）是同一个路子。
+//
+// 文件摆放：ftyp | mdat（样本数据）| moov（索引）
+// 索引里每个样本单独占一个 chunk，stsc 只有一条，够简单也够通用。
+// ============================================================================
+
+/** 大端整数 → 字节 */
+function be(value, n) {
+  const a = new Uint8Array(n);
+  let v = Math.max(0, Math.floor(value));
+  for (let i = n - 1; i >= 0; i--) { a[i] = v & 255; v = Math.floor(v / 256); }
+  return a;
+}
+
+/** ASCII 字符串 → 字节 */
+function ascii(s) {
+  const a = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i) & 255;
+  return a;
+}
+
+function join(parts) {
+  let n = 0;
+  for (const p of parts) n += p.length;
+  const out = new Uint8Array(n);
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.length; }
+  return out;
+}
+
+/** 一个 box：4 字节长度 + 4 字节类型 + 内容 */
+function box(type, ...parts) {
+  const body = join(parts);
+  return join([be(body.length + 8, 4), ascii(type), body]);
+}
+
+/** full box：多一个 version + flags */
+function fullBox(type, version, flags, ...parts) {
+  return box(type, new Uint8Array([version, (flags >> 16) & 255, (flags >> 8) & 255, flags & 255]), ...parts);
+}
+
+const UNITY_MATRIX = join([
+  be(0x00010000, 4), be(0, 4), be(0, 4),
+  be(0, 4), be(0x00010000, 4), be(0, 4),
+  be(0, 4), be(0, 4), be(0x40000000, 4),
+]);
+
+function ftyp() {
+  return box('ftyp', ascii('isom'), be(0x200, 4), ascii('isomavc1iso2mp41'));
+}
+
+/** avc1 样本描述：一段固定字段 + 编码器给的 avcC（SPS/PPS） */
+function sampleEntry(width, height, avcC) {
+  const compressorname = new Uint8Array(32);          // 第一字节 0 = 空名字
+  return box('avc1',
+    new Uint8Array(6),                                 // reserved
+    be(1, 2),                                          // data_reference_index
+    be(0, 2), be(0, 2), new Uint8Array(12),            // pre_defined / reserved
+    be(width, 2), be(height, 2),
+    be(0x00480000, 4), be(0x00480000, 4),              // 72dpi
+    be(0, 4), be(1, 2), compressorname,
+    be(0x0018, 2),                                     // depth
+    be(0xffff, 2),
+    avcC);
+}
+
+/**
+ * @param {object} o
+ *   width, height, fps     画面信息
+ *   samples                [{ data: Uint8Array, key: boolean }] 按顺序的编码帧
+ *   description            avcC 内容（VideoEncoder 的 decoderConfig.description）
+ * @returns {Uint8Array} 完整的 .mp4
+ */
+function muxMp4({ width, height, fps, samples, description }) {
+  const n = samples.length;
+  if (!n) throw new Error('没有帧可以封装');
+  if (!description || !description.length) throw new Error('缺少 avcC（SPS/PPS），封装不了 MP4');
+
+  // 时间基：用 fps*1000，每帧就是整数刻度，不会因为除不尽而累积漂移
+  const timescale = Math.max(1, Math.round(fps * 1000));
+  const frameDur = Math.max(1, Math.round(timescale / fps));
+  const duration = frameDur * n;
+
+  // ---- mdat：样本数据挨着放，顺便记住每个样本的偏移（stco/co64 用）
+  let dataSize = 0;
+  for (const s of samples) dataSize += s.data.length;
+  const needLarge = dataSize + 8 > 0xfffffff0;
+  const mdatHead = needLarge
+    ? join([be(1, 4), ascii('mdat'), be(dataSize + 16, 8)])
+    : join([be(dataSize + 8, 4), ascii('mdat')]);
+  const head = ftyp();
+  const base = head.length + mdatHead.length;
+  const offsets = [];
+  let at = base;
+  for (const s of samples) { offsets.push(at); at += s.data.length; }
+  const mdat = join([mdatHead, ...samples.map((s) => s.data)]);
+
+  // ---- 索引表
+  const stsd = fullBox('stsd', 0, 0, be(1, 4), sampleEntry(width, height, box('avcC', description)));
+  const stts = fullBox('stts', 0, 0, be(1, 4), be(n, 4), be(frameDur, 4));
+  const stsc = fullBox('stsc', 0, 0, be(1, 4), be(1, 4), be(1, 4), be(1, 4));
+  const stsz = fullBox('stsz', 0, 0, be(0, 4), be(n, 4), ...samples.map((s) => be(s.data.length, 4)));
+  const use64 = offsets.some((o) => o > 0xfffffff0);
+  const stco = use64
+    ? fullBox('co64', 0, 0, be(offsets.length, 4), ...offsets.map((o) => be(o, 8)))
+    : fullBox('stco', 0, 0, be(offsets.length, 4), ...offsets.map((o) => be(o, 4)));
+
+  // 关键帧表：不全都是关键帧才需要写
+  const keys = [];
+  samples.forEach((s, i) => { if (s.key) keys.push(i + 1); });
+  const stss = keys.length === n ? null
+    : fullBox('stss', 0, 0, be(keys.length, 4), ...keys.map((k) => be(k, 4)));
+
+  const stbl = box('stbl', stsd, stts, ...(stss ? [stss] : []), stsc, stsz, stco);
+  const vmhd = fullBox('vmhd', 0, 1, be(0, 2), be(0, 2), be(0, 2), be(0, 2));
+  const dref = fullBox('dref', 0, 0, be(1, 4), fullBox('url ', 0, 1));
+  const dinf = box('dinf', dref);
+  const minf = box('minf', vmhd, dinf, stbl);
+  const hdlr = fullBox('hdlr', 0, 0, be(0, 4), ascii('vide'), new Uint8Array(12), ascii('VideoHandler\0'));
+  const mdhd = fullBox('mdhd', 0, 0, be(0, 4), be(0, 4), be(timescale, 4), be(duration, 4), be(0x55c4, 2), be(0, 2));
+  const mdia = box('mdia', mdhd, hdlr, minf);
+  const tkhd = fullBox('tkhd', 0, 7,
+    be(0, 4), be(0, 4), be(1, 4), be(0, 4), be(duration, 4),
+    new Uint8Array(8), be(0, 2), be(0, 2), be(0, 2), be(0, 2),
+    UNITY_MATRIX, be(width << 16, 4), be(height << 16, 4));
+  const trak = box('trak', tkhd, mdia);
+  const mvhd = fullBox('mvhd', 0, 0,
+    be(0, 4), be(0, 4), be(timescale, 4), be(duration, 4),
+    be(0x00010000, 4), be(0x0100, 2), be(0, 2), new Uint8Array(8),
+    UNITY_MATRIX, new Uint8Array(24), be(2, 4));
+  const moov = box('moov', mvhd, trak);
+
+  return join([head, mdat, moov]);
+}
+
+/** 给界面用：这组样本封装出来大概多长（秒） */
+function mp4Duration(frameCount, fps) {
+  const timescale = Math.max(1, Math.round(fps * 1000));
+  const frameDur = Math.max(1, Math.round(timescale / fps));
+  return (frameDur * frameCount) / timescale;
+}
+
+return { muxMp4, mp4Duration };
+})();
+
+// ===== templates/_lib.js =====
+const __mod7 = (() => {
 let __default = undefined;
 // ============================================================================
 // 模板公共工具
@@ -2983,7 +3138,7 @@ return { clamp, lerp, smoothstep, palette, ui, anchor, nb, envelope, envelopeByT
 })();
 
 // ===== templates/hud.js =====
-const __mod7 = (() => {
+const __mod8 = (() => {
 let __default = undefined;
 // ============================================================================
 // HUD 类模板：整屏细线框、读数、仪表、跑马灯、参数条
@@ -2992,7 +3147,7 @@ let __default = undefined;
 
 const { text, label, measure, hudPanel, cornerTicks, microRow, hbar, dial, crosshair, scanlines, ruler, sprockets, gridLines, ui, palette, FONTS, ticker, statBlock, barcode, dotGrid } = __mod1;
 const { clamp, lerp, Rng, timecode } = __mod0;
-const { envelope, nb, color, trng, fmtNumber, fakeCode, anchor, P } = __mod6;
+const { envelope, nb, color, trng, fmtNumber, fakeCode, anchor, P } = __mod7;
 
 // ---------------------------------------------------------------------------
 const hudFrame = {
@@ -3361,7 +3516,7 @@ return { hudFrame, statCounter, dialGauge, tickerStrip, paramTicks, default: __d
 })();
 
 // ===== templates/type.js =====
-const __mod8 = (() => {
+const __mod9 = (() => {
 let __default = undefined;
 // ============================================================================
 // 排版类模板：卡点大字、词块宫格、标题定格、卡点字幕
@@ -3370,7 +3525,7 @@ let __default = undefined;
 
 const { text, label, measure, fitSize, wrap, scramble, typewriter, ui, palette, FONTS, hudPanel, hbar, dotGrid, gridLines, cornerTicks, fullRect, roundRect } = __mod1;
 const { clamp, lerp, Rng, EASINGS, easeOutExpo, easeOutBack, pulse } = __mod0;
-const { envelope, color, trng, stepDur, beatCell, words, chars, P } = __mod6;
+const { envelope, color, trng, stepDur, beatCell, words, chars, P } = __mod7;
 
 // ---------------------------------------------------------------------------
 const kineticType = {
@@ -3803,7 +3958,7 @@ return { kineticType, wordGrid, titleMark, subtitleKinetic, default: __default }
 })();
 
 // ===== templates/panels.js =====
-const __mod9 = (() => {
+const __mod10 = (() => {
 let __default = undefined;
 // ============================================================================
 // 面板类模板：终端窗口、编号白卡、吊牌条码、注释气泡
@@ -3812,7 +3967,7 @@ let __default = undefined;
 
 const { text, label, measure, fitSize, wrap, typewriter, blink, ui, palette, FONTS, hudPanel, card, barcode, roundRect, cornerTicks, crosshair, hbar, quoteBubble, microRow } = __mod1;
 const { clamp, lerp, Rng, easeOutExpo, easeOutBack } = __mod0;
-const { envelope, color, trng, stepDur, fakeCode, P } = __mod6;
+const { envelope, color, trng, stepDur, fakeCode, P } = __mod7;
 
 // ---------------------------------------------------------------------------
 const terminalPanel = {
@@ -4103,7 +4258,7 @@ return { terminalPanel, lookCard, shippingLabel, noteBubble, default: __default 
 })();
 
 // ===== templates/transitions.js =====
-const __mod10 = (() => {
+const __mod11 = (() => {
 let __default = undefined;
 // ============================================================================
 // 转场 / 动效类模板
@@ -4115,7 +4270,7 @@ let __default = undefined;
 
 const { label, ui, palette, measure, scanlines, fullRect } = __mod1;
 const { clamp, Rng, easeOutExpo, easeInExpo, easeInOutCubic, easeOutCubic } = __mod0;
-const { color, trng, P, fmtNumber } = __mod6;
+const { color, trng, P, fmtNumber } = __mod7;
 
 // ---- 离屏缓存 -------------------------------------------------------------
 const _buf = new Map();
@@ -4471,7 +4626,7 @@ return { whipPan, zoomPunch, camShake, flashCut, shutterWipe, halftoneRise, scan
 })();
 
 // ===== templates/hits.js =====
-const __mod11 = (() => {
+const __mod12 = (() => {
 let __default = undefined;
 // ============================================================================
 // 冲击类模板：故障爆闪、遮幅推入、色散冲击
@@ -4480,7 +4635,7 @@ let __default = undefined;
 
 const { label, ui, palette, scanlines, fullRect } = __mod1;
 const { clamp, Rng, easeOutCubic } = __mod0;
-const { color, P } = __mod6;
+const { color, P } = __mod7;
 
 const _buf = new Map();
 function buf(key, w, h) {
@@ -4675,7 +4830,7 @@ return { glitchBurst, letterboxPush, rgbSplit, default: __default };
 })();
 
 // ===== templates/design.js =====
-const __mod12 = (() => {
+const __mod13 = (() => {
 let __default = undefined;
 // ============================================================================
 // 设计感模板：杂志标题 / 名字条 / 片尾名单
@@ -4686,7 +4841,7 @@ let __default = undefined;
 
 const { clamp, smoothstep } = __mod0;
 const { FONTS, ui, text, label, measure, fitSize, roundRect } = __mod1;
-const { color } = __mod6;
+const { color } = __mod7;
 
 /** "0.5,0.5" -> {x,y}（和其它模板保持一致的写法） */
 function pos(param, dx = 0.5, dy = 0.5) {
@@ -5011,7 +5166,7 @@ return { editorialTitle, nameBar, creditsRoll, default: __default };
 })();
 
 // ===== templates/rock.js =====
-const __mod13 = (() => {
+const __mod14 = (() => {
 let __default = undefined;
 // ============================================================================
 // 摇滚 / 海报：压扁的大字、错版印刷、网点、胶带、撕边
@@ -5022,7 +5177,7 @@ let __default = undefined;
 
 const { clamp, smoothstep, easeOutCubic } = __mod0;
 const { FONTS, ui, text, label, measure, fitSize, roundRect, dotGrid, shake } = __mod1;
-const { color } = __mod6;
+const { color } = __mod7;
 
 function pos(param, dx = 0.5, dy = 0.5) {
   const [x, y] = String(param || '').split(',').map(Number);
@@ -5388,7 +5543,7 @@ return { rockTitle, tapeLabel, gigPoster, default: __default };
 })();
 
 // ===== templates/focus.js =====
-const __mod14 = (() => {
+const __mod15 = (() => {
 let __default = undefined;
 // ============================================================================
 // 聚焦 / 标注：把观众的眼睛按到画面里的某一块
@@ -5401,7 +5556,7 @@ let __default = undefined;
 
 const { clamp, smoothstep, easeOutCubic } = __mod0;
 const { FONTS, ui, text, label, measure, fitSize, roundRect } = __mod1;
-const { color } = __mod6;
+const { color } = __mod7;
 
 const TAU = Math.PI * 2;
 
@@ -5821,7 +5976,7 @@ return { focusBox, calloutPin, indexList, magnifier, default: __default };
 })();
 
 // ===== templates/data.js =====
-const __mod15 = (() => {
+const __mod16 = (() => {
 let __default = undefined;
 // ============================================================================
 // 数据 / 图表：柱状、折线，从零长出来那种
@@ -5830,7 +5985,7 @@ let __default = undefined;
 
 const { clamp, smoothstep, easeOutCubic } = __mod0;
 const { FONTS, ui, text, label, measure, fitSize, roundRect } = __mod1;
-const { color } = __mod6;
+const { color } = __mod7;
 
 function nums(s, def = [0.5, 0.5]) {
   const a = String(s || '').split(',').map(Number);
@@ -6081,7 +6236,7 @@ return { barChart, lineChart, default: __default };
 })();
 
 // ===== templates/mark.js =====
-const __mod16 = (() => {
+const __mod17 = (() => {
 let __default = undefined;
 // ============================================================================
 // 标注与版式：手绘圈注 / 地图定位 / 分屏对比 / 章节进度
@@ -6092,7 +6247,7 @@ let __default = undefined;
 
 const { clamp, smoothstep, easeOutCubic } = __mod0;
 const { FONTS, ui, text, label, measure, fitSize, roundRect } = __mod1;
-const { color } = __mod6;
+const { color } = __mod7;
 
 const TAU = Math.PI * 2;
 
@@ -6557,7 +6712,7 @@ return { handMark, locator, splitCompare, chapterBar, default: __default };
 })();
 
 // ===== templates/chaos.js =====
-const __mod17 = (() => {
+const __mod18 = (() => {
 let __default = undefined;
 // ============================================================================
 // 秩序 / 混沌：纸白 + 墨黑 + 一记橙红
@@ -6572,7 +6727,7 @@ let __default = undefined;
 
 const { clamp, smoothstep, easeOutCubic } = __mod0;
 const { FONTS, ui, text, label, measure, fitSize, roundRect } = __mod1;
-const { color } = __mod6;
+const { color } = __mod7;
 
 const TAU = Math.PI * 2;
 const INK = '#111214';
@@ -6999,7 +7154,7 @@ return { gridField, seriesIndex, inkScatter, default: __default };
 })();
 
 // ===== templates/grid2.js =====
-const __mod18 = (() => {
+const __mod19 = (() => {
 let __default = undefined;
 // ============================================================================
 // 秩序 / 混沌 · 延伸篇
@@ -7012,7 +7167,7 @@ let __default = undefined;
 
 const { clamp, smoothstep, easeOutCubic } = __mod0;
 const { FONTS, ui, text, label, measure, fitSize, roundRect } = __mod1;
-const { color } = __mod6;
+const { color } = __mod7;
 
 const TAU = Math.PI * 2;
 const INK = '#111214';
@@ -7464,7 +7619,7 @@ return { typeStack, chaosMeter, lineSweep, dotMatrix, default: __default };
 })();
 
 // ===== templates/index.js =====
-const __mod19 = (() => {
+const __mod20 = (() => {
 let __default = undefined;
 // ============================================================================
 // 模板注册中心
@@ -7472,18 +7627,18 @@ let __default = undefined;
 // ============================================================================
 
 const { registerTemplate, listTemplates, registry } = __mod0;
-const hud = __mod7.default;
-const type = __mod8.default;
-const panels = __mod9.default;
-const transitions = __mod10.default;
-const hits = __mod11.default;
-const design = __mod12.default;
-const rock = __mod13.default;
-const focus = __mod14.default;
-const data = __mod15.default;
-const mark = __mod16.default;
-const chaos = __mod17.default;
-const grid2 = __mod18.default;
+const hud = __mod8.default;
+const type = __mod9.default;
+const panels = __mod10.default;
+const transitions = __mod11.default;
+const hits = __mod12.default;
+const design = __mod13.default;
+const rock = __mod14.default;
+const focus = __mod15.default;
+const data = __mod16.default;
+const mark = __mod17.default;
+const chaos = __mod18.default;
+const grid2 = __mod19.default;
 
 // 顺序 = 模板库里的分组顺序：叠加层 → 动态排版 → 设计排版 → 面板卡片 → 转场
 // 顺序 = 模板库里的分组顺序
@@ -7528,7 +7683,7 @@ return { listTemplates, registry, ALL, registerAll, CATEGORIES, byCategory };
 })();
 
 // ===== studio/agent-panel.js =====
-const __mod20 = (() => {
+const __mod21 = (() => {
 let __default = undefined;
 // ============================================================================
 // AI 助手面板
@@ -7866,7 +8021,7 @@ return { initAgentPanel };
 })();
 
 // ===== studio/sync-panel.js =====
-const __mod21 = (() => {
+const __mod22 = (() => {
 let __default = undefined;
 // ============================================================================
 // 同步面板 —— 不敲命令，点按钮就完成：提交、上传到 GitHub、拉取更新、打包给另一台电脑。
@@ -8081,7 +8236,7 @@ return { initSyncPanel };
 })();
 
 // ===== studio/studio.js =====
-const __mod22 = (() => {
+const __mod23 = (() => {
 let __default = undefined;
 // ============================================================================
 // MotionKit 工作室
@@ -8096,9 +8251,10 @@ const { runFx } = __mod2;
 const { analyzeAudioFile, analyzeBuffer, envAt, onsets } = __mod3;
 const { parseSubtitles, toSRT, splitForKinetic, estimateWordTimings } = __mod4;
 const { makeZip, createZipWriter, downloadBlob, canvasToPngBytes } = __mod5;
-const { registerAll, listTemplates, CATEGORIES, byCategory } = __mod19;
-const { initAgentPanel } = __mod20;
-const { initSyncPanel } = __mod21;
+const { muxMp4 } = __mod6;
+const { registerAll, listTemplates, CATEGORIES, byCategory } = __mod20;
+const { initAgentPanel } = __mod21;
+const { initSyncPanel } = __mod22;
 
 registerAll();
 
@@ -10540,11 +10696,98 @@ function pickVideoMime(want) {
 }
 
 /**
+ * MP4（H.264）走 WebCodecs：逐帧编码 + 自己封装。
+ *
+ * 为什么不用 MediaRecorder 录 MP4：它是按"墙上时钟"打时间戳的，渲染一帧比 1/fps 慢，
+ * 时长就被拖长（2:40 的工程能录成 6:00）。这里每一帧的时间戳是 i/fps，导出多长就是多长，
+ * 而且不用等实时 —— 渲染多快就多快。
+ */
+async function renderMp4Blob(includeMedia) {
+  if (typeof window.VideoEncoder === 'undefined') {
+    const e = new Error('这个浏览器没有 WebCodecs（VideoEncoder），用 Chrome / Edge 打开就能直接出 MP4。');
+    e.code = 'unsupported';
+    throw e;
+  }
+  const s = state.scene;
+  const fps = s.fps;
+  const total = await frameCount();
+
+  // H.264 的 level 要配得上分辨率（4K 用 4.0 会直接被拒）
+  const mbPerSec = Math.ceil(s.width / 16) * Math.ceil(s.height / 16) * fps;
+  const level = mbPerSec <= 245760 ? '28' : mbPerSec <= 522240 ? '32' : '33';
+  // 码率按像素率给：1080p30 大约 15 Mbps（画面是文字/线条，够清楚）。
+  // 别给太高：编码样本会在内存里攒到导出结束，长片很吃内存。
+  const bitrate = Math.min(60_000_000, Math.max(4_000_000, Math.round(s.width * s.height * fps * 0.25)));
+  const configs = [`avc1.6400${level}`, `avc1.4d00${level}`, `avc1.42E0${level}`];
+
+  let picked = null;
+  for (const codec of configs) {
+    const cfg = { codec, width: s.width, height: s.height, bitrate, framerate: fps, avc: { format: 'avc' } };
+    try {
+      const sup = await VideoEncoder.isConfigSupported(cfg);
+      if (sup && sup.supported) { picked = sup.config || cfg; break; }
+    } catch (_) { /* 换下一个 */ }
+  }
+  if (!picked) {
+    const e = new Error('这台机器的 H.264 编码器不接受 ' + s.width + '×' + s.height + ' 这个尺寸');
+    e.code = 'unsupported';
+    throw e;
+  }
+
+  const samples = [];
+  let description = null;
+  let encError = null;
+  const enc = new VideoEncoder({
+    output: (chunk, meta) => {
+      const cfg = meta && meta.decoderConfig;
+      if (cfg && cfg.description && !description) description = new Uint8Array(cfg.description);
+      const buf = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(buf);
+      samples.push({ data: buf, key: chunk.type === 'key' });
+    },
+    error: (e) => { encError = e; },
+  });
+  enc.configure(picked);
+
+  const keyEvery = Math.max(1, Math.round(fps * 2));      // 每 2 秒一个关键帧，方便拖进度条
+  const frameDurUs = Math.round(1e6 / fps);
+  for (let i = 0; i < total; i++) {
+    if (encError) break;
+    const c = await renderFrameForExport(i, includeMedia);
+    const frame = new VideoFrame(c, { timestamp: Math.round((i * 1e6) / fps), duration: frameDurUs });
+    enc.encode(frame, { keyFrame: i % keyEvery === 0 });
+    frame.close();
+    showBusy(`编码 MP4 ${i + 1}/${total}`, (i + 1) / total);
+    // 背压：编码队列积太多就先让出一会儿，别把内存吃光
+    while (enc.encodeQueueSize > 12) await new Promise((r) => setTimeout(r, 4));
+    if (i % 3 === 0) await new Promise((r) => setTimeout(r, 0));   // 界面别卡死
+  }
+  await enc.flush();
+  enc.close();
+  if (encError) throw encError;
+
+  const data = muxMp4({ width: s.width, height: s.height, fps, samples, description });
+  return { blob: new Blob([data], { type: 'video/mp4' }), mime: 'video/mp4', ext: 'mp4', label: 'MP4（H.264）' };
+}
+
+/**
  * 把工程录成一个视频 Blob（画面层，不含声音 —— 和 WebM 那条路一样）。
  * 录法是逐帧渲染 + 推帧给 canvas 流，所以合成结果和无头渲染是同一套引擎。
  */
 async function renderVideoBlob(want, includeMedia) {
   const fmt = VIDEO_FORMATS[want] ? want : 'webm';
+  if (fmt === 'mp4') {
+    // 优先走帧精确那条路；浏览器不支持再退回实时录制
+    try {
+      return await renderMp4Blob(includeMedia);
+    } catch (err) {
+      if (err && err.code === 'unsupported' && pickVideoMime('mp4')) {
+        console.warn('WebCodecs 走不通，退回实时录制：', err.message);
+      } else {
+        throw err;
+      }
+    }
+  }
   const mime = pickVideoMime(fmt);
   if (!mime) {
     const err = new Error('这个浏览器不能直接录 ' + VIDEO_FORMATS[fmt].label
@@ -11227,7 +11470,8 @@ soundNote.className = 'mini';
 soundNote.style.cssText = 'margin-top:8px;color:#8b929e;line-height:1.7;font-size:11px';
 soundNote.innerHTML =
   '上面这些导出的都是<b>画面层，不含声音</b>（MP4 也一样；连底片一起渲进去也不含）。' +
-  'MP4 直接点一下就出片，走的是浏览器自带的 H.264；浏览器不支持时会提示你改用 PNG 序列。' +
+  'MP4 是<b>帧精确</b>的：每帧时间戳按工程帧率写，工程多长就导出多长，渲染多快就多快（WebCodecs + 自带的 H.264）。' +
+  'WebM 是实时录制，渲染一帧比 1/fps 慢就会把时长拖长。' +
   '要带声音的成片：① 用 AI 助手跑 <code>--render</code>，它会输出带原声的 <code>final.mp4</code>；' +
   '② 或者用 <code>tools/encode.py --overlay 原片.mp4</code> 把叠加层烧到原片上，声音跟着原片走。';
 optRow.after(soundNote);

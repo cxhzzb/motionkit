@@ -574,12 +574,15 @@ python tools/autocut.py --music song.mp3 --clips D:\clips --scene-only --title "
 
 ### 直接出 MP4
 
-**导出… → MP4（H.264）** 就完事：浏览器自带的编码器（Chrome / Edge 111+）边渲染边编码，
-结束后直接下载 `motionkit_时间戳.mp4`。和 WebM 那条路是同一套代码，逐帧推给 canvas 流，
-所以合成结果和无头渲染是同一个引擎，不会"预览一个样、导出另一个样"。
+**导出… → MP4（H.264）** 就完事：结束后直接下载 `motionkit_时间戳.mp4`。走的是 WebCodecs
+（`VideoEncoder`）+ 自己的 MP4 封装器（[engine/mp4.js](engine/mp4.js)），逐帧编码，
+合成结果和无头渲染是同一个引擎，不会"预览一个样、导出另一个样"。
 
 两件要知道的事：
 
+- **帧精确，导出多长就是工程多长**。这一点以前是错的：浏览器录屏（MediaRecorder）按
+  **墙上时钟**给帧打时间戳，渲染一帧比 `1/fps` 慢的时候，2 分 40 秒的工程能导出成 6 分钟。
+  现在每帧的时间戳是 `i/fps` 写在文件里的，而且不用等实时 —— **渲染多快就多快**。
 - **没有透明通道**（H.264 就不支持），所以透明区域由程序**压成深色底**再编码 ——
   不然交给浏览器自己合，实测会变成浅灰，白字压上去直接看不清。
   想把实拍一起烧进去就勾上那个"把底下的视频/图片一起渲染进去"。
@@ -588,6 +591,9 @@ python tools/autocut.py --music song.mp3 --clips D:\clips --scene-only --title "
 
 Firefox / Safari 目前没有 MP4 录制能力，这种情况下会直接告诉你改用 PNG 序列，
 而不是给你一个后缀是 `.mp4`、其实打不开的文件。
+
+> WebM（VP9 含透明）那条路还是**实时录制**，渲染慢就把时长拖长 —— 要准的用 MP4，
+> 要透明的用 PNG 序列 / ProRes。
 
 ### 用 ffmpeg 编码 / 直接烧到成片
 
@@ -722,7 +728,8 @@ export default [myEffect];
 │   ├─ fx.js               后期特效栈 + runFx + beatHits
 │   ├─ audio.js            卡点分析（STFT 分频段通量 → 自相关 → 最小二乘精修）
 │   ├─ srt.js              字幕解析 / 导出 / 切短句 / 词级时间估算
-│   └─ zip.js              ZIP 写入器（含流式版本，边渲染边落盘）
+│   ├─ zip.js              ZIP 写入器（含流式版本，边渲染边落盘）
+│   └─ mp4.js              MP4 封装器（一条 H.264 轨，帧精确；导出 MP4 用）
 ├─ templates/              46 个模板（hud / type / design / chaos / data / focus / mark / rock / panels / transitions / hits）
 ├─ presets/                slopcore / slopcore-3min / demo-scene / design-demo / rock-2min / focus-demo / data-demo / chaos-demo + index.json
 ├─ agent/                  AI 助手：分析 → 转写 → 文案 → 排布 → 成片

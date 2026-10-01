@@ -34,18 +34,15 @@ const sup = MK.videoSupport();
 report.support = sup;
 report.checks.browserMp4 = !!sup.mp4;
 
-// 摆一个短工程：6 帧，够验证封装就行
 const S = MK.state.scene;
-S.layers.length = 0;
-S.fx.length = 0;             // 特效会往整帧撒噪点，压底色的判断会被它搅浑
-S.duration = 0.6;
-S.fps = 10;
-S.add({
-  template: 'kinetic-type', start: 0, end: 0.6, seed: 'ex-1', name: '导出测试',
-  params: { text: 'MP4 TEST', mode: 'slam', size: 120, position: '0.5,0.5' },
-});
-MK.setTime(0);
-await sleep(200);
+function resetScene(dur, fps, layers) {
+  S.layers.length = 0;
+  S.fx.length = 0;            // 特效会往整帧撒噪点，底色判断会被它搅浑
+  S.width = 1920; S.height = 1080;
+  S.duration = dur; S.fps = fps;
+  layers.forEach((spec, i) => S.add(Object.assign({ start: 0, end: dur, seed: 'ex-' + i, name: '导出测试' + i }, spec)));
+  MK.setTime(0);
+}
 
 const head = async (blob, n = 12) => {
   const buf = new Uint8Array(await blob.slice(0, n).arrayBuffer());
@@ -54,51 +51,76 @@ const head = async (blob, n = 12) => {
     ascii: [...buf].map((b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : '.')).join(''),
   };
 };
+/** 把 blob 交给 <video> 真解一遍，再抽一帧到小画布上数亮度 */
+async function inspect(blob, dur) {
+  const url = URL.createObjectURL(blob);
+  const v = document.createElement('video');
+  v.muted = true;
+  v.src = url;
+  const meta = await new Promise((res) => {
+    v.onloadedmetadata = () => res({ w: v.videoWidth, h: v.videoHeight, dur: v.duration });
+    v.onerror = () => res(null);
+    setTimeout(() => res(null), 5000);
+  });
+  let bright = 0, maxLum = 0, corner = [0, 0, 0];
+  if (meta) {
+    try { v.currentTime = Math.max(0.05, dur * 0.3); } catch (_) {}
+    await new Promise((res) => { v.onseeked = res; setTimeout(res, 2500); });
+    const probe = document.createElement('canvas');
+    probe.width = 320; probe.height = 180;
+    const pc = probe.getContext('2d');
+    pc.drawImage(v, 0, 0, 320, 180);
+    const px = pc.getImageData(0, 0, 320, 180).data;
+    corner = [px[0], px[1], px[2]];
+    for (let i = 0; i < px.length; i += 4) {
+      const l = (px[i] + px[i + 1] + px[i + 2]) / 3;
+      if (l > maxLum) maxLum = l;
+      if (l > 40) bright++;
+    }
+  }
+  URL.revokeObjectURL(url);
+  return { meta, bright, maxLum, corner };
+}
 
-// ---- MP4：真录一段
+// ---- ① 老 bug 的回归测试：故意做一个"渲染明显比 1/fps 慢"的工程。
+//         实时录制在这种工程上会把时长拖长（2:40 导成 6:00），帧精确的写法不会。
+resetScene(1.5, 24, [
+  { template: 'kinetic-type', end: 0.9, params: { text: 'MP4 TEST', mode: 'slam', size: 120, position: '0.5,0.5' } },
+  { template: 'grid-field', params: { mode: 'break', cols: 18, rows: 11, blocks: 30 } },
+  { template: 'ink-scatter', params: { mode: 'ink', count: 20, inkBlobs: 6, lines: 10 } },
+]);
+await sleep(200);
 const t0 = Date.now();
 const r = await MK.renderVideoBlob('mp4', false);
 const tag = await head(r.blob);
-report.mp4 = { mime: r.mime, ext: r.ext, size: r.blob.size, head: tag.ascii, ms: Date.now() - t0 };
+const a = await inspect(r.blob, 1.5);
+report.mp4 = {
+  mime: r.mime, ext: r.ext, size: r.blob.size, head: tag.ascii, ms: Date.now() - t0,
+  projectDur: S.duration, outDur: a.meta && a.meta.dur, size_: a.meta && a.meta.w + 'x' + a.meta.h,
+};
 report.checks.mp4Blob = r.blob.size > 1000;
 report.checks.mp4Container = tag.ascii.slice(4, 8) === 'ftyp';
+report.checks.mp4Playable = !!a.meta && a.meta.w === S.width && a.meta.h === S.height;
+// ★ 导出多长 = 工程多长（老写法这里会是好几倍）
+report.checks.mp4DurationExact = !!a.meta && Math.abs(a.meta.dur - S.duration) <= 0.1;
+report.checks.mp4HasPicture = a.bright > 300;
 
-// 再用 <video> 真读一遍：能读出宽高才算"能播"，不然只是个后缀对的壳
-const url = URL.createObjectURL(r.blob);
-const v = document.createElement('video');
-v.muted = true;
-v.src = url;
-const meta = await new Promise((res) => {
-  v.onloadedmetadata = () => res({ w: v.videoWidth, h: v.videoHeight, dur: v.duration });
-  v.onerror = () => res(null);
-  setTimeout(() => res(null), 5000);
-});
-report.playback = meta;
-report.checks.mp4Playable = !!meta && meta.w === S.width && meta.h === S.height;
-
-// 录进去的得是画面本身，不是一片黑：抽一帧画到小画布上数亮点
-try { v.currentTime = 0.2; } catch (_) {}
-await new Promise((res) => { v.onseeked = res; setTimeout(res, 2500); });
-const probe = document.createElement('canvas');
-probe.width = 320; probe.height = 180;      // 采样密一点，标题字才不会在缩放里被平均掉
-const pc = probe.getContext('2d');
-pc.drawImage(v, 0, 0, 320, 180);
-const px = pc.getImageData(0, 0, 320, 180).data;
-let maxLum = 0, bright = 0;
-const hist = [0, 0, 0, 0, 0];       // <16 / <64 / <128 / <200 / 亮
-for (let i = 0; i < px.length; i += 4) {
-  const l = (px[i] + px[i + 1] + px[i + 2]) / 3;
-  if (l > maxLum) maxLum = l;
-  if (l > 40) bright++;
-  hist[l < 16 ? 0 : l < 64 ? 1 : l < 128 ? 2 : l < 200 ? 3 : 4]++;
-}
-report.frameSample = { maxLum, bright, of: px.length / 4, hist, corner: [px[0], px[1], px[2]] };
-report.checks.mp4HasPicture = bright > 300;
-// 透明区必须压成深色底（不然白字压在浅灰上，等于报废）
-report.checks.mp4BlackBackdrop = px[0] < 60 && px[1] < 60 && px[2] < 60;
-URL.revokeObjectURL(url);
+// ---- ② 干净工程：透明区必须压成深色底（不然白字压在浅灰上等于报废）
+resetScene(0.5, 10, [
+  { template: 'kinetic-type', params: { text: 'ABC', mode: 'slam', size: 120, position: '0.5,0.5' } },
+]);
+await sleep(200);
+const r2 = await MK.renderVideoBlob('mp4', false);
+const b = await inspect(r2.blob, 0.5);
+report.clean = { corner: b.corner, bright: b.bright, dur: b.meta && b.meta.dur, size: r2.blob.size };
+report.checks.mp4BlackBackdrop = b.corner[0] < 60 && b.corner[1] < 60 && b.corner[2] < 60;
+report.checks.cleanDurationExact = !!b.meta && Math.abs(b.meta.dur - 0.5) <= 0.08;
 
 // ---- WebM 那条老路也得还在
+resetScene(0.5, 10, [
+  { template: 'kinetic-type', params: { text: 'ABC', mode: 'slam', size: 120, position: '0.5,0.5' } },
+]);
+await sleep(150);
 const w = await MK.renderVideoBlob('webm', false);
 const wtag = await head(w.blob, 4);
 report.webm = { mime: w.mime, size: w.blob.size, bytes: wtag.bytes };

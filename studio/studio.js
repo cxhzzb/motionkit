@@ -14,6 +14,7 @@ import { runFx } from '../engine/fx.js';
 import { analyzeAudioFile, analyzeBuffer, envAt, onsets } from '../engine/audio.js';
 import { parseSubtitles, toSRT, splitForKinetic, estimateWordTimings } from '../engine/srt.js';
 import { makeZip, createZipWriter, downloadBlob, canvasToPngBytes } from '../engine/zip.js';
+import { muxMp4 } from '../engine/mp4.js';
 import { registerAll, listTemplates, CATEGORIES, byCategory } from '../templates/index.js';
 import { initAgentPanel } from './agent-panel.js';
 import { initSyncPanel } from './sync-panel.js';
@@ -2458,11 +2459,98 @@ function pickVideoMime(want) {
 }
 
 /**
+ * MP4（H.264）走 WebCodecs：逐帧编码 + 自己封装。
+ *
+ * 为什么不用 MediaRecorder 录 MP4：它是按"墙上时钟"打时间戳的，渲染一帧比 1/fps 慢，
+ * 时长就被拖长（2:40 的工程能录成 6:00）。这里每一帧的时间戳是 i/fps，导出多长就是多长，
+ * 而且不用等实时 —— 渲染多快就多快。
+ */
+async function renderMp4Blob(includeMedia) {
+  if (typeof window.VideoEncoder === 'undefined') {
+    const e = new Error('这个浏览器没有 WebCodecs（VideoEncoder），用 Chrome / Edge 打开就能直接出 MP4。');
+    e.code = 'unsupported';
+    throw e;
+  }
+  const s = state.scene;
+  const fps = s.fps;
+  const total = await frameCount();
+
+  // H.264 的 level 要配得上分辨率（4K 用 4.0 会直接被拒）
+  const mbPerSec = Math.ceil(s.width / 16) * Math.ceil(s.height / 16) * fps;
+  const level = mbPerSec <= 245760 ? '28' : mbPerSec <= 522240 ? '32' : '33';
+  // 码率按像素率给：1080p30 大约 15 Mbps（画面是文字/线条，够清楚）。
+  // 别给太高：编码样本会在内存里攒到导出结束，长片很吃内存。
+  const bitrate = Math.min(60_000_000, Math.max(4_000_000, Math.round(s.width * s.height * fps * 0.25)));
+  const configs = [`avc1.6400${level}`, `avc1.4d00${level}`, `avc1.42E0${level}`];
+
+  let picked = null;
+  for (const codec of configs) {
+    const cfg = { codec, width: s.width, height: s.height, bitrate, framerate: fps, avc: { format: 'avc' } };
+    try {
+      const sup = await VideoEncoder.isConfigSupported(cfg);
+      if (sup && sup.supported) { picked = sup.config || cfg; break; }
+    } catch (_) { /* 换下一个 */ }
+  }
+  if (!picked) {
+    const e = new Error('这台机器的 H.264 编码器不接受 ' + s.width + '×' + s.height + ' 这个尺寸');
+    e.code = 'unsupported';
+    throw e;
+  }
+
+  const samples = [];
+  let description = null;
+  let encError = null;
+  const enc = new VideoEncoder({
+    output: (chunk, meta) => {
+      const cfg = meta && meta.decoderConfig;
+      if (cfg && cfg.description && !description) description = new Uint8Array(cfg.description);
+      const buf = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(buf);
+      samples.push({ data: buf, key: chunk.type === 'key' });
+    },
+    error: (e) => { encError = e; },
+  });
+  enc.configure(picked);
+
+  const keyEvery = Math.max(1, Math.round(fps * 2));      // 每 2 秒一个关键帧，方便拖进度条
+  const frameDurUs = Math.round(1e6 / fps);
+  for (let i = 0; i < total; i++) {
+    if (encError) break;
+    const c = await renderFrameForExport(i, includeMedia);
+    const frame = new VideoFrame(c, { timestamp: Math.round((i * 1e6) / fps), duration: frameDurUs });
+    enc.encode(frame, { keyFrame: i % keyEvery === 0 });
+    frame.close();
+    showBusy(`编码 MP4 ${i + 1}/${total}`, (i + 1) / total);
+    // 背压：编码队列积太多就先让出一会儿，别把内存吃光
+    while (enc.encodeQueueSize > 12) await new Promise((r) => setTimeout(r, 4));
+    if (i % 3 === 0) await new Promise((r) => setTimeout(r, 0));   // 界面别卡死
+  }
+  await enc.flush();
+  enc.close();
+  if (encError) throw encError;
+
+  const data = muxMp4({ width: s.width, height: s.height, fps, samples, description });
+  return { blob: new Blob([data], { type: 'video/mp4' }), mime: 'video/mp4', ext: 'mp4', label: 'MP4（H.264）' };
+}
+
+/**
  * 把工程录成一个视频 Blob（画面层，不含声音 —— 和 WebM 那条路一样）。
  * 录法是逐帧渲染 + 推帧给 canvas 流，所以合成结果和无头渲染是同一套引擎。
  */
 async function renderVideoBlob(want, includeMedia) {
   const fmt = VIDEO_FORMATS[want] ? want : 'webm';
+  if (fmt === 'mp4') {
+    // 优先走帧精确那条路；浏览器不支持再退回实时录制
+    try {
+      return await renderMp4Blob(includeMedia);
+    } catch (err) {
+      if (err && err.code === 'unsupported' && pickVideoMime('mp4')) {
+        console.warn('WebCodecs 走不通，退回实时录制：', err.message);
+      } else {
+        throw err;
+      }
+    }
+  }
   const mime = pickVideoMime(fmt);
   if (!mime) {
     const err = new Error('这个浏览器不能直接录 ' + VIDEO_FORMATS[fmt].label
@@ -3145,7 +3233,8 @@ soundNote.className = 'mini';
 soundNote.style.cssText = 'margin-top:8px;color:#8b929e;line-height:1.7;font-size:11px';
 soundNote.innerHTML =
   '上面这些导出的都是<b>画面层，不含声音</b>（MP4 也一样；连底片一起渲进去也不含）。' +
-  'MP4 直接点一下就出片，走的是浏览器自带的 H.264；浏览器不支持时会提示你改用 PNG 序列。' +
+  'MP4 是<b>帧精确</b>的：每帧时间戳按工程帧率写，工程多长就导出多长，渲染多快就多快（WebCodecs + 自带的 H.264）。' +
+  'WebM 是实时录制，渲染一帧比 1/fps 慢就会把时长拖长。' +
   '要带声音的成片：① 用 AI 助手跑 <code>--render</code>，它会输出带原声的 <code>final.mp4</code>；' +
   '② 或者用 <code>tools/encode.py --overlay 原片.mp4</code> 把叠加层烧到原片上，声音跟着原片走。';
 optRow.after(soundNote);
