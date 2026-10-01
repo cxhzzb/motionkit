@@ -328,11 +328,16 @@ textarea.sync-input { resize: vertical; line-height: 1.45; }
 
 /* ---------- 时间轴 ---------- */
 .timeline-wrap { flex: 0 0 auto; background: var(--bg2); }
+.tl-resize { height: 7px; cursor: ns-resize; background: linear-gradient(#1b1e24, #121317); border-top: 1px solid var(--line); }
+.tl-resize:hover { background: linear-gradient(var(--accent), #2a1a14); }
+.tl-resize:active { background: var(--accent); }
 #timeline { display: block; width: 100%; height: 212px; cursor: pointer; }
 .tl-legend {
   display: flex; gap: 14px; padding: 6px 12px 10px; font-family: var(--mono); font-size: 11px; color: var(--dim);
   align-items: center;
 }
+.tl-legend > span { white-space: nowrap; }
+.tl-legend > .hint { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .tl-legend .k { display: inline-block; width: 10px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 1px; }
 .k.beat { background: #3a4048; } .k.strong { background: var(--accent2); }
 .k.vid { background: #00e5ff; } .k.aud { background: #ffcc00; }

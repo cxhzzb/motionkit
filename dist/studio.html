@@ -335,11 +335,16 @@ textarea.sync-input { resize: vertical; line-height: 1.45; }
 
 /* ---------- 时间轴 ---------- */
 .timeline-wrap { flex: 0 0 auto; background: var(--bg2); }
+.tl-resize { height: 7px; cursor: ns-resize; background: linear-gradient(#1b1e24, #121317); border-top: 1px solid var(--line); }
+.tl-resize:hover { background: linear-gradient(var(--accent), #2a1a14); }
+.tl-resize:active { background: var(--accent); }
 #timeline { display: block; width: 100%; height: 212px; cursor: pointer; }
 .tl-legend {
   display: flex; gap: 14px; padding: 6px 12px 10px; font-family: var(--mono); font-size: 11px; color: var(--dim);
   align-items: center;
 }
+.tl-legend > span { white-space: nowrap; }
+.tl-legend > .hint { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .tl-legend .k { display: inline-block; width: 10px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 1px; }
 .k.beat { background: #3a4048; } .k.strong { background: var(--accent2); }
 .k.vid { background: #00e5ff; } .k.aud { background: #ffcc00; }
@@ -654,6 +659,7 @@ textarea.sync-input { resize: vertical; line-height: 1.45; }
     </div>
 
     <div class="timeline-wrap">
+      <div id="tlResize" class="tl-resize" title="拖动可以调整时间轴高度（图层多的时候拉高一点）"></div>
       <canvas id="timeline"></canvas>
       <div class="tl-legend">
         <span><i class="k vid"></i>视频</span>
@@ -662,7 +668,7 @@ textarea.sync-input { resize: vertical; line-height: 1.45; }
         <span><i class="k strong"></i>强拍</span>
         <span><i class="k layer"></i>图层</span>
         <span><i class="k cap"></i>字幕</span>
-        <span class="hint" id="tlHint">预览里直接改：拖动 · 拉角缩放 · 转手柄旋转 · 双击改字 · Alt+点穿透下层</span>
+        <span class="hint" id="tlHint">图层多了：时间轴上滚轮上下翻，或拖上面的把手把时间轴拉高</span>
       </div>
     </div>
   </section>
@@ -5859,6 +5865,7 @@ const state = {
   muted: false,          // 预览总静音（走带栏那个喇叭）
     tplPick: null,         // 模板库里点选中的模板（只是选中，拖着往画面里放才会加图层）
     durationAuto: true,    // 工程时长是否跟着素材走（手动改过时长就关掉）
+    tlScroll: 0,           // 时间轴图层区的上下滚动量（层数多的时候用）
 };
 state.scene.addFx({ type: 'chromatic', amount: 0, enabled: false });
 
@@ -6141,11 +6148,20 @@ function drawTimeline() {
     tlCtx.fillText('音频轨 · 未载入（拖一首歌进来会自动分析卡点）', x0 + 8, audY + AUD_H / 2);
   }
 
-  // ---- 图层 ----
+  // ---- 图层（可上下滚动）----
+  const capY = h - ROW_H - 4;
+  const areaTop = TRACK_TOP, areaBot = capY - 4;
+  const contentH = s.layers.length * (ROW_H + ROW_GAP) - ROW_GAP;
+  const maxScroll = Math.max(0, contentH - (areaBot - areaTop));
+  state.tlScroll = clamp(state.tlScroll || 0, 0, maxScroll);
   rowMap = new Map();
+  tlCtx.save();
+  tlCtx.beginPath();
+  tlCtx.rect(x0, areaTop, x1 - x0, Math.max(0, areaBot - areaTop));
+  tlCtx.clip();
   s.layers.forEach((L, i) => {
-    const y = TRACK_TOP + i * (ROW_H + ROW_GAP);
-    if (y > h - ROW_H) return;
+    const y = TRACK_TOP + i * (ROW_H + ROW_GAP) - state.tlScroll;
+    if (y + ROW_H < areaTop - 2 || y > areaBot + 2) return;
     const bx = sx(L.start), bw = Math.max(3, sx(L.end) - sx(L.start));
     rowMap.set(L.id, { y, x: bx, w: bw });
     const tpl = listTemplates().find((t) => t.id === L.template);
@@ -6164,9 +6180,21 @@ function drawTimeline() {
       tlCtx.fillRect(bx + bw - 2, y, 4, ROW_H);
     }
   });
+  tlCtx.restore();
+
+  // 图层区的滚动条（层数多到装不下时出现）
+  if (maxScroll > 1) {
+    const trackH = areaBot - areaTop;
+    tlCtx.fillStyle = 'rgba(255,255,255,0.07)';
+    tlCtx.fillRect(x1 - 3, areaTop, 3, trackH);
+    const thumbH = Math.max(20, trackH * (trackH / contentH));
+    const thumbY = areaTop + (trackH - thumbH) * (state.tlScroll / maxScroll);
+    tlCtx.fillStyle = 'rgba(255,255,255,0.38)';
+    roundRectPath(tlCtx, x1 - 3, thumbY, 3, thumbH, 1.5);
+    tlCtx.fill();
+  }
 
   // 字幕轨
-  const capY = h - ROW_H - 4;
   if (capY > TRACK_TOP) {
     tlCtx.fillStyle = 'rgba(255,255,255,0.04)';
     tlCtx.fillRect(x0, capY, x1 - x0, ROW_H);
@@ -6182,6 +6210,40 @@ function drawTimeline() {
   tlCtx.fillStyle = '#ffffff';
   tlCtx.fillRect(px - 0.5, 0, 1.5, h);
   tlCtx.beginPath(); tlCtx.moveTo(px - 5, 0); tlCtx.lineTo(px + 5, 0); tlCtx.lineTo(px, 8); tlCtx.closePath(); tlCtx.fill();
+}
+
+/** 图层区能滚多远（层数装不下时 > 0） */
+function tlScrollMax() {
+  const h = tl.clientHeight;
+  const capY = h - ROW_H - 4;
+  const areaH = Math.max(0, (capY - 4) - TRACK_TOP);
+  const contentH = state.scene.layers.length * (ROW_H + ROW_GAP) - ROW_GAP;
+  return Math.max(0, contentH - areaH);
+}
+
+/** 滚轮滚图层区 */
+function tlScrollBy(dy) {
+  const max = tlScrollMax();
+  if (max <= 0) return false;
+  const next = clamp((state.tlScroll || 0) + dy, 0, max);
+  if (next === state.tlScroll) return false;
+  state.tlScroll = next;
+  drawTimeline();
+  return true;
+}
+
+/** 选中某层时把它滚进可见区（不然点了下面那层也不知道在哪） */
+function scrollLayerIntoView(id) {
+  const i = state.scene.layers.findIndex((L) => L.id === id);
+  if (i < 0) return;
+  const h = tl.clientHeight;
+  const capY = h - ROW_H - 4;
+  const areaTop = TRACK_TOP, areaH = Math.max(1, (capY - 4) - TRACK_TOP);
+  const y = i * (ROW_H + ROW_GAP);
+  const cur = state.tlScroll || 0;
+  if (y < cur) state.tlScroll = y;
+  else if (y + ROW_H > cur + areaH) state.tlScroll = y + ROW_H - areaH;
+  state.tlScroll = clamp(state.tlScroll, 0, tlScrollMax());
 }
 
 function roundRectPath(ctx, x, y, w, h, r) {
@@ -6259,6 +6321,38 @@ tl.addEventListener('pointermove', (e) => {
 const endDrag = () => { drag = null; scrubbing = false; };
 tl.addEventListener('pointerup', endDrag);
 tl.addEventListener('pointercancel', endDrag);
+// 滚轮：上下翻图层（层数多的时候时间轴装不下）
+tl.addEventListener('wheel', (e) => {
+  const dy = e.deltaY > 0 ? Math.max(14, Math.abs(e.deltaY) * 0.6) : -Math.max(14, Math.abs(e.deltaY) * 0.6);
+  if (tlScrollBy(dy)) e.preventDefault();
+}, { passive: false });
+
+// 拖动时间轴顶端那条：调整高度（图层多的时候拉高点）
+{
+  const grip = $('tlResize');
+  let rz = null;
+  const saved = Number(localStorage.getItem('motionkit.tlHeight') || 0);
+  if (saved >= 120 && saved <= 700) tl.style.height = saved + 'px';
+  grip.addEventListener('pointerdown', (e) => {
+    rz = { y: e.clientY, h: tl.clientHeight };
+    grip.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  grip.addEventListener('pointermove', (e) => {
+    if (!rz) return;
+    const h = clamp(rz.h - (e.clientY - rz.y), 120, 700);
+    tl.style.height = h + 'px';
+    drawTimeline();
+  });
+  const end = () => {
+    if (!rz) return;
+    rz = null;
+    try { localStorage.setItem('motionkit.tlHeight', String(tl.clientHeight)); } catch (_) {}
+    drawTimeline();
+  };
+  grip.addEventListener('pointerup', end);
+  grip.addEventListener('pointercancel', end);
+}
 
 // ---------------------------------------------------------------- 模板库
 // 交互：点一下只是"选中"，不会往工程里塞东西；要加图层必须从这儿**拖到右边画面里**。
@@ -7931,6 +8025,7 @@ function selectLayer(id) {
   state.selection = id;
   if (id != null) rightTab = 'layer';     // 选了图层就自动切到「图层」页
   if (elText) closeTextEditor();
+  if (id != null) scrollLayerIntoView(id); // 让它出现在时间轴可见区里
   renderRight();
   drawTimeline();
 }
@@ -8375,6 +8470,8 @@ window.MotionKit = {
       sceneDur: state.scene.duration, auto: state.durationAuto, peaks: state.media.peaks ? state.media.peaks.length : 0,
     }),
     followMedia: (on) => { state.durationAuto = on !== false; return applyAutoDuration(true); },
+    tlScroll: () => ({ y: state.tlScroll || 0, max: tlScrollMax(), rowH: ROW_H, gap: ROW_GAP, top: TRACK_TOP,
+                       visible: Math.max(0, (tl.clientHeight - ROW_H - 8) - TRACK_TOP) }),
     rightTab: (t) => { if (t) setRightTab(t); return rightTab; },
     pickAt: (nx, ny) => pickLayerAt(nx, ny).map((l) => l.id),
     layerBox: (i) => { const L = layerArgOf(i); return L ? layerBoxFor(L) : null; },

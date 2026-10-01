@@ -277,6 +277,30 @@ if (textPick) {
   }
 
   // ---------------------------------------------------------------- 收尾：留个好看的演示状态
+  // ---------------------------------------------------------------- 9. 时间轴上下滚动
+  const tlEl = document.getElementById('timeline');
+  tlEl.dispatchEvent(new WheelEvent('wheel', { deltaY: -4000, bubbles: true, cancelable: true }));
+  await sleep(60);
+  const s0 = MK.tlScroll();
+  tlEl.dispatchEvent(new WheelEvent('wheel', { deltaY: 160, bubbles: true, cancelable: true }));
+  await sleep(80);
+  const s1 = MK.tlScroll();
+  report.scroll = { max: s1.max, visible: s1.visible, before: s0.y, after: s1.y, layers: S2.layers.length };
+  report.checks.tlScrollable = s1.max > 0;
+  report.checks.tlWheel = s1.y > s0.y;
+
+  // 选中最下面那层 → 应该自动滚到可见区
+  const lastL = S2.layers[S2.layers.length - 1];
+  MK.selectLayer(lastL.id);
+  await sleep(80);
+  const s2 = MK.tlScroll();
+  const idx = S2.layers.indexOf(lastL);
+  const rowTop = s2.top + idx * (s2.rowH + s2.gap) - s2.y;
+  const areaTop = s2.top;
+  report.scroll.auto = { y: s2.y, rowTop, areaTop, visible: s2.visible };
+  report.checks.tlAutoScroll = s2.y > 0 && rowTop >= areaTop - 1 && rowTop + s2.rowH <= areaTop + s2.visible + 1;
+
+  // ---------------------------------------------------------------- 收尾：留个好看的演示状态
   if (sel) {
     MK.selectLayer(sel.id);
     MK.setTransform(-1, { x: 0.01, y: 0.015, scale: 1.18, rot: 0, px: 0.5, py: 0.5 });
