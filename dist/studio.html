@@ -335,13 +335,14 @@ textarea.sync-input { resize: vertical; line-height: 1.45; }
 
 /* ---------- 时间轴 ---------- */
 .timeline-wrap { flex: 0 0 auto; background: var(--bg2); }
-#timeline { display: block; width: 100%; height: 132px; cursor: pointer; }
+#timeline { display: block; width: 100%; height: 212px; cursor: pointer; }
 .tl-legend {
   display: flex; gap: 14px; padding: 6px 12px 10px; font-family: var(--mono); font-size: 11px; color: var(--dim);
   align-items: center;
 }
 .tl-legend .k { display: inline-block; width: 10px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 1px; }
 .k.beat { background: #3a4048; } .k.strong { background: var(--accent2); }
+.k.vid { background: #00e5ff; } .k.aud { background: #ffcc00; }
 .k.layer { background: var(--accent); } .k.cap { background: var(--ok); }
 .tl-legend .hint { margin-left: auto; }
 
@@ -655,11 +656,13 @@ textarea.sync-input { resize: vertical; line-height: 1.45; }
     <div class="timeline-wrap">
       <canvas id="timeline"></canvas>
       <div class="tl-legend">
+        <span><i class="k vid"></i>视频</span>
+        <span><i class="k aud"></i>音频</span>
         <span><i class="k beat"></i>卡点</span>
         <span><i class="k strong"></i>强拍</span>
         <span><i class="k layer"></i>图层</span>
         <span><i class="k cap"></i>字幕</span>
-        <span class="hint" id="tlHint">预览里直接改：点选拖动 · 拉角缩放 · 转手柄旋转 · 双击改字 · Alt+点穿透下层 · Del 删除</span>
+        <span class="hint" id="tlHint">预览里直接改：拖动 · 拉角缩放 · 转手柄旋转 · 双击改字 · Alt+点穿透下层</span>
       </div>
     </div>
   </section>
@@ -5849,11 +5852,13 @@ const state = {
     media: {
       video: null, audio: null, videoName: '', audioName: '',
       videoFile: null, videoMeta: null, audioMeta: null,   // 后三个给「自动保存」用
+      videoDur: 0, audioDur: 0, peaks: null,               // 素材时长 + 音频波形（时间轴那两条轨用）
     },
   analysis: null,
   layerSeq: 0,
   muted: false,          // 预览总静音（走带栏那个喇叭）
     tplPick: null,         // 模板库里点选中的模板（只是选中，拖着往画面里放才会加图层）
+    durationAuto: true,    // 工程时长是否跟着素材走（手动改过时长就关掉）
 };
 state.scene.addFx({ type: 'chromatic', amount: 0, enabled: false });
 
@@ -6023,9 +6028,13 @@ function tlGeom() {
   return { w, h };
 }
 const RULER_H = 22;
-const TRACK_TOP = RULER_H + 4;
 const ROW_H = 22;
 const ROW_GAP = 3;
+// 媒体轨：视频在上、音频在下（跟剪辑软件的习惯一致），下面是图层、最底下是字幕
+const MEDIA_TOP = RULER_H + 4;
+const VID_H = 26;
+const AUD_H = 30;
+const TRACK_TOP = MEDIA_TOP + VID_H + 3 + AUD_H + 7;
 let rowMap = new Map();
 
 function drawTimeline() {
@@ -6064,6 +6073,75 @@ function drawTimeline() {
   }
 
   // 图层
+  // ---- 媒体轨：视频 / 音频 ----
+  const monoS = getComputedStyle(document.body).getPropertyValue('--mono');
+  const vidY = MEDIA_TOP;
+  const audY = MEDIA_TOP + VID_H + 3;
+  const mv = state.media.video;
+  const ma = state.media.audio;
+
+  // 视频轨
+  tlCtx.fillStyle = 'rgba(0,229,255,0.055)';
+  tlCtx.fillRect(x0, vidY, x1 - x0, VID_H);
+  if (mv) {
+    const vd = Math.max(0.1, state.media.videoDur || s.duration);
+    const bx = sx(0), bw = Math.max(6, sx(Math.min(vd, s.duration)) - bx);
+    roundRectPath(tlCtx, bx, vidY + 3, bw, VID_H - 6, 3);
+    tlCtx.fillStyle = 'rgba(0,229,255,0.28)'; tlCtx.fill();
+    tlCtx.strokeStyle = 'rgba(0,229,255,0.75)'; tlCtx.lineWidth = 1; tlCtx.stroke();
+    // 素材比工程短的话，后面那段空出来一眼就看得见
+    if (vd < s.duration - 0.02) {
+      tlCtx.fillStyle = 'rgba(255,255,255,0.05)';
+      tlCtx.fillRect(sx(vd), vidY + 3, Math.max(0, x1 - sx(vd)), VID_H - 6);
+    }
+    tlCtx.save();
+    tlCtx.beginPath(); tlCtx.rect(bx + 6, vidY, Math.max(10, bw - 12), VID_H); tlCtx.clip();
+    tlCtx.fillStyle = '#cdf3ff';
+    tlCtx.font = '600 11px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+    tlCtx.fillText(`视频  ${state.media.videoName || ''}  ${vd.toFixed(2)}s`, bx + 7, vidY + VID_H / 2 + 0.5);
+    tlCtx.restore();
+  } else {
+    tlCtx.fillStyle = '#4a505b';
+    tlCtx.font = '11px ' + monoS;
+    tlCtx.fillText('视频轨 · 未载入（把视频/图片拖进画面区）', x0 + 8, vidY + VID_H / 2);
+  }
+
+  // 音频轨（带波形）
+  tlCtx.fillStyle = 'rgba(255,204,0,0.05)';
+  tlCtx.fillRect(x0, audY, x1 - x0, AUD_H);
+  if (ma) {
+    const ad = Math.max(0.1, state.media.audioDur || s.duration);
+    const midY = audY + AUD_H / 2;
+    const pk = state.media.peaks;
+    if (pk && pk.length) {
+      const nb = pk.length;
+      const bw2 = (x1 - x0) / nb;
+      tlCtx.fillStyle = 'rgba(255,204,0,0.72)';
+      for (let i = 0; i < nb; i++) {
+        const x = x0 + i * bw2;
+        if (x > x1) break;
+        const hh = Math.max(0.8, pk[i] * (AUD_H - 10) * 0.5);
+        tlCtx.fillRect(x, midY - hh, Math.max(1, bw2 * 0.85), hh * 2);
+      }
+    } else {
+      tlCtx.fillStyle = 'rgba(255,204,0,0.22)';
+      tlCtx.fillRect(x0, midY - 1, Math.min(x1 - x0, Math.max(4, sx(ad) - x0)), 2);
+    }
+    // 音频比工程短也标一下
+    if (ad < s.duration - 0.02) {
+      tlCtx.fillStyle = 'rgba(255,255,255,0.05)';
+      tlCtx.fillRect(sx(ad), audY, Math.max(0, x1 - sx(ad)), AUD_H);
+    }
+    tlCtx.fillStyle = '#ffe9a8';
+    tlCtx.font = '600 11px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+    tlCtx.fillText(`音频  ${state.media.audioName || ''}  ${ad.toFixed(2)}s`, x0 + 8, audY + 11);
+  } else {
+    tlCtx.fillStyle = '#4a505b';
+    tlCtx.font = '11px ' + monoS;
+    tlCtx.fillText('音频轨 · 未载入（拖一首歌进来会自动分析卡点）', x0 + 8, audY + AUD_H / 2);
+  }
+
+  // ---- 图层 ----
   rowMap = new Map();
   s.layers.forEach((L, i) => {
     const y = TRACK_TOP + i * (ROW_H + ROW_GAP);
@@ -6407,7 +6485,30 @@ function rightPanelScene(body) {
     g.appendChild(numField('宽', state.scene.width, 64, 8192, 1, (v) => { state.scene.width = Math.round(v); resize(); }));
     g.appendChild(numField('高', state.scene.height, 64, 8192, 1, (v) => { state.scene.height = Math.round(v); resize(); }));
     g.appendChild(numField('帧率', state.scene.fps, 1, 120, 1, (v) => { state.scene.fps = Math.round(v); }));
-    g.appendChild(numField('时长(秒)', state.scene.duration, 0.1, 3600, 0.1, (v) => { state.scene.duration = v; drawTimeline(); }));
+    const mediaNote = () => {
+      const v = state.media.video ? (state.media.videoDur ? state.media.videoDur.toFixed(2) + 's' : '静态图') : '未载入';
+      const a = state.media.audioDur ? state.media.audioDur.toFixed(2) + 's' : '未载入';
+      return `视频 ${v} · 音频 ${a}\n`
+        + (state.durationAuto ? '工程时长跟着素材走（谁长算谁）' : '时长是手动设的');
+    };
+    let durNote = null;
+    g.appendChild(numField('时长(秒)', state.scene.duration, 0.1, 3600, 0.1, (v) => {
+      state.durationAuto = false;                 // 手动改过就不再跟素材跑
+      state.scene.duration = Math.max(0.1, v);
+      if (state.scene.beat) state.scene.beat.duration = state.scene.duration;
+      if (durNote) durNote.textContent = mediaNote();
+      drawTimeline();
+    }));
+    durNote = document.createElement('div');
+    durNote.className = 'fx-note';
+    durNote.style.whiteSpace = 'pre-line';
+    durNote.textContent = mediaNote();
+    g.appendChild(durNote);
+    g.appendChild(btn('重新跟随素材时长', () => {
+      state.durationAuto = true;
+      if (!applyAutoDuration()) { if (durNote) durNote.textContent = mediaNote(); }
+      renderRight();
+    }));
     g.appendChild(colorField('背景色(空=透明)', state.scene.bg || '', (v) => { state.scene.bg = v || null; }));
     g.appendChild(btn('重置为默认', () => {
       state.scene.width = 1920; state.scene.height = 1080; state.scene.fps = 24; resize();
@@ -6732,6 +6833,44 @@ function resize() {
 }
 
 // ---------------------------------------------------------------- 素材载入
+/** 把音频抽成一条对称波形（0..1），给时间轴的音频轨画 */
+function computePeaks(buffer, buckets = 480) {
+  try {
+    const ch = buffer.getChannelData(0);
+    const out = new Float32Array(buckets);
+    const per = Math.max(1, Math.floor(ch.length / buckets));
+    let mx = 1e-6;
+    for (let i = 0; i < buckets; i++) {
+      let peak = 0;
+      const s0 = i * per, s1 = Math.min(ch.length, s0 + per);
+      for (let j = s0; j < s1; j++) { const v = ch[j] < 0 ? -ch[j] : ch[j]; if (v > peak) peak = v; }
+      out[i] = peak;
+      if (peak > mx) mx = peak;
+    }
+    for (let i = 0; i < buckets; i++) out[i] = Math.min(1, out[i] / mx);
+    return out;
+  } catch (_) { return null; }
+}
+
+/**
+ * 工程时长跟着素材走：视频和音频谁长算谁。
+ * 手动改过「时长」之后就不再自动改（state.durationAuto = false），
+ * 面板上有「重新跟随素材时长」可以切回来。
+ */
+function applyAutoDuration(quiet) {
+  if (!state.durationAuto) return false;
+  const d = Math.max(state.media.videoDur || 0, state.media.audioDur || 0);
+  if (!d || d < 0.1) return false;
+  const nd = Math.round(d * 100) / 100;
+  if (Math.abs(nd - state.scene.duration) < 0.005) return false;
+  state.scene.duration = nd;
+  if (state.scene.beat) state.scene.beat.duration = nd;
+  drawTimeline();
+  if (rightTab === 'scene') renderRight();
+  if (!quiet) toast(`工程时长跟着素材走：${nd.toFixed(2)} 秒`);
+  return true;
+}
+
 function loadVideoFile(file, opts = {}) {
   const url = URL.createObjectURL(file);
   state.media.videoFile = file;          // AI 助手要把原始文件上传给本地服务
@@ -6741,8 +6880,11 @@ function loadVideoFile(file, opts = {}) {
     const img = new Image();
     img.onload = () => {
       state.media.video = img; state.media.videoName = file.name;
+      state.media.videoDur = 0;            // 静态图没有时长，时长就看音频的
       $('dropHint').classList.add('hidden');
-      renderAt(state.t); blit(); renderRight();
+      renderAt(state.t); blit();
+      applyAutoDuration(!!opts.keepDuration);   // 恢复工程时不弹提示
+      renderRight();
     };
     img.src = url;
     return;
@@ -6753,12 +6895,11 @@ function loadVideoFile(file, opts = {}) {
   v.src = url; v.muted = !!state.media.audio; v.playsInline = true; v.loop = false; v.preload = 'auto';
   v.addEventListener('loadeddata', () => {
     state.media.video = v; state.media.videoName = file.name;
+      state.media.videoDur = Number.isFinite(v.duration) ? v.duration : 0;
     applyAudio();
-      // 恢复上次工程时视频是"迟到"的，别让它把已存的时长改掉
-      if (!opts.keepDuration && (!state.scene.duration || state.scene.duration === 10)) {
-      state.scene.duration = Math.max(1, Math.round(v.duration * 100) / 100);
-    }
     $('dropHint').classList.add('hidden');
+      // 恢复上次工程时视频是"迟到"的，别让它把已存的时长改掉
+      if (!opts.keepDuration) applyAutoDuration(!opts.quiet);
     resize(); drawTimeline(); renderRight();
   });
   v.load();
@@ -6778,6 +6919,8 @@ async function loadAudioFile(file, opts = {}) {
   try {
     const res = await analyzeAudioFile(file, { sensitivity: 1.0 });
     state.analysis = res;
+    state.media.audioDur = res.duration || (res.audioBuffer ? res.audioBuffer.duration : 0);
+    state.media.peaks = res.audioBuffer ? computePeaks(res.audioBuffer) : null;
     state.scene.beat = new BeatMap({
       bpm: res.bpm, offset: res.offset, beats: res.beats, duration: state.scene.duration, source: 'audio',
     });
@@ -6786,7 +6929,9 @@ async function loadAudioFile(file, opts = {}) {
       const words = estimateWordTimings(c, res);
       return new Caption({ ...c, words });
     });
-    updateBeatInfo(); drawTimeline(); renderRight();
+    updateBeatInfo();
+    applyAutoDuration(opts.quiet === true);   // 时长跟着素材走
+    drawTimeline(); renderRight();
     hideBusy();
   } catch (err) {
     hideBusy();
@@ -8224,6 +8369,12 @@ window.MotionKit = {
     // 预览直接操控相关的接口（自检 / 自动化用，也可从外部脚本驱动）
     selectLayer,
     selected: () => state.selection,
+    mediaInfo: () => ({
+      video: state.media.videoName || '', videoDur: state.media.videoDur || 0,
+      audio: state.media.audioName || '', audioDur: state.media.audioDur || 0,
+      sceneDur: state.scene.duration, auto: state.durationAuto, peaks: state.media.peaks ? state.media.peaks.length : 0,
+    }),
+    followMedia: (on) => { state.durationAuto = on !== false; return applyAutoDuration(true); },
     rightTab: (t) => { if (t) setRightTab(t); return rightTab; },
     pickAt: (nx, ny) => pickLayerAt(nx, ny).map((l) => l.id),
     layerBox: (i) => { const L = layerArgOf(i); return L ? layerBoxFor(L) : null; },

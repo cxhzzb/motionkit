@@ -13,6 +13,8 @@
 //   --js-file <file>   同上，从文件读（脚本长了用这个）
 //   --reload           跑完脚本后刷新页面，再跑 --js-file2（用来验证"刷新后状态还在"）
 //   --js2 / --js-file2 刷新之后执行的脚本
+//   --file 名=路径     把本地文件塞进页面：window.__mkFiles['名'] = {name,type,b64}
+//                      （给"把素材拖进工作室"这类测试用，可以给多次）
 //   --wait <ms>        截图前额外等待，默认 600
 //   --browser <path>   指定浏览器
 
@@ -45,6 +47,12 @@ const OPT = {
   wait: Number(arg('wait', 600)),
   browser: arg('browser'),
 };
+
+// --file 名=路径（可多次）：把本地文件塞进页面，给"拖素材进工作室"这类测试用
+const FILE_ARGS = [];
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i] === '--file' && argv[i + 1] && argv[i + 1].includes('=')) FILE_ARGS.push(argv[i + 1]);
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -211,6 +219,24 @@ async function main() {
       for (const x of pageErrors.slice(0, 10)) console.error('  - ' + String(x).split('\n').slice(0, 3).join(' / '));
       throw e;
     }
+    // --file：把本地文件塞进页面（window.__mkFiles['名'] = {name,type,b64}）
+    for (const spec of FILE_ARGS) {
+      const eq = spec.indexOf('=');
+      const key = spec.slice(0, eq);
+      const abs = path.resolve(ROOT, spec.slice(eq + 1));
+      const ext = path.extname(abs).toLowerCase();
+      const type = ext === '.mp4' ? 'video/mp4' : ext === '.wav' ? 'audio/wav'
+        : ext === '.mp3' ? 'audio/mpeg' : ext === '.mov' ? 'video/quicktime'
+        : ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'application/octet-stream';
+      const b64 = fs.readFileSync(abs).toString('base64');
+      await cdp.send('Runtime.evaluate', {
+        expression: `window.__mkFiles=window.__mkFiles||{};window.__mkFiles[${JSON.stringify(key)}]=`
+          + `{name:${JSON.stringify(path.basename(abs))},type:${JSON.stringify(type)},b64:${JSON.stringify(b64)}};true`,
+        returnByValue: true,
+      });
+      console.log(`注入文件 ${key}: ${path.basename(abs)} (${(b64.length / 1365).toFixed(0)} KB)`);
+    }
+
     await runScript(readScript(OPT.js, OPT.jsFile));
 
     // --reload：刷新一遍再跑第二段脚本，用来确认"刷新后状态还在"
