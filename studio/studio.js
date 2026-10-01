@@ -1325,6 +1325,18 @@ function numField(labelText, value, min, max, step, onInput) {
   return field(labelText, () => wrap);
 }
 /**
+ * 这个颜色参数是不是"底色"性质的？
+ * 底色留空＝透明；但闪光色（fillColor）之类留空会被模板回退成默认色，
+ * 那样"透明"就会闪成黑的，所以排除掉。
+ */
+function isBackgroundParam(key) {
+  const k = String(key || '');
+  if (/^paperColor$/i.test(k)) return true;
+  if (/(color|colour)$/i.test(k)) return false;
+  return /(plate|fill|bg|paper|backdrop)/i.test(k);
+}
+
+/**
  * 颜色参数。
  * allowTransparent=true 时多给一个「透明」勾选 —— 底色类参数（垫底色 / 纸色 / 填充）
  * 清空文字框就是透明，但没人猜得到，所以给个明面上的开关。
@@ -1416,7 +1428,7 @@ function paramField(p, bag, onChange) {
     case 'number': return numField(p.label, get(), p.min ?? 0, p.max ?? 100, p.step ?? 0.1, (v) => { bag[p.key] = v; onChange(); });
     case 'bool': return checkField(p.label, get(), (v) => { bag[p.key] = v; onChange(); });
       case 'color': return colorField(p.label, get(), (v) => { bag[p.key] = v; onChange(); },
-        /(plate|fill|bg|paper|backdrop)/i.test(p.key));   // 底色类才给「透明」开关
+        isBackgroundParam(p.key));   // 底色类才给「透明」开关
     case 'multiline': return textField(p.label, get(), (v) => { bag[p.key] = v; onChange(); }, true);
     case 'select': return field(p.label, () => {
       const s = document.createElement('select');

@@ -407,6 +407,37 @@ if (textPick) {
   MK.state.scene.layers = MK.state.scene.layers.filter((l) => l !== tplL);   // 别影响后面的截图
   MK.selectLayer(null);
 
+  // ---------------------------------------------------------------- 16. 底色设成透明，画面上真的没有底色
+  // （这个 case 踩过：颜色留空会被模板回退成默认色，于是"透明"没生效）
+  {
+    // 不换场景（换了之后前面的图层引用会失效，后面的检查全崩）：
+    // 临时把其它图层和特效关掉，只量这一层
+    const keep = MK.state.scene.layers.map((l) => [l, l.enabled]);
+    const savedFx = MK.state.scene.fx;
+    for (const [l] of keep) l.enabled = false;
+    MK.state.scene.fx = [];
+    const gf = MK.addTemplate('grid-field', { x: 0.5, y: 0.5 });
+    Object.assign(gf.params, { paper: true, paperColor: '#f2f0ea', mode: 'grid', chaos: 0.1 });
+    const clearRatio = () => {
+      const c = MK.off.canvas;
+      const d = MK.off.ctx.getImageData(0, 0, c.width, c.height).data;
+      let clear = 0, n = 0;
+      for (let i = 3; i < d.length; i += 4 * 53) { if (d[i] < 8) clear++; n++; }
+      return clear / Math.max(1, n);
+    };
+    MK.renderAt(1);
+    const withPaper = clearRatio();
+    gf.params.paperColor = '';               // ＝勾上「透明」
+    MK.renderAt(1);
+    const noPaper = clearRatio();
+    report.transparentRender = { withPaper: +withPaper.toFixed(3), noPaper: +noPaper.toFixed(3) };
+    report.checks.transparentRender = withPaper < 0.2 && noPaper > 0.8;
+    for (const [l, en] of keep) l.enabled = en;
+    MK.state.scene.fx = savedFx;
+    MK.state.scene.layers = MK.state.scene.layers.filter((l) => l !== gf);
+    MK.renderAt(1);
+  }
+
   // ---------------------------------------------------------------- 收尾：留个好看的演示状态
   // ---------------------------------------------------------------- 13. 模板库：缩略图 + 分类折叠
   await sleep(900);                         // 缩略图是分帧画的，等一下

@@ -66,7 +66,7 @@ export const gridField = {
       ? ramp(env.local, p.inDur * 0.5, Math.max(p.inDur * 0.6, p.inDur * 0.5 + p.autoDur))
       : p.chaos, 0, 1);
 
-    if (p.paper) {
+    if (p.paper && p.paperColor) {   // 纸色留空＝不要纸底（别回退成默认色）
       ctx.save();
       ctx.globalAlpha = out * tIn;
       ctx.fillStyle = paper;
@@ -202,7 +202,7 @@ export const seriesIndex = {
 
     ctx.save();
     ctx.globalAlpha = out;
-    if (p.paper) {
+    if (p.paper && p.paperColor) {
       ctx.globalAlpha = out * t;
       ctx.fillStyle = paper;
       ctx.fillRect(0, 0, W, H);

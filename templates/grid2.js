@@ -66,7 +66,7 @@ export const typeStack = {
 
     ctx.save();
     ctx.globalAlpha = out;
-    if (p.paper) {
+    if (p.paper && p.paperColor) {   // 纸色留空＝不要纸底（别回退成默认纸白）
       ctx.globalAlpha = out * ramp(env.local, 0, p.inDur * 0.5);
       ctx.fillStyle = color(p.paperColor, PAPER);
       ctx.fillRect(0, 0, W, H);
@@ -289,7 +289,7 @@ export const lineSweep = {
 
     ctx.save();
     ctx.globalAlpha = out;
-    if (p.paper) {
+    if (p.paper && p.paperColor) {   // 纸色留空＝不要纸底
       ctx.fillStyle = color(p.paperColor, PAPER);
       ctx.fillRect(0, 0, W, H);
     }
@@ -421,7 +421,7 @@ export const dotMatrix = {
 
     ctx.save();
     ctx.globalAlpha = out;
-    if (p.paper) {
+    if (p.paper && p.paperColor) {   // 纸色留空＝不要纸底
       ctx.globalAlpha = out * tIn;
       ctx.fillStyle = color(p.paperColor, PAPER);
       ctx.fillRect(0, 0, W, H);
