@@ -2433,7 +2433,43 @@ async function exportPngSequence(includeMedia) {
   hideBusy();
 }
 
-async function exportWebm(includeMedia) {
+/**
+ * 挑一个当前浏览器能录的封装 / 编码。
+ * MP4 优先 H.264：Chrome / Edge 从 111 起自带，Firefox、Safari 目前没有，
+ * 那种情况会退回 WebM，并把话说明白（不然用户拿到一个 .mp4 后缀打不开的文件更糟）。
+ */
+const VIDEO_FORMATS = {
+  mp4: {
+    ext: 'mp4', label: 'MP4（H.264）', bits: 24_000_000,
+    mimes: ['video/mp4', 'video/mp4;codecs=avc1.4d0028', 'video/mp4;codecs=avc1'],
+  },
+  webm: {
+    ext: 'webm', label: 'WebM', bits: 40_000_000,
+    mimes: ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'],
+  },
+};
+
+function pickVideoMime(want) {
+  const rec = window.MediaRecorder;
+  if (!rec) return null;
+  const list = (VIDEO_FORMATS[want] || VIDEO_FORMATS.webm).mimes;
+  for (const m of list) { try { if (rec.isTypeSupported(m)) return m; } catch (_) {} }
+  return null;
+}
+
+/**
+ * 把工程录成一个视频 Blob（画面层，不含声音 —— 和 WebM 那条路一样）。
+ * 录法是逐帧渲染 + 推帧给 canvas 流，所以合成结果和无头渲染是同一套引擎。
+ */
+async function renderVideoBlob(want, includeMedia) {
+  const fmt = VIDEO_FORMATS[want] ? want : 'webm';
+  const mime = pickVideoMime(fmt);
+  if (!mime) {
+    const err = new Error('这个浏览器不能直接录 ' + VIDEO_FORMATS[fmt].label
+      + '。用 Chrome / Edge 打开工作室，或者导出「PNG 序列」再跑 tools/encode.py 转成 mp4。');
+    err.code = 'unsupported';
+    throw err;
+  }
   const s = state.scene;
   const fps = s.fps;
   const rec = document.createElement('canvas');
@@ -2441,26 +2477,38 @@ async function exportWebm(includeMedia) {
   const rctx = rec.getContext('2d');
   const stream = rec.captureStream(0);
   const track = stream.getVideoTracks()[0];
-  let mime = 'video/webm;codecs=vp9';
-  if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8';
   const chunks = [];
-  const mr = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 40_000_000 });
-  mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-  const done = new Promise((res) => { mr.onstop = res; });
-  mr.start();
+  // MP4（H.264）没有透明通道：透明区交给浏览器去合，结果不可控（实测会变成浅灰）。
+  // 所以打底自己来 —— 不勾"连底片一起渲"就压黑底，勾了的话底片本来就铺满整帧。
+  const opaque = fmt === 'mp4';
+  const mr = new MediaRecorder(stream, {
+    mimeType: mime, videoBitsPerSecond: VIDEO_FORMATS[fmt].bits,
+  });
+  mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  const done = new Promise((res, rej) => { mr.onstop = res; mr.onerror = (e) => rej(e.error || new Error('录制失败')); });
+  mr.start(1000);                     // 每秒切一片，长片也不至于全憋在最后
   const total = await frameCount();
+  const label = VIDEO_FORMATS[fmt].label;
   for (let i = 0; i < total; i++) {
     const c = await renderFrameForExport(i, includeMedia);
     rctx.clearRect(0, 0, s.width, s.height);
+    if (opaque) { rctx.fillStyle = '#0a0a0c'; rctx.fillRect(0, 0, s.width, s.height); }
     rctx.drawImage(c, 0, 0);
     if (track.requestFrame) track.requestFrame();
-    showBusy(`录制 WebM ${i + 1}/${total}`, (i + 1) / total);
+    showBusy(`录制 ${label} ${i + 1}/${total}`, (i + 1) / total);
     await new Promise((r) => setTimeout(r, Math.max(1, 1000 / fps)));
   }
   mr.stop();
   await done;
   hideBusy();
-  downloadBlob(new Blob(chunks, { type: mime }), `motionkit_${Date.now()}.webm`);
+  return { blob: new Blob(chunks, { type: mime }), mime, ext: VIDEO_FORMATS[fmt].ext, label };
+}
+
+async function exportVideo(want, includeMedia) {
+  const r = await renderVideoBlob(want, includeMedia);
+  downloadBlob(r.blob, `motionkit_${Date.now()}.${r.ext}`);
+  toast(`${r.label} 导出完成（${(r.blob.size / 1048576).toFixed(1)} MB，无声）`);
+  return r;
 }
 
 function exportProject() {
@@ -3096,7 +3144,8 @@ const soundNote = document.createElement('div');
 soundNote.className = 'mini';
 soundNote.style.cssText = 'margin-top:8px;color:#8b929e;line-height:1.7;font-size:11px';
 soundNote.innerHTML =
-  '上面这些导出的都是<b>画面层，不含声音</b>（连底片一起渲进去也不含）。' +
+  '上面这些导出的都是<b>画面层，不含声音</b>（MP4 也一样；连底片一起渲进去也不含）。' +
+  'MP4 直接点一下就出片，走的是浏览器自带的 H.264；浏览器不支持时会提示你改用 PNG 序列。' +
   '要带声音的成片：① 用 AI 助手跑 <code>--render</code>，它会输出带原声的 <code>final.mp4</code>；' +
   '② 或者用 <code>tools/encode.py --overlay 原片.mp4</code> 把叠加层烧到原片上，声音跟着原片走。';
 optRow.after(soundNote);
@@ -3109,7 +3158,8 @@ dlg.addEventListener('click', async (e) => {
   dlg.close();
   try {
     if (kind === 'png') await exportPngSequence(includeMedia);
-    else if (kind === 'webm') await exportWebm(includeMedia);
+    else if (kind === 'webm') await exportVideo('webm', includeMedia);
+    else if (kind === 'mp4') await exportVideo('mp4', includeMedia);
     else if (kind === 'json') exportProject();
     else if (kind === 'beats') exportBeats();
     else if (kind === 'srt') exportSrt();
@@ -3937,6 +3987,9 @@ window.MotionKit = {
       markIndexDirty(); renderAt(state.t); blit();
       return L.transform;
     },
+  // 导出：录一段视频（自检里会用，用来确认 MP4 这条线真的能出文件）
+  renderVideoBlob: (want, includeMedia) => renderVideoBlob(want, includeMedia),
+  videoSupport: () => ({ mp4: pickVideoMime('mp4'), webm: pickVideoMime('webm') }),
   registerTemplate,
   version: '1.0.0',
 };
