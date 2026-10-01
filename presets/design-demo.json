@@ -1,0 +1,67 @@
+{
+  "name": "design-demo",
+  "width": 1920,
+  "height": 1080,
+  "fps": 24,
+  "duration": 12,
+  "bg": null,
+  "transparent": true,
+  "beat": { "bpm": 100, "offset": 0, "duration": 12, "source": "manual" },
+  "captions": [],
+  "layers": [
+    {
+      "template": "editorial-title",
+      "start": 0.3,
+      "end": 3.6,
+      "opacity": 1,
+      "seed": "design-editorial",
+      "name": "杂志标题",
+      "params": {
+        "title": "夜里的河",
+        "kicker": "CHAPTER ONE",
+        "note": "2026 · 纪录片 · 4K",
+        "index": "01 / 06",
+        "position": "0.5,0.50",
+        "align": "center",
+        "size": 132,
+        "rule": true,
+        "plate": "",
+        "inDur": 0.55,
+        "outDur": 0.4
+      }
+    },
+    {
+      "template": "name-bar",
+      "start": 4.0,
+      "end": 7.2,
+      "opacity": 1,
+      "seed": "design-namebar",
+      "name": "名字条",
+      "params": {
+        "name": "张野",
+        "role": "摄影指导 · DIRECTOR OF PHOTOGRAPHY",
+        "pos": "bl",
+        "margin": 72,
+        "width": 0.42,
+        "size": 40
+      }
+    },
+    {
+      "template": "credits-roll",
+      "start": 7.6,
+      "end": 12,
+      "opacity": 1,
+      "seed": "design-credits",
+      "name": "片尾名单",
+      "params": {
+        "title": "CREW",
+        "lines": "导演|张野\n摄影|李默\n剪辑|王川\n调色|陈小雨\n音乐|——\n特别感谢|所有熬夜的人",
+        "speed": 46,
+        "size": 30,
+        "width": 0.56,
+        "align": "split"
+      }
+    }
+  ],
+  "fx": []
+}

@@ -117,7 +117,7 @@ node tools/serve.mjs --open # 起服务并自动开浏览器（bat 里用的就�
 **直接在预览里改**：不用去右边翻参数。在预览上点一下图层就选中（选择框和手柄出来），
 拖动挪位置、拉四个角缩放、转上面那个圆手柄旋转、**双击直接改文字**（浮窗里边打边看）。
 位置 / 缩放 / 旋转记在图层自己的变换上，不去动模板的 `position` 参数，
-所以 23 个模板——包括根本没有位置参数的全屏 HUD、字幕层、转场层——都能这么调；
+所以 26 个模板——包括根本没有位置参数的全屏 HUD、字幕层、转场层——都能这么调；
 而且导出和无头渲染走的是同一个引擎，界面里摆成什么样，导出来就是什么样。
 
 **图层索引**（左栏第二个页签，快捷键 `I`）：图层一多，光看时间轴上的色条不知道谁是谁。
@@ -190,7 +190,7 @@ python tools/beatmap.py --in music.mp3 --out beats.json --markers beats.txt --fp
 
 ---
 
-## 模板总览（23 个）
+## 模板总览（26 个）
 
 ### 叠加层 / HUD
 
@@ -210,6 +210,20 @@ python tools/beatmap.py --in music.mp3 --out beats.json --markers beats.txt --fp
 | `word-grid` | 词块宫格 | `ESCAPE / VELOCITY / PERMANENT / UNDERCLASS` 逐格点亮 |
 | `title-mark` | 标题定格 | 带引线和小注解的标题（`ZERO-DAY.` / `STARGATE:`） |
 | `subtitle-kinetic` | 卡点字幕 | 读取字幕轨，四种样式 |
+
+### 设计排版〔新增〕
+
+和上面那批"终端 HUD"是两套语言：大留白、细线、克制的动效，适合纪录片 / 访谈 / 品牌片 / 片尾。
+
+![设计排版三个模板压在实拍上的样子](docs/preview-design.png)
+
+| id | 名称 | 说明 |
+| --- | --- | --- |
+| `editorial-title` | 杂志标题 | 大标题 + 细分割线 + 小号大写标签 + 编号，编辑部那套排版。可加垫底色压住花哨素材 |
+| `name-bar` | 名字条 | 电视台那种左下角名字条：色块滑入 + 姓名 + 头衔。访谈 / 解说 / 集锦 |
+| `credits-roll` | 片尾名单 | 从下往上滚的片尾名单，左边职位右边名字，带出画淡出与速度控制 |
+
+预设 `presets/design-demo.json`（载入预设 → 设计排版）能一次看到这三款的效果。
 
 ### 面板卡片
 
@@ -413,8 +427,8 @@ export default [myEffect];
 │   ├─ audio.js            卡点分析（STFT 分频段通量 → 自相关 → 最小二乘精修）
 │   ├─ srt.js              字幕解析 / 导出 / 切短句 / 词级时间估算
 │   └─ zip.js              ZIP 写入器（含流式版本，边渲染边落盘）
-├─ templates/              23 个模板（hud / type / panels / transitions / hits）
-├─ presets/                slopcore / demo-scene / transitions-demo + index.json
+├─ templates/              26 个模板（hud / type / panels / transitions / hits / design）
+├─ presets/                slopcore / demo-scene / transitions-demo / design-demo + index.json
 ├─ agent/                  AI 助手：分析 → 转写 → 文案 → 排布 → 成片
 │   ├─ autopilot.py        总入口（CLI 也是本地服务调的那支）
 │   ├─ analyze.py          拍点 / 镜头切点 / 亮度 / 运动量 / 人声段
@@ -422,7 +436,7 @@ export default [myEffect];
 │   ├─ llm.py              文案与定调（DeepSeek / OpenAI / 本地 Ollama 都行）
 │   ├─ director.py         导演：把分析 + 选择 + 文案排成图层栈（含占位避让）
 │   ├─ styles.json         6 套配色风格预设
-│   ├─ schema.json         从 23 个模板导出的参数表，用来校验生成结果
+│   ├─ schema.json         从 26 个模板导出的参数表，用来校验生成结果
 │   └─ _mock_api.py        离线自检用的假接口
 ├─ tools/
 │   ├─ serve.mjs           零依赖静态服务器
@@ -505,7 +519,7 @@ AI 助手要调 python、ffmpeg 和无头浏览器，只有带后端的开发模
 
 **它会不会写出引擎不认的工程？**
 
-不会。生成之后会拿 `agent/schema.json`（从 23 个模板导出的参数表）逐字段校验：
+不会。生成之后会拿 `agent/schema.json`（从 26 个模板导出的参数表）逐字段校验：
 不认识的键丢掉、越界数字钳回范围、非法选项退回默认，越界的情况会记在 `report.md` 里。
 
 **为什么导出的 PNG 这么大？**

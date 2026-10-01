@@ -1,11 +1,12 @@
 {
   "generatedBy": "tools/schema.mjs",
-  "count": 23,
+  "count": 26,
   "categories": {
     "overlay": "叠加层 / HUD",
     "typography": "动态排版",
     "caption": "字幕",
     "panel": "面板卡片",
+    "design": "设计排版",
     "transition": "转场 / 冲击"
   },
   "templates": {
@@ -843,6 +844,350 @@
           "label": "强调色",
           "type": "color",
           "default": "orange"
+        }
+      ]
+    },
+    "editorial-title": {
+      "id": "editorial-title",
+      "name": "杂志标题",
+      "category": "design",
+      "categoryLabel": "设计排版",
+      "desc": "",
+      "params": [
+        {
+          "key": "title",
+          "label": "主标题",
+          "type": "string",
+          "default": "夜里的河"
+        },
+        {
+          "key": "kicker",
+          "label": "上方小标",
+          "type": "string",
+          "default": "CHAPTER ONE"
+        },
+        {
+          "key": "note",
+          "label": "下方注释",
+          "type": "string",
+          "default": "2026 · 纪录片"
+        },
+        {
+          "key": "index",
+          "label": "编号",
+          "type": "string",
+          "default": "01 / 06"
+        },
+        {
+          "key": "position",
+          "label": "位置 X,Y",
+          "type": "string",
+          "default": "0.5,0.5"
+        },
+        {
+          "key": "align",
+          "label": "对齐",
+          "type": "select",
+          "default": "center",
+          "options": [
+            "left",
+            "center"
+          ]
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 132,
+          "min": 20,
+          "max": 600,
+          "step": 2
+        },
+        {
+          "key": "maxWidth",
+          "label": "最大宽度[0-1]",
+          "type": "number",
+          "default": 0.78,
+          "min": 0.2,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "rule",
+          "label": "细分割线",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "indexPos",
+          "label": "编号位置",
+          "type": "select",
+          "default": "right",
+          "options": [
+            "right",
+            "left",
+            "none"
+          ]
+        },
+        {
+          "key": "color",
+          "label": "文字色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "plate",
+          "label": "垫底色(空=无)",
+          "type": "color",
+          "default": ""
+        },
+        {
+          "key": "plateOpacity",
+          "label": "垫底不透明度",
+          "type": "number",
+          "default": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.55,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.4,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "name-bar": {
+      "id": "name-bar",
+      "name": "名字条",
+      "category": "design",
+      "categoryLabel": "设计排版",
+      "desc": "",
+      "params": [
+        {
+          "key": "name",
+          "label": "姓名",
+          "type": "string",
+          "default": "张野"
+        },
+        {
+          "key": "role",
+          "label": "头衔 / 说明",
+          "type": "string",
+          "default": "摄影指导 · DIRECTOR OF PHOTOGRAPHY"
+        },
+        {
+          "key": "pos",
+          "label": "位置",
+          "type": "select",
+          "default": "bl",
+          "options": [
+            "bl",
+            "bc",
+            "br",
+            "ml",
+            "mr"
+          ]
+        },
+        {
+          "key": "margin",
+          "label": "边距",
+          "type": "number",
+          "default": 72,
+          "min": 0,
+          "max": 400,
+          "step": 4
+        },
+        {
+          "key": "width",
+          "label": "条宽[0-1]",
+          "type": "number",
+          "default": 0.4,
+          "min": 0.12,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 40,
+          "min": 12,
+          "max": 140,
+          "step": 2
+        },
+        {
+          "key": "accent",
+          "label": "色块",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "color",
+          "label": "文字色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "plateOpacity",
+          "label": "底色不透明度",
+          "type": "number",
+          "default": 0.78,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "line",
+          "label": "下面细线",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.42,
+          "min": 0.05,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.3,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "credits-roll": {
+      "id": "credits-roll",
+      "name": "片尾名单",
+      "category": "design",
+      "categoryLabel": "设计排版",
+      "desc": "",
+      "params": [
+        {
+          "key": "lines",
+          "label": "每行：职位|名字",
+          "type": "multiline",
+          "default": "导演|张野\n摄影|李默\n剪辑|王川\n调色|陈小雨\n音乐|——"
+        },
+        {
+          "key": "title",
+          "label": "顶部标题",
+          "type": "string",
+          "default": "CREW"
+        },
+        {
+          "key": "speed",
+          "label": "速度(px/秒 @1080p)",
+          "type": "number",
+          "default": 58,
+          "min": 8,
+          "max": 400,
+          "step": 2
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 30,
+          "min": 10,
+          "max": 120,
+          "step": 2
+        },
+        {
+          "key": "width",
+          "label": "内容宽度[0-1]",
+          "type": "number",
+          "default": 0.56,
+          "min": 0.2,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "position",
+          "label": "位置 X,Y",
+          "type": "string",
+          "default": "0.5,0.5"
+        },
+        {
+          "key": "align",
+          "label": "排布",
+          "type": "select",
+          "default": "split",
+          "options": [
+            "split",
+            "left"
+          ]
+        },
+        {
+          "key": "color",
+          "label": "文字色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "plate",
+          "label": "垫底色(空=无)",
+          "type": "color",
+          "default": ""
+        },
+        {
+          "key": "plateOpacity",
+          "label": "垫底不透明度",
+          "type": "number",
+          "default": 0.75,
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        {
+          "key": "inDur",
+          "label": "淡入(秒)",
+          "type": "number",
+          "default": 0.5,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "淡出(秒)",
+          "type": "number",
+          "default": 0.6,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
         }
       ]
     },
