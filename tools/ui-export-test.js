@@ -37,6 +37,7 @@ report.checks.browserMp4 = !!sup.mp4;
 // 摆一个短工程：6 帧，够验证封装就行
 const S = MK.state.scene;
 S.layers.length = 0;
+S.fx.length = 0;             // 特效会往整帧撒噪点，压底色的判断会被它搅浑
 S.duration = 0.6;
 S.fps = 10;
 S.add({
@@ -79,10 +80,10 @@ report.checks.mp4Playable = !!meta && meta.w === S.width && meta.h === S.height;
 try { v.currentTime = 0.2; } catch (_) {}
 await new Promise((res) => { v.onseeked = res; setTimeout(res, 2500); });
 const probe = document.createElement('canvas');
-probe.width = 64; probe.height = 36;
+probe.width = 320; probe.height = 180;      // 采样密一点，标题字才不会在缩放里被平均掉
 const pc = probe.getContext('2d');
-pc.drawImage(v, 0, 0, 64, 36);
-const px = pc.getImageData(0, 0, 64, 36).data;
+pc.drawImage(v, 0, 0, 320, 180);
+const px = pc.getImageData(0, 0, 320, 180).data;
 let maxLum = 0, bright = 0;
 const hist = [0, 0, 0, 0, 0];       // <16 / <64 / <128 / <200 / 亮
 for (let i = 0; i < px.length; i += 4) {
@@ -92,7 +93,7 @@ for (let i = 0; i < px.length; i += 4) {
   hist[l < 16 ? 0 : l < 64 ? 1 : l < 128 ? 2 : l < 200 ? 3 : 4]++;
 }
 report.frameSample = { maxLum, bright, of: px.length / 4, hist, corner: [px[0], px[1], px[2]] };
-report.checks.mp4HasPicture = bright > 20;
+report.checks.mp4HasPicture = bright > 300;
 // 透明区必须压成深色底（不然白字压在浅灰上，等于报废）
 report.checks.mp4BlackBackdrop = px[0] < 60 && px[1] < 60 && px[2] < 60;
 URL.revokeObjectURL(url);
