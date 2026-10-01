@@ -1,0 +1,59 @@
+{
+  "name": "focus-demo",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "duration": 12,
+  "bg": null,
+  "transparent": true,
+  "beat": { "bpm": 120, "offset": 0, "duration": 12, "source": "manual" },
+  "captions": [],
+  "layers": [
+    {
+      "template": "focus-box",
+      "start": 0.2,
+      "end": 3.4,
+      "opacity": 1,
+      "seed": "focus-1",
+      "name": "聚焦框",
+      "params": { "region": "0.28,0.30,0.42,0.38", "label": "DETAIL", "index": "01", "dim": 0.5 }
+    },
+    {
+      "template": "callout-pin",
+      "start": 3.7,
+      "end": 6.3,
+      "opacity": 1,
+      "seed": "focus-2",
+      "name": "索引标注 ①",
+      "params": { "index": "1", "text": "光源位置", "point": "0.42,0.58", "dir": "tr", "len": 200 }
+    },
+    {
+      "template": "callout-pin",
+      "start": 4.1,
+      "end": 6.3,
+      "opacity": 1,
+      "seed": "focus-3",
+      "name": "索引标注 ②",
+      "params": { "index": "2", "text": "主体轮廓", "point": "0.62,0.38", "dir": "bl", "len": 210 }
+    },
+    {
+      "template": "index-list",
+      "start": 6.6,
+      "end": 9.6,
+      "opacity": 1,
+      "seed": "focus-4",
+      "name": "索引清单",
+      "params": { "position": "0.06,0.30", "step": 0.85 }
+    },
+    {
+      "template": "magnifier",
+      "start": 9.8,
+      "end": 12,
+      "opacity": 1,
+      "seed": "focus-5",
+      "name": "放大镜",
+      "params": { "center": "0.52,0.46", "radius": 230, "zoom": 2.4, "label": "×2.4" }
+    }
+  ],
+  "fx": []
+}

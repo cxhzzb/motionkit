@@ -1,12 +1,13 @@
 {
   "generatedBy": "tools/schema.mjs",
-  "count": 29,
+  "count": 33,
   "categories": {
     "overlay": "叠加层 / HUD",
     "typography": "动态排版",
     "caption": "字幕",
     "panel": "面板卡片",
     "design": "设计排版",
+    "focus": "聚焦 / 标注",
     "rock": "摇滚 / 海报",
     "transition": "转场 / 冲击"
   },
@@ -1186,6 +1187,440 @@
           "label": "淡出(秒)",
           "type": "number",
           "default": 0.6,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "focus-box": {
+      "id": "focus-box",
+      "name": "聚焦框",
+      "category": "focus",
+      "categoryLabel": "聚焦 / 标注",
+      "desc": "",
+      "params": [
+        {
+          "key": "region",
+          "label": "区域 x,y,w,h",
+          "type": "string",
+          "default": "0.30,0.31,0.40,0.36"
+        },
+        {
+          "key": "style",
+          "label": "样式",
+          "type": "select",
+          "default": "brackets",
+          "options": [
+            "brackets",
+            "box",
+            "rounded"
+          ]
+        },
+        {
+          "key": "dim",
+          "label": "框外压暗",
+          "type": "number",
+          "default": 0.45,
+          "min": 0,
+          "max": 0.92,
+          "step": 0.02
+        },
+        {
+          "key": "label",
+          "label": "标签文字",
+          "type": "string",
+          "default": "DETAIL"
+        },
+        {
+          "key": "index",
+          "label": "编号",
+          "type": "string",
+          "default": "01"
+        },
+        {
+          "key": "corner",
+          "label": "标签位置",
+          "type": "select",
+          "default": "tl",
+          "options": [
+            "tl",
+            "tr",
+            "bl",
+            "br"
+          ]
+        },
+        {
+          "key": "bracket",
+          "label": "括号长度(px)",
+          "type": "number",
+          "default": 56,
+          "min": 12,
+          "max": 220,
+          "step": 2
+        },
+        {
+          "key": "lineW",
+          "label": "线宽",
+          "type": "number",
+          "default": 3,
+          "min": 1,
+          "max": 12,
+          "step": 0.5
+        },
+        {
+          "key": "color",
+          "label": "线色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "pulse",
+          "label": "呼吸脉冲",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.42,
+          "min": 0.05,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.3,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "callout-pin": {
+      "id": "callout-pin",
+      "name": "索引标注",
+      "category": "focus",
+      "categoryLabel": "聚焦 / 标注",
+      "desc": "",
+      "params": [
+        {
+          "key": "index",
+          "label": "编号",
+          "type": "string",
+          "default": "1"
+        },
+        {
+          "key": "text",
+          "label": "标签文字",
+          "type": "string",
+          "default": "光源位置"
+        },
+        {
+          "key": "point",
+          "label": "指向点 x,y",
+          "type": "string",
+          "default": "0.62,0.44"
+        },
+        {
+          "key": "dir",
+          "label": "引出方向",
+          "type": "select",
+          "default": "tr",
+          "options": [
+            "tl",
+            "tr",
+            "bl",
+            "br"
+          ]
+        },
+        {
+          "key": "len",
+          "label": "引线长度(px)",
+          "type": "number",
+          "default": 190,
+          "min": 40,
+          "max": 700,
+          "step": 5
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 30,
+          "min": 12,
+          "max": 90,
+          "step": 2
+        },
+        {
+          "key": "dot",
+          "label": "圆点半径",
+          "type": "number",
+          "default": 8,
+          "min": 2,
+          "max": 24,
+          "step": 1
+        },
+        {
+          "key": "lineW",
+          "label": "线宽",
+          "type": "number",
+          "default": 2,
+          "min": 1,
+          "max": 8,
+          "step": 0.5
+        },
+        {
+          "key": "color",
+          "label": "文字色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "plate",
+          "label": "标签垫底(空=无)",
+          "type": "color",
+          "default": "#0a0a0c"
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.6,
+          "min": 0.1,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.35,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "index-list": {
+      "id": "index-list",
+      "name": "索引清单",
+      "category": "focus",
+      "categoryLabel": "聚焦 / 标注",
+      "desc": "",
+      "params": [
+        {
+          "key": "title",
+          "label": "标题",
+          "type": "string",
+          "default": "SIGNAL INDEX"
+        },
+        {
+          "key": "items",
+          "label": "条目(每行一条)",
+          "type": "multiline",
+          "default": "摄像头 A\n麦克风 L / R\n时间码同步\n电池 × 4"
+        },
+        {
+          "key": "position",
+          "label": "位置 X,Y",
+          "type": "string",
+          "default": "0.06,0.32"
+        },
+        {
+          "key": "width",
+          "label": "宽度(px)",
+          "type": "number",
+          "default": 420,
+          "min": 220,
+          "max": 1100,
+          "step": 10
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 22,
+          "min": 12,
+          "max": 64,
+          "step": 1
+        },
+        {
+          "key": "step",
+          "label": "每条推进(秒)",
+          "type": "number",
+          "default": 0.9,
+          "min": 0.15,
+          "max": 5,
+          "step": 0.05
+        },
+        {
+          "key": "loop",
+          "label": "循环",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "auto",
+          "label": "自动推进",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "fixed",
+          "label": "固定高亮第几条",
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "max": 40,
+          "step": 1
+        },
+        {
+          "key": "color",
+          "label": "文字色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "fill",
+          "label": "底色(空=无)",
+          "type": "color",
+          "default": "#0a0a0c"
+        },
+        {
+          "key": "plateOpacity",
+          "label": "底色不透明度",
+          "type": "number",
+          "default": 0.78,
+          "min": 0,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.4,
+          "min": 0.05,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.3,
+          "min": 0,
+          "max": 3,
+          "step": 0.05
+        }
+      ]
+    },
+    "magnifier": {
+      "id": "magnifier",
+      "name": "放大镜",
+      "category": "focus",
+      "categoryLabel": "聚焦 / 标注",
+      "desc": "",
+      "params": [
+        {
+          "key": "center",
+          "label": "镜片中心 x,y",
+          "type": "string",
+          "default": "0.5,0.46"
+        },
+        {
+          "key": "radius",
+          "label": "半径(px)",
+          "type": "number",
+          "default": 220,
+          "min": 40,
+          "max": 760,
+          "step": 10
+        },
+        {
+          "key": "zoom",
+          "label": "放大倍数",
+          "type": "number",
+          "default": 2,
+          "min": 1.05,
+          "max": 5,
+          "step": 0.05
+        },
+        {
+          "key": "ring",
+          "label": "外圈",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "crosshair",
+          "label": "准星",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "dim",
+          "label": "镜片外压暗",
+          "type": "number",
+          "default": 0.18,
+          "min": 0,
+          "max": 0.8,
+          "step": 0.02
+        },
+        {
+          "key": "label",
+          "label": "角标文字",
+          "type": "string",
+          "default": "×2.0"
+        },
+        {
+          "key": "color",
+          "label": "线色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "inDur",
+          "label": "入场(秒)",
+          "type": "number",
+          "default": 0.5,
+          "min": 0.05,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "outDur",
+          "label": "出场(秒)",
+          "type": "number",
+          "default": 0.35,
           "min": 0,
           "max": 3,
           "step": 0.05
