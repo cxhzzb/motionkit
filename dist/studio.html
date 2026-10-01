@@ -9121,6 +9121,7 @@ function rightPanelSubs(body) {
     body.appendChild(gc);
   }
   body.appendChild(buildCaptionReskinGroup());
+  body.appendChild(buildCaptionGroupGroup());
 }
 
 // ---------------------------------------------------------------- 字幕换装
@@ -9275,6 +9276,7 @@ function applyCaptionReskin() {
     });
   });
 
+  captionGroupCaptureBase();     // 整组改的基准值：刚铺好的这一版
   markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
   const used = new Set(s.layers.filter((L) => L.group === 'caption-reskin').map((L) => L.template));
   toast(`换装完成：${n} 句台词 · ${used.size} 个不同模板`);
@@ -9284,6 +9286,7 @@ function clearCaptionReskin() {
   const before = state.scene.layers.length;
   state.scene.layers = state.scene.layers.filter((L) => L.group !== 'caption-reskin');
   const gone = before - state.scene.layers.length;
+  state.captionGroup.base = {};
   markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
   if (gone) toast(`清掉 ${gone} 个换装图层`);
 }
@@ -9306,7 +9309,6 @@ function buildCaptionReskinGroup() {
     { value: 'poster', label: '海报感 · 夸张' },
   ], (v) => { p.tier = v; p.plan = null; renderRight(); }));
 
-  g.appendChild(numField('提前量(秒)', p.lead, 0, 1, 0.05, (v) => { p.lead = v; }));
   g.appendChild(checkField('去掉原来那条整段「卡点字幕」', p.replace, (v) => { p.replace = v; }));
 
   const row = document.createElement('div');
@@ -9332,6 +9334,129 @@ function buildCaptionReskinGroup() {
       + `这一批的顺序：\n${order}`;
   }
   g.appendChild(info);
+  return g;
+}
+
+// ---------------------------------------------------------------- 字幕换装：整组改
+/**
+ * 换装出来的每一句都是一个独立图层（40 句就是 40 层），一层层调太烦。
+ * 这里改一个等于改全部 —— 和「卡点重复动效」那套是一个路子。
+ *
+ * 字号给的是**倍数**不是绝对值：池子里各模板的原始字号差着好几倍
+ * （字幕条 44、卡点大字 118），统一设成 60 只会把一半样子弄坏。
+ * 位置走的是图层自带的 transform（引擎统一处理），所以 19 种样子通吃。
+ */
+state.captionGroup = { scale: 1, dx: 0, dy: 0, opacity: 1, base: {} };
+
+function captionGroupList() { return state.scene.layers.filter((L) => L.group === 'caption-reskin'); }
+
+/** 这个模板用哪个参数当"字号"（没有单一字号的返回 null，整组改会跳过它） */
+function captionSizeKey(tpl) {
+  if (tpl === 'word-grid') return 'fontSize';
+  if (tpl === 'series-index') return null;
+  return 'size';
+}
+
+/** 换装之后把基准值记下来：整组改都是相对基准算的，不是叠着改 */
+function captionGroupCaptureBase() {
+  const g = state.captionGroup;
+  g.base = {};
+  g.scale = 1; g.dx = 0; g.dy = 0; g.opacity = 1;
+  for (const L of captionGroupList()) {
+    const key = captionSizeKey(L.template);
+    const tr = L.transform || { x: 0, y: 0 };
+    g.base[L.id] = { key, size: key ? (L.params[key] ?? 40) : null, x: tr.x || 0, y: tr.y || 0 };
+  }
+}
+
+function captionBaseOf(L) {
+  const g = state.captionGroup;
+  if (!g.base[L.id]) {
+    const key = captionSizeKey(L.template);
+    const tr = L.transform || { x: 0, y: 0 };
+    g.base[L.id] = { key, size: key ? (L.params[key] ?? 40) : null, x: tr.x || 0, y: tr.y || 0 };
+  }
+  return g.base[L.id];
+}
+
+/** what: { size, place, alpha, time } —— 只动点名的那几样，其余保持原样 */
+function captionGroupApply(what) {
+  const g = state.captionGroup;
+  const caps = state.scene.captions;
+  const list = captionGroupList();
+  list.forEach((L, i) => {
+    const b = captionBaseOf(L);
+    if (what.size && b.key) L.params[b.key] = Math.round(b.size * g.scale * 10) / 10;
+    if (what.place) {
+      const x = +(b.x + g.dx).toFixed(4);
+      const y = +(b.y + g.dy).toFixed(4);
+      L.transform = (x || y) ? { x, y, scale: 1, rot: 0, px: 0.5, py: 0.5 } : null;
+    }
+    if (what.alpha) L.opacity = g.opacity;
+    if (what.time && caps[i]) {
+      const sub = L.template === 'subtitle-kinetic';   // 字幕类自己按字幕时间做起落
+      const a = Math.max(0, sub ? caps[i].start : caps[i].start - state.captionReskin.lead);
+      const b2 = Math.min(state.scene.duration, sub ? caps[i].end : caps[i].end + state.captionReskin.tail);
+      L.start = +a.toFixed(3);
+      L.end = +Math.max(a + 0.2, b2).toFixed(3);
+    }
+    invalidateLayerBox(L.id);
+  });
+  drawTimeline(); renderAt(state.t); blit();
+  return list.length;
+}
+
+function buildCaptionGroupGroup() {
+  const g = group('字幕换装（整组改）');
+  const list = captionGroupList();
+
+  if (!list.length) {
+    const e = document.createElement('div');
+    e.className = 'empty';
+    e.textContent = '还没换装过。上面点一下「给每句字幕换模板」，这里就会出现整组改的开关。';
+    g.appendChild(e);
+    return g;
+  }
+
+  const note = document.createElement('div');
+  note.className = 'fx-note';
+  note.textContent = `当前 ${list.length} 个换装图层，改一个等于改全部。`
+    + '字号给的是倍数（各模板原始字号差着好几倍）；位置走图层变换，19 种样子通吃。'
+    + '单独拖过的那层会被整组位置覆盖，这是故意的。';
+  g.appendChild(note);
+
+  const cg = state.captionGroup;
+  g.appendChild(numField('字号 ×', cg.scale, 0.4, 2.5, 0.05, (v) => { cg.scale = v; captionGroupApply({ size: true }); }));
+  g.appendChild(numField('上下位置', cg.dy, -0.35, 0.35, 0.005, (v) => { cg.dy = v; captionGroupApply({ place: true }); }));
+  g.appendChild(numField('左右位置', cg.dx, -0.35, 0.35, 0.005, (v) => { cg.dx = v; captionGroupApply({ place: true }); }));
+  g.appendChild(numField('不透明度', cg.opacity, 0, 1, 0.02, (v) => { cg.opacity = v; captionGroupApply({ alpha: true }); }));
+  g.appendChild(numField('提前量(秒)', state.captionReskin.lead, 0, 1, 0.05, (v) => {
+    state.captionReskin.lead = v;
+    captionGroupApply({ time: true });
+  }));
+  g.appendChild(numField('尾巴(秒)', state.captionReskin.tail, 0, 1, 0.05, (v) => {
+    state.captionReskin.tail = v;
+    captionGroupApply({ time: true });
+  }));
+
+  const row = document.createElement('div');
+  row.className = 'btn-row';
+  row.appendChild(btn('重置整组', () => {
+    cg.scale = 1; cg.dx = 0; cg.dy = 0; cg.opacity = 1;
+    captionGroupApply({ size: true, place: true, alpha: true });
+    renderRight();
+    toast('字号 / 位置 / 不透明度已回到基准');
+  }));
+  row.appendChild(btn('全部关掉', () => {
+    captionGroupList().forEach((L) => { L.enabled = false; });
+    drawTimeline(); renderAt(state.t); blit();
+  }));
+  row.appendChild(btn('全部打开', () => {
+    captionGroupList().forEach((L) => { L.enabled = true; });
+    drawTimeline(); renderAt(state.t); blit();
+  }));
+  row.appendChild(btn('删掉整组', () => clearCaptionReskin(), 'danger'));
+  g.appendChild(row);
   return g;
 }
 

@@ -61,6 +61,50 @@ report.checks.removedDefault = !S.layers.some((L) => L.template === 'subtitle-ki
 const covered = mine().every((L, i) => L.start <= S.captions[i].start + 1e-6 && L.end >= S.captions[i].end - 1e-6);
 report.checks.coversCaption = covered;
 
+// ---- ①b 整组改：改一个等于改全部
+document.querySelector('#rightTabs .rtab[data-tab="subs"]').click();
+await sleep(150);
+const grp = [...document.querySelectorAll('#rightBody .group')].find((g) => /整组改/.test(g.querySelector('h4').textContent));
+report.checks.groupPanel = !!grp;
+if (grp) {
+  const numOf = (label) => {
+    const f = [...grp.querySelectorAll('.field')].find((x) => x.querySelector('label').textContent.includes(label));
+    return f ? f.querySelector('input[type=number]') : null;
+  };
+  const setNum = (label, v) => {
+    const el = numOf(label);
+    el.value = String(v);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const sizeOf = (L) => (L.template === 'word-grid' ? L.params.fontSize : (L.template === 'series-index' ? undefined : L.params.size));
+
+  const s0 = mine().map(sizeOf);
+  setNum('字号', 1.5);
+  await sleep(150);
+  const s1 = mine().map(sizeOf);
+  report.group = { before: s0, after: s1 };
+  report.checks.groupSize = s1.every((v, i) => s0[i] === undefined || Math.abs(v - s0[i] * 1.5) < 0.6);
+
+  setNum('上下位置', 0.05);
+  await sleep(150);
+  report.checks.groupPlace = mine().every((L) => L.transform && Math.abs(L.transform.y - 0.05) < 1e-6);
+
+  setNum('不透明度', 0.5);
+  await sleep(150);
+  report.checks.groupAlpha = mine().every((L) => Math.abs(L.opacity - 0.5) < 1e-6);
+
+  setNum('尾巴', 0.6);
+  await sleep(150);
+  report.checks.groupTail = mine().every((L, i) => Math.abs(L.end - Math.min(S.duration, S.captions[i].end + 0.6)) < 0.01
+    || L.template === 'subtitle-kinetic');
+
+  [...grp.querySelectorAll('button')].find((b) => /重置整组/.test(b.textContent)).click();
+  await sleep(200);
+  const s2 = mine().map(sizeOf);
+  report.checks.groupReset = s2.every((v, i) => s0[i] === undefined || Math.abs(v - s0[i]) < 0.001)
+    && mine().every((L) => !L.transform && Math.abs(L.opacity - 1) < 1e-6);
+}
+
 // ---- ② 换一批：重新洗牌之后顺序应该和上一批不一样
 b = byText(/换一批/);
 b.click();
@@ -104,6 +148,8 @@ report.checks.longBalanced = Math.max(...bigCounts) - Math.min(...bigCounts) <= 
 // 留一张画面上的样子：停在换装之后的某一帧
 MK.setTime(Math.min(S.duration - 0.05, 2.2));
 await sleep(200);
+document.getElementById('rightBody').scrollTop = 1e6;   // 截图停在「整组改」那一栏
+await sleep(150);
 
 report.checks.all = Object.keys(report.checks).every((k) => report.checks[k] === true);
 return report;
