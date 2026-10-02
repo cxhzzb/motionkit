@@ -253,13 +253,47 @@ export class Caption {
 }
 
 /**
+ * 一个"素材片段"——剪辑轨上的最小单位。
+ *
+ *   kind      'video' | 'image' | 'audio'
+ *   assetId   指向素材库里的那条素材（文件本体不进工程 JSON，只存这个 id）
+ *   start     在时间轴上的位置（秒）
+ *   in        从素材的第几秒开始取（图片忽略）
+ *   dur       在时间轴上占多长（秒）—— 拖动边缘改的就是它
+ *   volume    音量 0~1（音频片段用）
+ *
+ * 同一份素材可以被切成好几段（in/dur 不一样），所以"素材"和"片段"是分开的两层。
+ */
+export class Clip {
+  constructor({ id = null, kind = 'video', assetId = null, name = '', start = 0, in: inPoint = 0, dur = 1, volume = 1 } = {}) {
+    this.id = id || `c${Clip._id++}`;
+    this.kind = kind;
+    this.assetId = assetId;
+    this.name = name;
+    this.start = start;
+    this.in = inPoint;
+    this.dur = dur;
+    this.volume = volume;
+  }
+  get end() { return this.start + this.dur; }
+  covers(t) { return t >= this.start && t < this.end; }
+  /** 时间轴上的 t 对应素材里的第几秒 */
+  sourceAt(t) { return this.in + (t - this.start); }
+  toJSON() {
+    return { id: this.id, kind: this.kind, assetId: this.assetId, name: this.name, start: this.start, in: this.in, dur: this.dur, volume: this.volume };
+  }
+  static fromJSON(o) { return new Clip(o || {}); }
+}
+Clip._id = 1;
+
+/**
  * Scene = 一个可渲染的工程。
  * 分辨率、帧率、总时长、图层栈、字幕轨、后期特效栈、节拍图。
  */
 export class Scene {
   constructor({
     width = 1920, height = 1080, fps = 24, duration = 10,
-    bg = null, layers = [], captions = [], fx = [], beat = null, name = 'scene', transparent = true,
+    bg = null, layers = [], captions = [], clips = [], fx = [], beat = null, name = 'scene', transparent = true,
   } = {}) {
     this.width = width;
     this.height = height;
@@ -268,6 +302,7 @@ export class Scene {
     this.bg = bg;                       // null = 透明底（做叠加层用）
     this.layers = layers;
     this.captions = captions;
+    this.clips = clips;                 // 素材片段（视频 / 图片 / 音频），见 Clip
     this.fx = fx;                       // 后期特效栈，见 engine/fx.js
     this.beat = beat instanceof BeatMap ? beat : new BeatMap(beat || {});
     this.name = name;
@@ -288,6 +323,21 @@ export class Scene {
     return hit;
   }
 
+  /** 某一时刻活动的画面片段（视频 / 图片；有重叠时取后面的那条） */
+  activeVisualClip(t) {
+    let hit = null;
+    for (const c of this.clips) if (c.kind !== 'audio' && c.covers(t)) hit = c;
+    return hit;
+  }
+  /** 某一时刻活动的音频片段 */
+  activeAudioClip(t) {
+    let hit = null;
+    for (const c of this.clips) if (c.kind === 'audio' && c.covers(t)) hit = c;
+    return hit;
+  }
+  /** 所有片段排完之后的结束时间 */
+  get clipsEnd() { return this.clips.reduce((m, c) => Math.max(m, c.end), 0); }
+
   frameIndex(t) { return Math.round(t * this.fps); }
   frameTime(i) { return i / this.fps; }
   get frameCount() { return Math.max(1, Math.round(this.duration * this.fps)); }
@@ -298,6 +348,7 @@ export class Scene {
       bg: this.bg, transparent: this.transparent, beat: this.beat.toJSON(),
       layers: this.layers.map((l) => l.toJSON()),
       captions: this.captions.map((c) => ({ start: c.start, end: c.end, text: c.text, words: c.words, speaker: c.speaker, style: c.style })),
+      clips: this.clips.map((c) => c.toJSON()),
       fx: this.fx,
     };
   }
@@ -305,6 +356,7 @@ export class Scene {
     const s = new Scene(o);
     s.layers = (o.layers || []).map((l) => new Layer(l));
     s.captions = (o.captions || []).map((c) => new Caption(c));
+    s.clips = (o.clips || []).map((c) => new Clip(c));
     s.fx = o.fx || [];
     s.beat = BeatMap.fromJSON(o.beat);
     return s;

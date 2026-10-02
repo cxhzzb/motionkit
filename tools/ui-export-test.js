@@ -53,6 +53,7 @@ const S = MK.state.scene;
 function resetScene(dur, fps, layers) {
   S.layers.length = 0;
   S.fx.length = 0;            // 特效会往整帧撒噪点，底色判断会被它搅浑
+  S.clips.length = 0;         // 这一段测的是"单个素材 + 叠加层"的老路径，别掺片段
   S.width = 1920; S.height = 1080;
   S.duration = dur; S.fps = fps;
   layers.forEach((spec, i) => S.add(Object.assign({ start: 0, end: dur, seed: 'ex-' + i, name: '导出测试' + i }, spec)));

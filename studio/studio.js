@@ -5,7 +5,7 @@
 // ============================================================================
 
 import {
-  Scene, Layer, Caption, BeatMap, renderFrame, makeCanvas, timecode,
+  Scene, Layer, Caption, Clip, BeatMap, renderFrame, makeCanvas, timecode,
   clamp, lerp, Rng, registerTemplate,
 } from '../engine/core.js';
 import * as Draw from '../engine/draw.js';
@@ -36,6 +36,9 @@ const state = {
     },
   analysis: null,
   layerSeq: 0,
+  assets: new Map(),      // 素材库：assetId -> { id, kind, name, file, url, el, duration, w, h, buffer, peaks }
+  clipSel: null,          // 选中的片段 id（时间轴上那些块）
+  suppressMedia: false,   // 导出"只要叠加层"时临时把底片藏掉
   muted: false,          // 预览总静音（走带栏那个喇叭）
     tplPick: null,         // 模板库里点选中的模板（只是选中，拖着往画面里放才会加图层）
     tplCollapsed: {},      // 模板库哪些分类是折叠的
@@ -73,6 +76,19 @@ function renderAt(t) {
 
 /** 视频 / 图片作为"最底层"，模板再往上叠 */
 function drawMedia(ctx, sc, t) {
+  if (state.suppressMedia) return;
+  // 有片段：按时间轴找此刻该显示的那一条
+  if (sc.clips.length) {
+    const c = sc.activeVisualClip(t);
+    if (!c) return;                                  // 片段之间没铺到 = 黑场
+    const a = assetById(c.assetId);
+    if (!a || !a.el) return;
+    if (a.kind === 'image') { drawCover(ctx, a.el, sc.width, sc.height); return; }
+    if (a.el.readyState < 2) return;
+    drawCover(ctx, a.el, sc.width, sc.height);
+    return;
+  }
+  // 老工程：没有片段，退回单个素材
   const v = state.media.video;
   if (!v) return;
   if (v.tagName === 'IMG') {
@@ -161,7 +177,11 @@ function loop(ts) {
   const dur = state.scene.duration;
 
   if (state.playing) {
-    if (clockEl && clockEl.tagName === 'VIDEO' || clockEl && clockEl.tagName === 'AUDIO') {
+    if (state.scene.clips.length) {
+      // 有片段：时间轴自己走（片段是一段一段接起来的，不能拿某个元素的 currentTime 当钟）
+      state.t += dt;
+      syncMediaTo(state.t, true);
+    } else if (clockEl && clockEl.tagName === 'VIDEO' || clockEl && clockEl.tagName === 'AUDIO') {
       state.t = clockEl.currentTime;
     } else {
       state.t += dt;
@@ -198,13 +218,46 @@ function updateTransport() {
 function setTime(t) {
   const v = clamp(t, 0, state.scene.duration);
   state.t = v;
-  for (const el of [state.media.video, state.media.audio]) {
-    if (el && el.tagName !== 'IMG') { try { el.currentTime = v; } catch (_) {} }
-  }
+  syncMediaTo(v, false);
   if (!state.playing) { renderAt(v); blit(); updateTransport(); drawTimeline(); }
+}
+
+/**
+ * 把素材元素对齐到时间轴上的某一刻。
+ *
+ * 有片段时：只让"此刻该出现的那一条"在放，别的都暂停 —— 切换片段就是在这里发生的。
+ * 没有片段（老工程）：还是原来那套，直接 seek 那两个元素。
+ */
+function syncMediaTo(t, playing) {
+  const sc = state.scene;
+  if (!sc.clips.length) {
+    for (const el of [state.media.video, state.media.audio]) {
+      if (el && el.tagName !== 'IMG') { try { el.currentTime = t; } catch (_) {} }
+    }
+    return;
+  }
+  const active = new Map();
+  const vis = sc.activeVisualClip(t);
+  const aud = sc.activeAudioClip(t);
+  if (vis) active.set(vis.assetId, vis);
+  if (aud) active.set(aud.assetId, aud);
+  for (const a of state.assets.values()) {
+    const el = a.el;
+    if (!el || el.tagName === 'IMG') continue;
+    const c = active.get(a.id);
+    if (!c) { if (!el.paused) el.pause(); continue; }
+    const want = c.sourceAt(t);
+    if (Math.abs(el.currentTime - want) > 0.3) { try { el.currentTime = want; } catch (_) {} }
+    const vol = state.muted ? 0 : clamp(c.volume === undefined ? 1 : c.volume, 0, 1);
+    if (Math.abs(el.volume - vol) > 0.01) el.volume = vol;
+    el.muted = state.muted;
+    if (playing) { if (el.paused) el.play().catch(() => {}); }
+    else if (!el.paused) el.pause();
+  }
 }
 function play() {
   state.playing = true;
+  if (state.scene.clips.length) { syncMediaTo(state.t, true); return; }
   // 视频和音乐都要放：以前只 play 了其中一个，结果"有音乐时画面是卡住的"。
   for (const el of [state.media.video, state.media.audio]) {
     if (!el || el.tagName === 'IMG') continue;
@@ -217,6 +270,7 @@ function play() {
 }
 function pause() {
   state.playing = false;
+  if (state.scene.clips.length) { syncMediaTo(state.t, false); return; }
   for (const el of [state.media.video, state.media.audio]) if (el && el.tagName !== 'IMG') el.pause();
 }
 function togglePlay() { state.playing ? pause() : play(); }
@@ -230,6 +284,20 @@ function togglePlay() { state.playing ? pause() : play(); }
  *  · 喇叭按钮 = 总静音，一键全静
  */
 function applyAudio() {
+  // 有片段：每段的音量自己说了算（剪辑页里有滑杆），这里只管总静音
+  if (state.scene.clips.length) {
+    for (const a of state.assets.values()) {
+      if (!a.el || a.el.tagName === 'IMG') continue;
+      a.el.muted = state.muted;
+      if (a.el.tagName === 'AUDIO') a.el.volume = state.muted ? 0 : 1;
+    }
+    const b2 = $('btnMute');
+    if (b2) {
+      b2.textContent = state.muted ? '🔇' : '🎵';
+      b2.title = state.muted ? '预览已静音（点击恢复）' : '按片段的音量播放（剪辑页可调）';
+    }
+    return;
+  }
   const v = state.media.video, a = state.media.audio;
   if (v && v.tagName === 'VIDEO') v.muted = state.muted || !!a;
   if (a) a.muted = state.muted;
@@ -245,6 +313,7 @@ function applyAudio() {
 // ---------------------------------------------------------------- 时间轴绘制
 let scrubbing = false;
 let drag = null;
+let dragClip = null;        // 正在拖的素材片段（挪位置 / 拉边裁剪）
 
 function tlGeom() {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -264,6 +333,131 @@ const VID_H = 26;
 const AUD_H = 30;
 const TRACK_TOP = MEDIA_TOP + VID_H + 3 + AUD_H + 7;
 let rowMap = new Map();
+let clipRowMap = new Map();      // clipId -> { band, x, w, y, h }（时间轴上的命中区）
+
+const CLIP_COLOR = {
+  video: { fill: 'rgba(0,229,255,0.20)', line: 'rgba(0,229,255,0.80)', text: '#d6f6ff' },
+  image: { fill: 'rgba(120,230,140,0.20)', line: 'rgba(120,230,140,0.80)', text: '#dcffe4' },
+  audio: { fill: 'rgba(255,204,0,0.18)', line: 'rgba(255,204,0,0.80)', text: '#ffeeb8' },
+};
+
+/** 媒体轨上的一条：缩略图 / 波形 + 名字 + 选中态 + 左右的裁剪把手 */
+function drawClipBlock(c, bx, y, bw, h, isAudio, isSel) {
+  const col = CLIP_COLOR[c.kind] || CLIP_COLOR.video;
+  const a = assetById(c.assetId);
+  tlCtx.save();
+  tlCtx.beginPath();
+  roundRectPath(tlCtx, bx, y, bw, h, 3);
+  tlCtx.fillStyle = col.fill;
+  tlCtx.fill();
+  tlCtx.clip();
+
+  // 底：视频/图片铺缩略图，音频铺波形
+  if (a && a.el && a.kind !== 'audio' && a.el.readyState >= 2) {
+    const sw = a.el.videoWidth || a.el.naturalWidth || 16;
+    const sh = a.el.videoHeight || a.el.naturalHeight || 9;
+    const sc2 = Math.max(bw / sw, h / sh);
+    const dw = sw * sc2, dh = sh * sc2;
+    tlCtx.globalAlpha = 0.55;
+    try { tlCtx.drawImage(a.el, bx + (bw - dw) / 2, y + (h - dh) / 2, dw, dh); } catch (_) {}
+    tlCtx.globalAlpha = 1;
+  } else if (isAudio && a && a.peaks && a.peaks.length && a.duration) {
+    const midY = y + h / 2;
+    const pk = a.peaks;
+    const per = a.duration / pk.length;
+    const x0b = bx;
+    tlCtx.fillStyle = 'rgba(255,204,0,0.72)';
+    for (let x = 0; x < bw; x += 2) {
+      const src = c.in + (x / bw) * c.dur;              // 这一列对应素材里的第几秒
+      const i = Math.floor(src / per);
+      if (i < 0 || i >= pk.length) continue;
+      const hh = Math.max(0.8, pk[i] * (h - 6) * 0.5);
+      tlCtx.fillRect(x0b + x, midY - hh, 1.4, hh * 2);
+    }
+  }
+  tlCtx.restore();
+
+  // 名字（压在左上）
+  const label = (c.kind === 'image' ? '图片 ' : c.kind === 'audio' ? '音频 ' : '') + (c.name || '');
+  tlCtx.font = '600 10.5px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+  const tw = Math.min(bw - 12, tlCtx.measureText(label).width + 8);
+  if (tw > 14) {
+    tlCtx.fillStyle = 'rgba(0,0,0,0.55)';
+    tlCtx.fillRect(bx + 3, y + 2, tw, 13);
+    tlCtx.fillStyle = col.text;
+    tlCtx.save();
+    tlCtx.beginPath(); tlCtx.rect(bx + 3, y + 2, tw, 13); tlCtx.clip();
+    tlCtx.fillText(label, bx + 6, y + 12);
+    tlCtx.restore();
+  }
+
+  // 边框 / 选中态 / 裁剪把手
+  tlCtx.beginPath();
+  roundRectPath(tlCtx, bx + 0.5, y + 0.5, Math.max(1, bw - 1), h - 1, 3);
+  tlCtx.strokeStyle = isSel ? '#ffffff' : col.line;
+  tlCtx.lineWidth = isSel ? 2 : 1;
+  tlCtx.stroke();
+  if (isSel) {
+    tlCtx.fillStyle = '#ffffff';
+    tlCtx.fillRect(bx, y, 4, h);              // 左把手（拖 = 改入点 / 起点）
+    tlCtx.fillRect(bx + bw - 4, y, 4, h);     // 右把手（拖 = 改长度）
+  }
+}
+
+function drawClipTrack(band, y, h, x0, x1, sx) {
+  tlCtx.fillStyle = band === 'audio' ? 'rgba(255,204,0,0.05)' : 'rgba(0,229,255,0.055)';
+  tlCtx.fillRect(x0, y, x1 - x0, h);
+  const list = state.scene.clips.filter((c) => clipBand(c.kind) === band);
+  if (list.length) {
+    for (const c of list) {
+      const bx = sx(c.start);
+      const bw = Math.max(6, sx(c.end) - bx);
+      const cy = y + 2, ch = h - 4;
+      drawClipBlock(c, bx, cy, bw, ch, band === 'audio', c.id === state.clipSel);
+      clipRowMap.set(c.id, { band, x: bx, w: bw, y: cy, h: ch });
+    }
+    return;
+  }
+  // 没有片段：老工程还有单个素材的话，把它当一整条画出来（读起来和以前一样）
+  const legacy = band === 'audio' ? state.media.audio : state.media.video;
+  if (legacy) {
+    const dur = band === 'audio' ? (state.media.audioDur || 0) : (state.media.videoDur || 0);
+    const bw = Math.max(6, sx(Math.min(dur || state.scene.duration, state.scene.duration)) - sx(0));
+    tlCtx.fillStyle = band === 'audio' ? 'rgba(255,204,0,0.22)' : 'rgba(0,229,255,0.22)';
+    roundRectPath(tlCtx, sx(0), y + 2, bw, h - 4, 3);
+    tlCtx.fill();
+    // 老工程那支音乐的波形，别因为改成片段轨就丢了
+    if (band === 'audio' && state.media.peaks && state.media.peaks.length) {
+      tlCtx.save();
+      tlCtx.beginPath(); roundRectPath(tlCtx, sx(0), y + 2, bw, h - 4, 3); tlCtx.clip();
+      const pk = state.media.peaks;
+      const per = (state.media.audioDur || state.scene.duration) / pk.length;
+      tlCtx.fillStyle = 'rgba(255,204,0,0.72)';
+      for (let x = sx(0); x < sx(0) + bw; x += 2) {
+        const i = Math.floor(((x - sx(0)) / bw) * (state.media.audioDur || state.scene.duration) / per);
+        if (i < 0 || i >= pk.length) continue;
+        const hh = Math.max(0.8, pk[i] * (h - 10) * 0.5);
+        tlCtx.fillRect(x, y + h / 2 - hh, 1.4, hh * 2);
+      }
+      tlCtx.restore();
+    }
+    tlCtx.strokeStyle = band === 'audio' ? 'rgba(255,204,0,0.75)' : 'rgba(0,229,255,0.75)';
+    tlCtx.lineWidth = 1; tlCtx.stroke();
+    tlCtx.fillStyle = band === 'audio' ? '#ffe9a8' : '#cdf3ff';
+    tlCtx.font = '600 11px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+    tlCtx.save();
+    tlCtx.beginPath(); tlCtx.rect(sx(0) + 4, y, Math.max(10, bw - 8), h); tlCtx.clip();
+    tlCtx.fillText((band === 'audio' ? '音频  ' : '') + (band === 'audio' ? state.media.audioName : state.media.videoName || '')
+      + '  ' + dur.toFixed(2) + 's', sx(0) + 7, y + h / 2 + 4);
+    tlCtx.restore();
+    return;
+  }
+  tlCtx.fillStyle = '#4a505b';
+  tlCtx.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  tlCtx.fillText(band === 'audio'
+    ? '音频轨 · 未载入（拖一首歌进来会自动分析卡点）'
+    : '视频轨 · 未载入（把视频 / 图片拖进画面区）', x0 + 8, y + h / 2 + 4);
+}
 
 function drawTimeline() {
   if (!tl.clientWidth) return;
@@ -301,73 +495,13 @@ function drawTimeline() {
   }
 
   // 图层
-  // ---- 媒体轨：视频 / 音频 ----
+  // ---- 媒体轨：视频 / 图片 / 音频，每个片段一块 ----
   const monoS = getComputedStyle(document.body).getPropertyValue('--mono');
   const vidY = MEDIA_TOP;
   const audY = MEDIA_TOP + VID_H + 3;
-  const mv = state.media.video;
-  const ma = state.media.audio;
-
-  // 视频轨
-  tlCtx.fillStyle = 'rgba(0,229,255,0.055)';
-  tlCtx.fillRect(x0, vidY, x1 - x0, VID_H);
-  if (mv) {
-    const vd = Math.max(0.1, state.media.videoDur || s.duration);
-    const bx = sx(0), bw = Math.max(6, sx(Math.min(vd, s.duration)) - bx);
-    roundRectPath(tlCtx, bx, vidY + 3, bw, VID_H - 6, 3);
-    tlCtx.fillStyle = 'rgba(0,229,255,0.28)'; tlCtx.fill();
-    tlCtx.strokeStyle = 'rgba(0,229,255,0.75)'; tlCtx.lineWidth = 1; tlCtx.stroke();
-    // 素材比工程短的话，后面那段空出来一眼就看得见
-    if (vd < s.duration - 0.02) {
-      tlCtx.fillStyle = 'rgba(255,255,255,0.05)';
-      tlCtx.fillRect(sx(vd), vidY + 3, Math.max(0, x1 - sx(vd)), VID_H - 6);
-    }
-    tlCtx.save();
-    tlCtx.beginPath(); tlCtx.rect(bx + 6, vidY, Math.max(10, bw - 12), VID_H); tlCtx.clip();
-    tlCtx.fillStyle = '#cdf3ff';
-    tlCtx.font = '600 11px ' + getComputedStyle(document.body).getPropertyValue('--sans');
-    tlCtx.fillText(`视频  ${state.media.videoName || ''}  ${vd.toFixed(2)}s`, bx + 7, vidY + VID_H / 2 + 0.5);
-    tlCtx.restore();
-  } else {
-    tlCtx.fillStyle = '#4a505b';
-    tlCtx.font = '11px ' + monoS;
-    tlCtx.fillText('视频轨 · 未载入（把视频/图片拖进画面区）', x0 + 8, vidY + VID_H / 2);
-  }
-
-  // 音频轨（带波形）
-  tlCtx.fillStyle = 'rgba(255,204,0,0.05)';
-  tlCtx.fillRect(x0, audY, x1 - x0, AUD_H);
-  if (ma) {
-    const ad = Math.max(0.1, state.media.audioDur || s.duration);
-    const midY = audY + AUD_H / 2;
-    const pk = state.media.peaks;
-    if (pk && pk.length) {
-      const nb = pk.length;
-      const bw2 = (x1 - x0) / nb;
-      tlCtx.fillStyle = 'rgba(255,204,0,0.72)';
-      for (let i = 0; i < nb; i++) {
-        const x = x0 + i * bw2;
-        if (x > x1) break;
-        const hh = Math.max(0.8, pk[i] * (AUD_H - 10) * 0.5);
-        tlCtx.fillRect(x, midY - hh, Math.max(1, bw2 * 0.85), hh * 2);
-      }
-    } else {
-      tlCtx.fillStyle = 'rgba(255,204,0,0.22)';
-      tlCtx.fillRect(x0, midY - 1, Math.min(x1 - x0, Math.max(4, sx(ad) - x0)), 2);
-    }
-    // 音频比工程短也标一下
-    if (ad < s.duration - 0.02) {
-      tlCtx.fillStyle = 'rgba(255,255,255,0.05)';
-      tlCtx.fillRect(sx(ad), audY, Math.max(0, x1 - sx(ad)), AUD_H);
-    }
-    tlCtx.fillStyle = '#ffe9a8';
-    tlCtx.font = '600 11px ' + getComputedStyle(document.body).getPropertyValue('--sans');
-    tlCtx.fillText(`音频  ${state.media.audioName || ''}  ${ad.toFixed(2)}s`, x0 + 8, audY + 11);
-  } else {
-    tlCtx.fillStyle = '#4a505b';
-    tlCtx.font = '11px ' + monoS;
-    tlCtx.fillText('音频轨 · 未载入（拖一首歌进来会自动分析卡点）', x0 + 8, audY + AUD_H / 2);
-  }
+  clipRowMap = new Map();
+  drawClipTrack('video', vidY, VID_H, x0, x1, sx);
+  drawClipTrack('audio', audY, AUD_H, x0, x1, sx);
 
   // ---- 图层（可上下滚动）----
   const capY = h - ROW_H - 4;
@@ -539,6 +673,99 @@ function fmtShort(t) {
 }
 
 // ---------------------------------------------------------------- 时间轴交互
+/** 像素 → 秒（不做卡点吸附；拖片段时用这个，不然每一动都被吸走） */
+function tlTimeAtRaw(clientX) {
+  const r = tl.getBoundingClientRect();
+  const x0 = 8, x1 = r.width - 8;
+  return clamp((clientX - r.left - x0) / (x1 - x0), 0, 1) * state.scene.duration;
+}
+
+/** 一根手指头大概几个像素 = 几秒（吸附容差用） */
+function tlPxToTime(px) {
+  const w = Math.max(1, tl.clientWidth - 16);
+  return (px / w) * state.scene.duration;
+}
+
+/** 拖片段时吸一下：播放头 / 时间轴两头 / 别的片段边缘 */
+function snapClipTime(t, ignoreId) {
+  const tol = tlPxToTime(7);
+  let best = t, bestD = tol;
+  const cands = [0, state.scene.duration, state.t];
+  for (const o of state.scene.clips) {
+    if (o.id === ignoreId) continue;
+    cands.push(o.start, o.end);
+  }
+  for (const v of cands) {
+    const d = Math.abs(v - t);
+    if (d < bestD) { bestD = d; best = v; }
+  }
+  return best;
+}
+
+/** 鼠标落在哪条媒体轨上（视频轨 / 音频轨） */
+function mediaBandAt(y) {
+  if (y >= MEDIA_TOP + VID_H + 3 && y < MEDIA_TOP + VID_H + 3 + AUD_H) return 'audio';
+  if (y >= MEDIA_TOP && y < MEDIA_TOP + VID_H) return 'video';
+  return null;
+}
+
+/** 拖动片段：挪位置 / 拉左右边缘裁剪 */
+function applyClipDrag(e) {
+  const c = clipById(dragClip.id);
+  if (!c) return;
+  const dt = tlTimeAtRaw(e.clientX) - dragClip.t0;
+  const c0 = dragClip.c0;
+  const srcDur = clipSourceDur(c);
+  const MIN = 0.1;
+  if (dragClip.mode === 'move') {
+    c.start = Math.max(0, snapClipTime(c0.start + dt, c.id));
+  } else if (dragClip.mode === 'trim-r') {
+    const want = snapClipTime(c0.start + c0.dur + dt, c.id) - c0.start;
+    const cap = srcDur ? Math.max(MIN, srcDur - c.in) : Infinity;   // 不能超过素材本身
+    c.dur = clamp(want, MIN, Math.min(cap, 3600));
+  } else {
+    let ns = snapClipTime(c0.start + dt, c.id);
+    let nin = c0.in + (ns - c0.start);
+    const right = c0.start + c0.dur;
+    if (nin < 0) { ns -= nin; nin = 0; }              // 素材开头到头了
+    if (ns < 0) { ns = 0; }                            // 时间轴开头到头了
+    if (right - ns < MIN) ns = right - MIN;
+    c.start = ns;
+    c.in = Math.max(0, nin);
+    c.dur = right - ns;
+  }
+  clipsFitDuration();
+  drawTimeline(); renderAt(state.t); blit();
+  if (rightTab === 'clip') renderRight();
+}
+
+/** 在播放头切开选中的片段（左右各留一半，素材入点接上） */
+function splitClipAt(t) {
+  const c = selectedClip();
+  if (!c) { toast('先在时间轴上点一个片段，再切'); return null; }
+  if (t <= c.start + 0.05 || t >= c.end - 0.05) { toast('播放头不在这个片段里面'); return null; }
+  const right = new Clip({
+    kind: c.kind, assetId: c.assetId, name: c.name,
+    start: t, in: c.in + (t - c.start), dur: c.end - t, volume: c.volume,
+  });
+  c.dur = t - c.start;
+  state.scene.clips.push(right);
+  state.clipSel = right.id;
+  markIndexDirty(); drawTimeline(); renderAt(state.t); blit(); renderRight();
+  toast('在 ' + t.toFixed(2) + 's 切开');
+  return right;
+}
+
+function deleteSelectedClip() {
+  const c = selectedClip();
+  if (!c) return 0;
+  state.scene.clips = state.scene.clips.filter((x) => x.id !== c.id);
+  state.clipSel = null;
+  drawTimeline(); renderAt(state.t); blit(); renderRight();
+  toast('删掉片段');
+  return 1;
+}
+
 function tlTimeAt(clientX) {
   const r = tl.getBoundingClientRect();
   const x0 = 8, x1 = r.width - 8;
@@ -555,6 +782,35 @@ tl.addEventListener('pointerdown', (e) => {
   const r = tl.getBoundingClientRect();
   const y = e.clientY - r.top;
   const mx = e.clientX - r.left;
+  // 媒体轨上的片段：点选 / 拖动 / 拉边裁剪
+  const band = mediaBandAt(y);
+  if (band) {
+    const hit = [...clipRowMap].find(([, g]) => g.band === band && mx >= g.x - 3 && mx <= g.x + g.w + 3);
+    if (hit) {
+      const [id, g] = hit;
+      const c = clipById(id);
+      state.clipSel = id;                 // 选片段
+      state.selection = null;             // 图层那边让位
+      state.selected = new Set();
+      rightTab = 'clip';
+      const edgeL = mx - g.x, edgeR = g.x + g.w - mx;
+      dragClip = {
+        id, t0: tlTimeAtRaw(e.clientX),
+        mode: edgeL < 6 ? 'trim-l' : edgeR < 6 ? 'trim-r' : 'move',
+        c0: { start: c.start, in: c.in, dur: c.dur },
+      };
+      try { tl.setPointerCapture(e.pointerId); } catch (_) {}
+      renderRight(); drawTimeline();
+      return;
+    }
+    // 点了媒体轨的空白：取消选中 + 播放头挪过去
+    state.clipSel = null;
+    scrubbing = true;
+    setTime(tlTimeAt(e.clientX));
+    try { tl.setPointerCapture(e.pointerId); } catch (_) {}
+    renderRight(); drawTimeline();
+    return;
+  }
   // Shift + 空白处拖动 = 框选（一块区域里的图层一起选上，然后 Delete 删掉）
   const hitRow = [...rowMap].some(([, g]) => y >= g.y && y <= g.y + ROW_H && mx >= g.x - 2 && mx <= g.x + g.w + 2);
   if (!hitRow && e.shiftKey) {
@@ -594,6 +850,7 @@ tl.addEventListener('pointermove', (e) => {
     drawTimeline();
     return;
   }
+  if (dragClip) { applyClipDrag(e); return; }
   if (scrubbing) { setTime(tlTimeAt(e.clientX)); return; }
   if (!drag) return;
   const L = state.scene.layers.find((x) => x.id === drag.id);
@@ -612,6 +869,14 @@ tl.addEventListener('pointermove', (e) => {
 });
 
 const endDrag = () => {
+  if (dragClip) {
+    dragClip = null;
+    sortClips();
+    clipsFitDuration();
+    drawTimeline(); renderAt(state.t); blit();
+    if (rightTab === 'clip') renderRight();
+    return;
+  }
   if (tlMarquee) {
     const m = tlMarquee;
     tlMarquee = null;
@@ -952,7 +1217,7 @@ function addLayerFromTemplate(t, at) {
 // ---------------------------------------------------------------- 右侧参数面板
 // 分页签：图层 / 工程 / 卡点 / 字幕 / 特效。点图层时会自动切到「图层」页 ——
 // 东西多的时候，切页签比在一条长滚动条里翻快得多。
-const RIGHT_TABS = ['layer', 'scene', 'beat', 'subs', 'fx'];
+const RIGHT_TABS = ['layer', 'clip', 'scene', 'beat', 'subs', 'fx'];
 let rightTab = 'scene';
 
 function setRightTab(tab) {
@@ -974,6 +1239,7 @@ function renderRight() {
   if (cnt) cnt.textContent = String((state.scene.fx || []).length);
   $('rightTitle').textContent = {
     layer: L ? `图层参数 · ${L.name || L.template}` : '图层参数',
+    clip: selectedClip() ? `片段 · ${selectedClip().name || selectedClip().kind}` : '剪辑',
     scene: '工程设置 · 画面 / 文件',
     beat: '卡点',
     subs: '字幕',
@@ -981,6 +1247,7 @@ function renderRight() {
   }[rightTab] || '工程设置';
 
   if (rightTab === 'layer') rightPanelLayer(body, L);
+  else if (rightTab === 'clip') rightPanelClip(body);
   else if (rightTab === 'beat') rightPanelBeat(body);
   else if (rightTab === 'subs') rightPanelSubs(body);
   else if (rightTab === 'fx') rightPanelFx(body);
@@ -1149,6 +1416,108 @@ function rightPanelBeat(body) {
     body.appendChild(gb);
     body.appendChild(buildBeatFxGroup());
   }
+}
+
+/**
+ * 剪辑页：时间轴上选中的那个片段。
+ *
+ * 素材（文件）和片段（时间轴上的块）是两层：同一份素材可以切几刀变成几个片段，
+ * 各自的入点 / 长度都不一样。这里改的是"这一个片段"，不是素材本身。
+ */
+function rightPanelClip(body) {
+  const c = selectedClip();
+  const g0 = group('素材片段');
+
+  const row = document.createElement('div');
+  row.className = 'btn-row';
+  row.appendChild(btn('载入视频 / 图片', () => $('fileVideo').click()));
+  row.appendChild(btn('载入音频', () => $('fileAudio').click()));
+  g0.appendChild(row);
+
+  if (!c) {
+    const e = document.createElement('div');
+    e.className = 'empty';
+    e.style.whiteSpace = 'pre-line';
+    e.textContent = '在时间轴的视频轨 / 音频轨上点一个片段，就能在这里改它。\n'
+      + '拖动片段 = 挪位置；拖左右两边的白条 = 裁剪长度；按 S = 在播放头切开。';
+    g0.appendChild(e);
+  } else {
+    const a = assetById(c.assetId);
+    const info = document.createElement('div');
+    info.className = 'empty';
+    info.style.whiteSpace = 'pre-line';
+    info.textContent = (c.kind === 'audio' ? '音频' : c.kind === 'image' ? '图片' : '视频') + ' · ' + (c.name || '') + '\n'
+      + (a ? '素材时长 ' + (a.kind === 'image' ? '静态图' : (a.duration || 0).toFixed(2) + 's') : '⚠ 素材没接上')
+      + '　·　时间轴上 ' + c.start.toFixed(2) + 's → ' + c.end.toFixed(2) + 's';
+    g0.appendChild(info);
+
+    g0.appendChild(numField('起点(秒)', c.start, 0, Math.max(1, state.scene.duration), 0.01, (v) => {
+      c.start = Math.max(0, v); clipsFitDuration(); drawTimeline(); renderAt(state.t); blit();
+    }));
+    g0.appendChild(numField('时长(秒)', c.dur, 0.1, Math.max(1, state.scene.duration), 0.01, (v) => {
+      const cap = clipSourceDur(c);
+      c.dur = clamp(v, 0.1, cap ? Math.max(0.1, cap - c.in) : 3600);
+      clipsFitDuration(); drawTimeline(); renderAt(state.t); blit();
+    }));
+    if (c.kind !== 'image') {
+      g0.appendChild(numField('入点(秒)', c.in, 0, Math.max(0.1, (clipSourceDur(c) || 60) - 0.1), 0.01, (v) => {
+        const cap = clipSourceDur(c);
+        c.in = clamp(v, 0, cap ? Math.max(0, cap - 0.1) : 3600);
+        if (cap) c.dur = Math.min(c.dur, Math.max(0.1, cap - c.in));
+        drawTimeline(); renderAt(state.t); blit();
+      }));
+      g0.appendChild(numField('音量', c.volume, 0, 1, 0.02, (v) => { c.volume = v; syncMediaTo(state.t, false); }));
+    }
+
+    const acts = document.createElement('div');
+    acts.className = 'btn-row';
+    acts.appendChild(btn('在播放头切开', () => splitClipAt(state.t)));
+    acts.appendChild(btn('复制一段接在后面', () => {
+      const copy = new Clip(Object.assign({}, c.toJSON(), { id: null, start: c.end }));
+      state.scene.clips.push(copy);
+      state.clipSel = copy.id;
+      clipsFitDuration(); drawTimeline(); renderRight(); toast('复制了一段');
+    }));
+    acts.appendChild(btn('删掉', () => deleteSelectedClip(), 'danger'));
+    g0.appendChild(acts);
+  }
+  body.appendChild(g0);
+
+  const g1 = group('全部片段（' + state.scene.clips.length + '）');
+  if (!state.scene.clips.length) {
+    const e = document.createElement('div');
+    e.className = 'empty';
+    e.textContent = '还没有素材。上面「载入视频 / 图片」，或者把文件拖进画面区。';
+    g1.appendChild(e);
+  } else {
+    const listBox = document.createElement('div');
+    listBox.className = 'cap-list';
+    state.scene.clips.slice().sort((x, y) => x.start - y.start).forEach((x, i) => {
+      const r = document.createElement('div');
+      r.className = 'cap-row';
+      const tx = document.createElement('div');
+      tx.className = 'cap-tx';
+      const icon = x.kind === 'audio' ? '♪' : x.kind === 'image' ? '▣' : '▶';
+      tx.textContent = z2(i + 1) + ' ' + icon + ' ' + (x.name || '') + '　' + x.start.toFixed(1) + '→' + x.end.toFixed(1) + 's';
+      tx.title = tx.textContent;
+      tx.style.cursor = 'pointer';
+      tx.addEventListener('click', () => {
+        state.clipSel = x.id;
+        rightTab = 'clip';
+        setTime(x.start + x.dur / 2);
+        renderRight(); drawTimeline();
+      });
+      const del = document.createElement('button');
+      del.textContent = '×';
+      del.className = 'fx-del';
+      del.title = '删掉这一段';
+      del.addEventListener('click', () => { state.clipSel = x.id; deleteSelectedClip(); });
+      r.appendChild(tx); r.appendChild(del);
+      listBox.appendChild(r);
+    });
+    g1.appendChild(listBox);
+  }
+  body.appendChild(g1);
 }
 
 /** 字幕页 */
@@ -2249,7 +2618,10 @@ function computePeaks(buffer, buckets = 480) {
  */
 function applyAutoDuration(quiet) {
   if (!state.durationAuto) return false;
-  const d = Math.max(state.media.videoDur || 0, state.media.audioDur || 0);
+  // 有片段就只跟片段走（片段才是时间轴上的真相）；老工程没有片段才看单个素材
+  const d = state.scene.clips.length
+    ? state.scene.clipsEnd
+    : Math.max(state.media.videoDur || 0, state.media.audioDur || 0);
   if (!d || d < 0.1) return false;
   const nd = Math.round(d * 100) / 100;
   if (Math.abs(nd - state.scene.duration) < 0.005) return false;
@@ -2261,52 +2633,139 @@ function applyAutoDuration(quiet) {
   return true;
 }
 
-function loadVideoFile(file, opts = {}) {
+// ---------------------------------------------------------------- 素材库 & 片段
+/**
+ * 素材库 = 拖进来的那些文件；片段 = 时间轴上的块。
+ *
+ * 分开是有意的：同一份素材可以被切成好几段（各自的入点和长度），
+ * 就像剪映里一段视频切三刀是三个片段、但素材只有一个。
+ * 文件本体存 IndexedDB，工程 JSON 里只留 assetId + 时间信息。
+ */
+let assetSeq = 0;
+
+function assetById(id) { return state.assets.get(id) || null; }
+
+/** 把文件变成一条素材（带好对应的媒体元素，预览和导出都直接用） */
+async function addAsset(file, kind) {
+  const id = 'a' + (++assetSeq) + '-' + Date.now().toString(36);
   const url = URL.createObjectURL(file);
+  const a = { id, kind, name: file.name, file, url, el: null, duration: 0, w: 0, h: 0, buffer: null, peaks: null };
+  if (kind === 'image') {
+    const img = new Image();
+    img.src = url;
+    await new Promise((res) => { img.onload = res; img.onerror = res; setTimeout(res, 5000); });
+    a.el = img; a.w = img.naturalWidth || 0; a.h = img.naturalHeight || 0;
+  } else {
+    const el = document.createElement(kind === 'audio' ? 'audio' : 'video');
+    el.src = url;
+    el.preload = 'auto';
+    if (kind === 'video') { el.playsInline = true; el.loop = false; }
+    await new Promise((res) => { el.onloadedmetadata = res; el.onerror = res; setTimeout(res, 8000); });
+    a.el = el;
+    a.duration = Number.isFinite(el.duration) ? el.duration : 0;
+    a.w = el.videoWidth || 0; a.h = el.videoHeight || 0;
+  }
+  state.assets.set(id, a);
+  persistAsset(a);
+  return a;
+}
+
+/** 解码音频（画波形 / 导出混音都要用），只解一次 */
+async function assetBuffer(a) {
+  if (!a || a.kind === 'image') return null;
+  if (a.buffer) return a.buffer;
+  try {
+    const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 48000);
+    a.buffer = await ctx.decodeAudioData(await a.file.arrayBuffer());
+    if (!a.peaks) a.peaks = computePeaks(a.buffer);
+  } catch (e) {
+    console.warn('素材解码失败：' + a.name, e);
+    a.buffer = null;
+  }
+  return a.buffer;
+}
+
+/** 片段落在哪条轨上 */
+function clipBand(kind) { return kind === 'audio' ? 'audio' : 'video'; }
+function clipTrackY(kind) { return clipBand(kind) === 'audio' ? MEDIA_TOP + VID_H + 3 : MEDIA_TOP; }
+function clipTrackH(kind) { return clipBand(kind) === 'audio' ? AUD_H : VID_H; }
+
+/**
+ * 加一个片段。默认接在同一条轨的最后面；视频/图片整段放进来
+ * （图片给 3 秒，之后拖右边缘改长度），音频也是整段。
+ */
+function addClip(asset, opts = {}) {
+  const band = clipBand(asset.kind);
+  const same = state.scene.clips.filter((c) => clipBand(c.kind) === band);
+  const at = opts.start !== undefined ? opts.start : same.reduce((m, c) => Math.max(m, c.end), 0);
+  const dur = opts.dur !== undefined ? opts.dur
+    : (asset.kind === 'image' ? 3 : Math.max(0.2, asset.duration || 3));
+  const c = new Clip({
+    kind: asset.kind, assetId: asset.id, name: asset.name,
+    start: Math.max(0, at), in: opts.in || 0, dur, volume: 1,
+  });
+  state.scene.clips.push(c);
+  clipsFitDuration();      // 新片段排到时长外面了，工程就跟着变长
+  return c;
+}
+
+function clipById(id) { return state.scene.clips.find((c) => c.id === id) || null; }
+function selectedClip() { return clipById(state.clipSel); }
+function sortClips() { state.scene.clips.sort((a, b) => a.start - b.start); }
+
+/** 某个片段的素材总长（图片没有上限，返回 0 表示随便拉） */
+function clipSourceDur(c) {
+  const a = assetById(c.assetId);
+  return a && a.kind !== 'image' ? (a.duration || 0) : 0;
+}
+
+/** 片段排到哪儿、工程时长就跟到哪儿（用户手动改过时长就不跟了） */
+function clipsFitDuration() {
+  const end = state.scene.clipsEnd;
+  if (!end) return false;
+  if (end > state.scene.duration + 0.001) {
+    state.scene.duration = Math.ceil(end * 100) / 100;
+    if (state.scene.beat) state.scene.beat.duration = state.scene.duration;
+    return true;
+  }
+  return false;
+}
+
+async function loadVideoFile(file, opts = {}) {
+  const kind = /^image\//.test(file.type) ? 'image' : 'video';
   state.media.videoFile = file;          // AI 助手要把原始文件上传给本地服务
   state.media.videoMeta = { name: file.name, type: file.type, size: file.size };
-  persistMedia('video', file);           // 刷新后还能接回来
-  if (/^image\//.test(file.type)) {
-    const img = new Image();
-    img.onload = () => {
-      state.media.video = img; state.media.videoName = file.name;
-      state.media.videoDur = 0;            // 静态图没有时长，时长就看音频的
-      $('dropHint').classList.add('hidden');
-      renderAt(state.t); blit();
-      applyAutoDuration(!!opts.keepDuration);   // 恢复工程时不弹提示
-      renderRight();
-    };
-    img.src = url;
-    return;
+  persistMedia('video', file);           // 刷新后还能接回来（老路径）
+  const asset = await addAsset(file, kind);
+  // 老路径：state.media.video 还指着"当前素材"，别的代码（AI 助手、滤镜）还在看它
+  state.media.video = asset.el;
+  state.media.videoName = file.name;
+  state.media.videoDur = asset.duration || 0;
+  applyAudio();
+  $('dropHint').classList.add('hidden');
+  if (!opts.noClip) {
+    // 第 2 段之后接在前一段后面（剪映那种"往后摞"），第一段落在时间轴开头
+    const at = opts.start !== undefined ? opts.start : undefined;
+    state.clipSel = addClip(asset, { start: at }).id;
   }
-  const v = document.createElement('video');
-  // 别默认静音：导入的视频本来就该能听见。如果已经载入了音乐，
-  // applyAudio() 会把视频原声静掉，避免两轨撞车。
-  v.src = url; v.muted = !!state.media.audio; v.playsInline = true; v.loop = false; v.preload = 'auto';
-  v.addEventListener('loadeddata', () => {
-    state.media.video = v; state.media.videoName = file.name;
-      state.media.videoDur = Number.isFinite(v.duration) ? v.duration : 0;
-    applyAudio();
-    $('dropHint').classList.add('hidden');
-      // 恢复上次工程时视频是"迟到"的，别让它把已存的时长改掉
-      if (!opts.keepDuration) applyAutoDuration(!opts.quiet);
-    resize(); drawTimeline(); renderRight();
-  });
-  v.load();
+  clipsFitDuration();
+  if (!opts.keepDuration) applyAutoDuration(!opts.quiet);
+  resize(); drawTimeline(); renderRight(); renderAt(state.t); blit();
+  return asset;
 }
 
 async function loadAudioFile(file, opts = {}) {
-  const url = URL.createObjectURL(file);
-  const a = document.createElement('audio');
-  a.src = url; a.preload = 'auto';
+  const asset = await addAsset(file, 'audio');
+  const a = asset.el;
   state.media.audio = a; state.media.audioName = file.name;
   state.media.audioFile = file;          // 导出 MP4 时要拿它重新解码出音轨
   state.media.audioMeta = { name: file.name, type: file.type, size: file.size };
-  // 元数据到了就把时长记下来（走 opts.analyze === false 恢复工程时也能填上）
-  a.addEventListener('loadedmetadata', () => {
-    if (!state.media.audioDur && a.duration) state.media.audioDur = a.duration;
-  });
+  state.media.audioDur = asset.duration || state.media.audioDur;
   persistMedia('audio', file);
+  if (!opts.noClip) {
+    state.clipSel = addClip(asset, { start: opts.start }).id;
+  }
+  clipsFitDuration();
   a.muted = state.muted;
   applyAudio();          // 载入音乐后视频原声自动让位
   if (opts.analyze === false) return;   // 恢复上次工程：拍点图已经存在工程里了，别再分析一遍
@@ -2365,14 +2824,18 @@ function hideBusy() { $('busy').classList.add('hidden'); }
 async function frameCount() { return Math.max(1, Math.round(state.scene.duration * state.scene.fps)); }
 
 function seekTo(t) {
-  const v = state.media.video;
+  const sc = state.scene;
+  // 有片段：找此刻该出现的那一条，seek 到它在素材里的位置
+  const clip = sc.clips.length ? sc.activeVisualClip(t) : null;
+  const v = clip ? (assetById(clip.assetId) || {}).el : state.media.video;
+  const want = clip ? clip.sourceAt(t) : t;
   return new Promise((res) => {
     if (!v || v.tagName === 'IMG' || v.readyState < 1) { res(); return; }
-    if (Math.abs(v.currentTime - t) < 1 / (state.scene.fps * 2) && v.readyState >= 2) { res(); return; }
+    if (Math.abs(v.currentTime - want) < 1 / (state.scene.fps * 2) && v.readyState >= 2) { res(); return; }
     let done = false;
     const finish = () => { if (done) return; done = true; v.removeEventListener('seeked', finish); res(); };
     v.addEventListener('seeked', finish);
-    try { v.currentTime = t; } catch (_) {}
+    try { v.currentTime = want; } catch (_) {}
     setTimeout(finish, 500);
   });
 }
@@ -2389,10 +2852,9 @@ async function renderFrameForExport(i, includeMedia) {
   const s = state.scene;
   const t = s.frameTime(i);
   if (includeMedia) await seekTo(t);
-  const savedVideo = state.media.video;
-  if (!includeMedia) state.media.video = null;
+  state.suppressMedia = !includeMedia;      // 只要叠加层时把底片藏掉
   const c = renderAt(t);
-  state.media.video = savedVideo;
+  state.suppressMedia = false;
   return c;
 }
 
@@ -2536,7 +2998,10 @@ async function renderMp4Blob(includeMedia, withAudio) {
 
   // 音轨：勾了"带声音"而且真的载入了音频才编
   let audio = null;
-  if (withAudio && state.media.audioFile) {
+  const hasSound = state.scene.clips.length
+    ? state.scene.clips.some((c) => c.kind === 'audio' || c.kind === 'video')
+    : !!state.media.audioFile;
+  if (withAudio && hasSound) {
     showBusy('编码音轨…', 0.75);
     try {
       audio = await encodeAudioTrack((s.duration * total) / fps);
@@ -2558,11 +3023,53 @@ async function renderMp4Blob(includeMedia, withAudio) {
  * 把载入的音乐编成 AAC 音轨（给 MP4 用）。
  * 返回 { sampleRate, channels, samples, description, bitrate }，交给 engine/mp4.js 封装。
  */
+/**
+ * 把时间轴上所有带声音的片段混成一条 AudioBuffer。
+ * 用 OfflineAudioContext 离线渲染，所以不受播放速度影响，导出多快都行。
+ */
+async function mixClipAudio(limitSec) {
+  const list = state.scene.clips.filter((c) => c.kind === 'audio' || c.kind === 'video');
+  if (!list.length) return null;
+  const SR = 48000;
+  const total = Math.max(1, Math.ceil(Math.min(limitSec, state.scene.clipsEnd) * SR));
+  const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, total, SR);
+  let used = 0;
+  for (const c of list) {
+    const a = assetById(c.assetId);
+    if (!a) continue;
+    const buf = await assetBuffer(a);
+    if (!buf) continue;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const gain = ctx.createGain();
+    gain.gain.value = state.muted ? 0 : clamp(c.volume === undefined ? 1 : c.volume, 0, 1);
+    src.connect(gain); gain.connect(ctx.destination);
+    const off = Math.min(c.in, Math.max(0, buf.duration - 0.01));
+    const dur = Math.min(c.dur, Math.max(0, buf.duration - off));
+    if (dur <= 0.01) continue;
+    src.start(Math.max(0, c.start), off, dur);
+    used++;
+    showBusy('混合音轨…', 0.6 + 0.15 * (used / list.length));
+  }
+  if (!used) return null;
+  return ctx.startRendering();
+}
+
 async function encodeAudioTrack(limitSec) {
   const file = state.media.audioFile;
-  if (!file || typeof window.AudioEncoder === 'undefined') return null;
-  const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 48000);
-  const buf = await ctx.decodeAudioData(await file.arrayBuffer());
+  if (typeof window.AudioEncoder === 'undefined') return null;
+
+  // 先把时间轴上的声音混成一条：
+  //  · 有片段 → 每段按 start/in/dur/volume 摆到自己的位置上（视频片段自带的声音也算进去）
+  //  · 没有片段（老工程）→ 就用那一支音乐
+  let buf = null;
+  if (state.scene.clips.length) {
+    buf = await mixClipAudio(limitSec);
+  } else if (file) {
+    const ctx0 = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 48000);
+    buf = await ctx0.decodeAudioData(await file.arrayBuffer());
+  }
+  if (!buf) return null;
   const sampleRate = buf.sampleRate;
   const channels = Math.min(2, buf.numberOfChannels);
   const bitrate = 192_000;
@@ -3375,7 +3882,11 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowRight') { e.preventDefault(); setTime(state.t + step); }
   else if (e.key === 'Delete' || e.key === 'Backspace') {
     e.preventDefault();
-    deleteSelectedLayers();          // 单选 / 框选 / Shift 加选，一次都删掉
+    // 选中片段就删片段，否则删图层
+    if (selectedClip()) deleteSelectedClip();
+    else deleteSelectedLayers();     // 单选 / 框选 / Shift 加选，一次都删掉
+  } else if ((e.key === 's' || e.key === 'S') && !e.metaKey && !e.ctrlKey) {
+    splitClipAt(state.t);            // 剪映里也是 S 切一刀
   } else if (e.key === 'Home') setTime(0);
   else if (e.key === 'End') setTime(state.scene.duration);
   else if (e.key === 'm' || e.key === 'M') { state.muted = !state.muted; applyAudio(); }
@@ -3926,6 +4437,40 @@ function persistMedia(kind, file) {
   idbPut(kind, file).catch(() => {});
 }
 
+/**
+ * 素材库持久化：每份素材单独存一条（key = 'asset:<id>'）。
+ * 刷新 / 换电脑打开工程时靠它把画面接回来 —— 否则工程 JSON 里只有个 assetId，
+ * 时间轴上是空壳。太大（> MEDIA_MAX）就跳过，工程里那一格会显示成"素材丢了"。
+ */
+function persistAsset(a) {
+  if (NO_PERSIST || !a || !a.file) return;
+  if (a.file.size > MEDIA_MAX) return;
+  idbPut('asset:' + a.id, { file: a.file, meta: { name: a.name, kind: a.kind, size: a.file.size, type: a.file.type } })
+    .catch(() => {});
+}
+
+/** 工程里有片段、但素材不在内存里时，按 id 把它们从 IndexedDB 捞回来 */
+async function restoreAssets() {
+  const ids = [...new Set(state.scene.clips.map((c) => c.assetId).filter(Boolean))];
+  let back = 0;
+  for (const id of ids) {
+    if (state.assets.has(id)) continue;
+    let rec = null;
+    try { rec = await idbGet('asset:' + id); } catch (_) {}
+    if (!rec || !rec.file) continue;
+    try {
+      const a = await addAsset(rec.file, (rec.meta && rec.meta.kind) || 'video');
+      const old = state.assets.get(a.id);
+      state.assets.delete(a.id);                 // 换成工程里记的那个 id
+      a.id = id;
+      state.assets.set(id, a);
+      void old;
+      back++;
+    } catch (_) {}
+  }
+  return back;
+}
+
 function autosaveSnapshot() {
   return {
     v: 1,
@@ -3964,9 +4509,11 @@ function adoptScene(json) {
   state.scene = Scene.fromJSON(json);
   state.selection = null;
   state.selected = new Set();
+  state.clipSel = null;
   rightTab = 'scene';
   resetLayerIndex();
   resize(); drawTimeline(); renderRight(); updateBeatInfo();
+  if (state.scene.clips.length) restoreAssets();     // 片段要配上素材才有画面
 }
 
 function clearLocalProject() {
@@ -3980,6 +4527,9 @@ function clearLocalProject() {
 function newProject(silent) {
   if (!silent && !confirm('新建空白工程？当前工程会被清空。\n（之前用「保存工程」存出来的文件不受影响）')) return;
   state.scene = new Scene({ width: 1920, height: 1080, fps: 24, duration: 10, transparent: true });
+  for (const a of state.assets.values()) { try { URL.revokeObjectURL(a.url); } catch (_) {} }
+  state.assets.clear();
+  state.clipSel = null;
   state.media = { video: null, audio: null, videoName: '', audioName: '', videoFile: null, videoMeta: null, audioMeta: null };
   state.analysis = null;
   state.selection = null;
@@ -4013,7 +4563,8 @@ function restoreAutosave() {
   const summary = () => {
     const s = state.scene;
     return `已 <b>恢复上次的工程</b>（${hh} 自动保存 · ${s.layers.length} 个图层`
-      + (s.captions.length ? ' · ' + s.captions.length + ' 条字幕' : '') + '）';
+      + (s.captions.length ? ' · ' + s.captions.length + ' 条字幕' : '')
+      + (s.clips.length ? ' · ' + s.clips.length + ' 个片段' : '') + '）';
   };
   const missing = (m) => `素材「${escapeHtml(m.name)}」没有一起存下来，需要重新拖进来一次`;
   const meta = data.media || {};
@@ -4026,10 +4577,13 @@ function restoreAutosave() {
     idbGet(kind).then((blob) => {
       if (!blob) { showRestoreBar(summary() + '<br>' + missing(m)); return; }
       const f = new File([blob], m.name, { type: m.type || '' });
-      if (kind === 'video') loadVideoFile(f, { keepDuration: true });
-      else loadAudioFile(f, { analyze: false });
+      // noClip：工程里已经存了片段表，这里只是把"当前素材"接回来当兜底
+      if (kind === 'video') loadVideoFile(f, { keepDuration: true, noClip: true });
+      else loadAudioFile(f, { analyze: false, noClip: true });
+      restoreAssets();
     }).catch(() => showRestoreBar(summary() + '<br>' + missing(m)));
   }
+  if (!want.length && state.scene.clips.length) restoreAssets();
 
   if (sc.layers.length || sc.captions.length) {
     showRestoreBar(summary());
@@ -4168,6 +4722,11 @@ window.MotionKit = {
   // 导出：录一段视频（自检里会用，用来确认 MP4 这条线真的能出文件）
   renderVideoBlob: (want, includeMedia, opts) => renderVideoBlob(want, includeMedia, opts),
   loadAudioFile: (file) => loadAudioFile(file, { analyze: false }),
+  addImageFile: (file) => loadVideoFile(file, { noClip: true }).then((a) => addClip(a)),
+  loadVideoAsClip: (file) => loadVideoFile(file),
+  splitAt: (t) => splitClipAt(t),
+  clipRows: () => [...clipRowMap.entries()].map(([id, g]) => Object.assign({ id }, g)),
+  clipById: (id) => clipById(id),
   videoSupport: () => ({ mp4: pickVideoMime('mp4'), webm: pickVideoMime('webm') }),
   registerTemplate,
   version: '1.0.0',
