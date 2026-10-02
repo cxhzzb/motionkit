@@ -9145,6 +9145,55 @@ function drawTimeline() {
   drawClipTrack('video', vidY, VID_H, x0, x1, sx);
   drawClipTrack('audio', audY, AUD_H, x0, x1, sx);
 
+  // ---- 素材结束之后的那一段：明确标出来，不然"视频没了但时间还在走"很难看出来 ----
+  {
+    const clipsEnd = s.clips.length ? s.clipsEnd : 0;
+    const tail = clipsEnd ? s.duration - clipsEnd : 0;
+    if (tail > 0.05) {
+      const tx = Math.max(x0, sx(clipsEnd));
+      if (tx < x1 - 2) {
+        tlCtx.save();
+        tlCtx.fillStyle = 'rgba(255,90,36,0.10)';
+        tlCtx.fillRect(tx, RULER_H, x1 - tx, h - RULER_H);
+        tlCtx.beginPath();
+        tlCtx.rect(tx, RULER_H, x1 - tx, h - RULER_H);
+        tlCtx.clip();
+        tlCtx.strokeStyle = 'rgba(255,90,36,0.22)';
+        tlCtx.lineWidth = 1;
+        for (let d = -h; d < (x1 - tx) + h; d += 9) {      // 斜纹，一眼看出"这段是空的"
+          tlCtx.beginPath();
+          tlCtx.moveTo(tx + d, h);
+          tlCtx.lineTo(tx + d + h, 0);
+          tlCtx.stroke();
+        }
+        tlCtx.restore();
+        tlCtx.strokeStyle = 'rgba(255,120,60,0.9)';
+        tlCtx.setLineDash([4, 3]);
+        tlCtx.beginPath();
+        tlCtx.moveTo(tx + 0.5, RULER_H);
+        tlCtx.lineTo(tx + 0.5, h);
+        tlCtx.stroke();
+        tlCtx.setLineDash([]);
+        // 标签
+        const tag = '素材到 ' + clipsEnd.toFixed(2) + 's 就没了 · 后面还有 ' + tail.toFixed(2) + 's（导出会多出黑场）';
+        tlCtx.font = uiFont(12, 600) + getComputedStyle(document.body).getPropertyValue('--sans');
+        const tw = tlCtx.measureText(tag).width + 14;
+        if (x1 - tx > 60) {
+          tlCtx.fillStyle = 'rgba(30,10,4,0.92)';
+          roundRectPath(tlCtx, tx + 4, RULER_H + 4, Math.min(tw, x1 - tx - 8), 18, 3);
+          tlCtx.fill();
+          tlCtx.fillStyle = '#ffb08a';
+          tlCtx.save();
+          tlCtx.beginPath();
+          tlCtx.rect(tx + 4, RULER_H + 4, Math.min(tw, x1 - tx - 8), 18);
+          tlCtx.clip();
+          tlCtx.fillText(tag, tx + 10, RULER_H + 17);
+          tlCtx.restore();
+        }
+      }
+    }
+  }
+
   // ---- 图层（可上下滚动）----
   const capY = h - ROW_H - 4;
   const areaTop = TRACK_TOP, areaBot = capY - 4;
@@ -10260,6 +10309,26 @@ function rightPanelScene(body) {
     durNote.style.whiteSpace = 'pre-line';
     durNote.textContent = mediaNote();
     g.appendChild(durNote);
+    // 素材结束之后还剩一截的话，这里明说 + 一键收紧
+    const tail = tailBeyondClips();
+    if (tail > 0.05) {
+      const n = stuffBeyondClips();
+      const warn = document.createElement('div');
+      warn.className = 'fx-note';
+      warn.style.cssText = 'color:#ffb08a;background:#241009;border:1px solid #5a2a15;border-radius:5px;padding:8px 9px';
+      warn.textContent = '⚠ 素材只到 ' + n.end.toFixed(2) + ' 秒，工程却有 ' + state.scene.duration.toFixed(2)
+        + ' 秒 —— 导出会多出 ' + tail.toFixed(2) + ' 秒没有画面的黑场。\n'
+        + '后面还压着：' + (n.layers.length ? n.layers.length + ' 个图层 ' : '')
+        + (n.captions.length ? n.captions.length + ' 条字幕 ' : '')
+        + (n.clips.length ? n.clips.length + ' 个片段' : '')
+        + (n.layers.length + n.captions.length + n.clips.length ? '' : '（没有多余内容，只是时长没跟上）');
+      g.appendChild(warn);
+      const tr = document.createElement('div');
+      tr.className = 'btn-row';
+      tr.appendChild(btn('时长收紧到素材末尾', () => trimProjectToClips()));
+      tr.appendChild(btn('清掉素材之后的内容', () => clearStuffBeyondClips(), 'danger'));
+      g.appendChild(tr);
+    }
     g.appendChild(btn('重新跟随素材时长', () => {
       state.durationAuto = true;
       if (!applyAutoDuration()) { if (durNote) durNote.textContent = mediaNote(); }
@@ -11934,16 +12003,77 @@ function clipGainAt(c, t) {
   return clamp(g, 0, 1);
 }
 
-/** 片段排到哪儿、工程时长就跟到哪儿（用户手动改过时长就不跟了） */
+/**
+ * 片段排到哪儿、工程时长就跟到哪儿。
+ *
+ * 注意"会缩"：以前这里只往长了长，结果素材剪短之后，工程还是老长 ——
+ * 图层继续铺在那段空时间里，导出就多出一大截没有画面的黑场（真踩过）。
+ * 自动模式下（默认）跟着片段两头对齐；手动设过时长的工程只长不缩，不动用户的设定。
+ */
 function clipsFitDuration() {
   const end = state.scene.clipsEnd;
   if (!end) return false;
-  if (end > state.scene.duration + 0.001) {
-    state.scene.duration = Math.ceil(end * 100) / 100;
-    if (state.scene.beat) state.scene.beat.duration = state.scene.duration;
-    return true;
-  }
-  return false;
+  const want = Math.max(0.5, Math.round(end * 100) / 100);
+  const next = state.durationAuto ? want : Math.max(state.scene.duration, want);
+  if (Math.abs(next - state.scene.duration) < 0.005) return false;
+  state.scene.duration = next;
+  if (state.scene.beat) state.scene.beat.duration = next;
+  return true;
+}
+
+/** 素材结束后还剩多长（> 0 就说明导出会多出一段没有画面的黑场） */
+function tailBeyondClips() {
+  const end = state.scene.clipsEnd;
+  if (!end) return 0;
+  return Math.max(0, state.scene.duration - end);
+}
+
+/** 素材末尾之后还压着哪些东西（图层 / 字幕）—— 用来给用户交代"是什么在拖着" */
+function stuffBeyondClips() {
+  const end = state.scene.clipsEnd;
+  if (!end) return { end: 0, layers: [], captions: [], clips: [] };
+  return {
+    end,
+    layers: state.scene.layers.filter((L) => L.start >= end - 0.01),
+    captions: state.scene.captions.filter((c) => c.start >= end - 0.01),
+    clips: state.scene.clips.filter((c) => c.start >= end - 0.01),
+  };
+}
+
+/** 一键把工程收紧到素材末尾（不删东西，只是不再多导出那段空的） */
+function trimProjectToClips(silent) {
+  const end = state.scene.clipsEnd;
+  if (!end) { if (!silent) toast('时间轴上还没有素材'); return false; }
+  state.scene.duration = Math.max(0.5, Math.round(end * 100) / 100);
+  state.durationAuto = true;
+  if (state.scene.beat) state.scene.beat.duration = state.scene.duration;
+  state.t = Math.min(state.t, state.scene.duration);
+  markIndexDirty(); resize(); drawTimeline(); renderRight(); renderAt(state.t); blit();
+  if (!silent) toast('工程时长收紧到素材末尾：' + state.scene.duration.toFixed(2) + ' 秒');
+  return true;
+}
+
+/** 顺手把素材之后压着的东西删掉（图层 / 字幕 / 片段）—— 要用户确认 */
+function clearStuffBeyondClips() {
+  const end = state.scene.clipsEnd;
+  if (!end) return 0;
+  const n = stuffBeyondClips();
+  const total = n.layers.length + n.captions.length + n.clips.length;
+  if (!total) { toast('素材之后没有多余的东西'); return 0; }
+  const ok = confirm('素材只到 ' + end.toFixed(2) + ' 秒，后面还压着：\n'
+    + (n.layers.length ? '· ' + n.layers.length + ' 个图层\n' : '')
+    + (n.captions.length ? '· ' + n.captions.length + ' 条字幕\n' : '')
+    + (n.clips.length ? '· ' + n.clips.length + ' 个片段\n' : '')
+    + '\n确定删掉这些？（删了还能 Ctrl+Z 撤销）');
+  if (!ok) return 0;
+  const ids = new Set(n.layers.map((L) => L.id));
+  state.scene.layers = state.scene.layers.filter((L) => !ids.has(L.id));
+  state.scene.captions = state.scene.captions.filter((c) => !n.captions.includes(c));
+  state.scene.clips = state.scene.clips.filter((c) => !n.clips.includes(c));
+  selectLayer(null);
+  trimProjectToClips(true);
+  toast('删掉 ' + total + ' 项素材之后的内容');
+  return total;
 }
 
 async function loadVideoFile(file, opts = {}) {
@@ -13025,8 +13155,26 @@ stage.addEventListener('drop', (e) => {
 const dlg = $('exportDlg');
 $('btnExport').addEventListener('click', () => {
   $('exportInfo').textContent = `${state.scene.width}×${state.scene.height} · ${state.scene.fps}fps · ${state.scene.frameCount} 帧`;
+  updateExportTailWarn();
   dlg.showModal();
 });
+
+/**
+ * 导出弹窗里那条"素材已经没了但工程还在走"的提醒。
+ * 用户是在导出这一步发现时长不对的，那就把提醒和修好的按钮都放在这一步。
+ */
+function updateExportTailWarn() {
+  const box = $('exportWarn');
+  if (!box) return;
+  const tail = tailBeyondClips();
+  if (tail <= 0.05) { box.style.display = 'none'; box.textContent = ''; return; }
+  const n = stuffBeyondClips();
+  box.style.display = '';
+  box._text.textContent = '⚠ 素材只到 ' + n.end.toFixed(2) + 's，工程有 ' + state.scene.duration.toFixed(2)
+    + 's —— 会多导出 ' + tail.toFixed(2) + 's 黑场。点右边按钮收紧到素材末尾。';
+  const b = $('btnExportTrim');
+  if (b) b.textContent = '收紧到 ' + n.end.toFixed(2) + 's';
+}
 $('btnCloseDlg').addEventListener('click', () => dlg.close());
 
 // 弹窗里补一个"包含底图"开关
@@ -13054,6 +13202,29 @@ soundNote.innerHTML =
   '要"原片原声 + 叠加层"的成片：用 <code>tools/encode.py --overlay 原片.mp4 --audio 音乐.wav</code>，' +
   '或者 AI 助手跑 <code>--render</code>。';
 audioRow.after(soundNote);
+
+// 「素材已经结束、工程还在走」的提醒：就地给一个收紧按钮，不用跑去别的页签
+{
+  const box = document.createElement('div');
+  box.id = 'exportWarn';
+  box.className = 'mini';
+  box.style.cssText = 'display:none;align-items:center;gap:8px;margin-top:10px;color:#ffb08a;'
+    + 'background:#241009;border:1px solid #5a2a15;border-radius:5px;padding:8px 10px;line-height:1.6';
+  const tx = document.createElement('span');
+  tx.style.flex = '1 1 auto';
+  box.appendChild(tx);
+  const fix = document.createElement('button');
+  fix.id = 'btnExportTrim';
+  fix.textContent = '收紧时长';
+  fix.addEventListener('click', () => {
+    trimProjectToClips();
+    updateExportTailWarn();
+    $('exportInfo').textContent = `${state.scene.width}×${state.scene.height} · ${state.scene.fps}fps · ${state.scene.frameCount} 帧`;
+  });
+  box.appendChild(fix);
+  soundNote.after(box);
+  box._text = tx;
+}
 
 dlg.addEventListener('click', async (e) => {
   const b = e.target.closest('.ex');
@@ -13976,6 +14147,14 @@ window.MotionKit = {
   tlView: () => tlView(),
   tlZoomFit: () => tlZoomFit(),
   applyUiScale: (k) => applyUiScale(k, false),
+  tailBeyond: () => tailBeyondClips(),
+  stuffBeyond: () => {
+    const n = stuffBeyondClips();
+    return { end: n.end, layers: n.layers.length, captions: n.captions.length, clips: n.clips.length };
+  },
+  trimToClips: () => trimProjectToClips(),
+  clearBeyond: () => clearStuffBeyondClips(),
+  syncClips: () => { const ch = clipsFitDuration(); if (ch) { drawTimeline(); renderRight(); } return ch; },
   clipById: (id) => clipById(id),
   assetState: (id) => {
     const a = state.assets.get(id);
