@@ -100,6 +100,10 @@ report.checks.shiftAdds = sel().size === 2;
 
 // ---- ⑦ 时间轴上 Shift 拖 = 框选（空白处起手，不跟拖播放头打架）
 const tl = document.getElementById('timeline');
+// 界面字号放大之后行变高了，4 行可能装不下 —— 先把时间轴拉高，保证四行都在可见区里
+tl.style.height = '420px';
+MK.setTime(MK.state.t);
+await sleep(150);
 const tr = tl.getBoundingClientRect();
 const tpt = (x, y) => ({ x: tr.left + x, y: tr.top + y });
 const from = tpt(tr.width - 14, tr.height - 24);

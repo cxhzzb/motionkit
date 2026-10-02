@@ -510,6 +510,31 @@ if (textPick) {
   }
 }
 
+// -------------------------------------------------------------- 字号 / 界面大小
+// 「字太小看不清」是个真反馈：这里守住底线 —— 按钮和面板正文字号不许低于 13px，
+// 而且工程页那个「界面大小」要真的能放大（CSS 变量 + 画布尺寸两边一起动）。
+{
+  const sizes = [...document.querySelectorAll('#rightBody button, #tlTools button, .top-actions button, .lrow .nm')]
+    .map((el) => parseFloat(getComputedStyle(el).fontSize))
+    .filter((n) => n > 0);
+  report.fonts = { min: Math.min(...sizes), n: sizes.length };
+  report.checks.fontSizeFloor = sizes.length > 5 && Math.min(...sizes) >= 13;
+
+  const before = {
+    body: parseFloat(getComputedStyle(document.body).fontSize),
+    rowH: MK.tlScroll().rowH,
+  };
+  MK.applyUiScale(1.3);
+  const after = {
+    body: parseFloat(getComputedStyle(document.body).fontSize),
+    rowH: MK.tlScroll().rowH,
+  };
+  report.uiScale = { before, after };
+  report.checks.uiScaleGrowsText = after.body > before.body + 2;
+  report.checks.uiScaleGrowsTimeline = after.rowH > before.rowH;
+  MK.applyUiScale(1);
+}
+
 report.checks.all = Object.keys(report.checks).every((k) => report.checks[k] !== false);
 // 结果挂在全局上：shot.mjs 会把它读出来打印。
 // （不写顶层 return，是为了这个文件本身也能过 node --check）

@@ -40,6 +40,7 @@ const state = {
   clipSel: null,          // 选中的片段 id（时间轴上那些块）
   suppressMedia: false,   // 导出"只要叠加层"时临时把底片藏掉
   muted: false,          // 预览总静音（走带栏那个喇叭）
+  uiScale: 1,            // 界面整体大小（工程页可调，CSS 走 --ui 变量）
     tplPick: null,         // 模板库里点选中的模板（只是选中，拖着往画面里放才会加图层）
     tplCollapsed: {},      // 模板库哪些分类是折叠的
     durationAuto: true,    // 工程时长是否跟着素材走（手动改过时长就关掉）
@@ -381,14 +382,53 @@ function tlGeom() {
   tlCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { w, h };
 }
-const RULER_H = 22;
-const ROW_H = 22;
-const ROW_GAP = 3;
+// ---------------------------------------------------------------- 界面大小
+/**
+ * 界面整体大小。
+ *
+ * CSS 那边所有字号都是 calc(px * var(--ui))，改一个变量就行；画布上画的时间轴
+ * （标尺、片段名字、图层条）不吃 CSS，所以这里也乘一遍 —— 连轨道高度一起算，
+ * 字大了行还那么窄会挤成一团。
+ */
+function uiScale() { return state.uiScale || 1; }
+/** 画布上的字体串：uiFont(13, 700) → '700 14.3px ' */
+function uiFont(px, weight) { return (weight ? weight + ' ' : '') + (px * uiScale()).toFixed(1) + 'px '; }
+
+let RULER_H = 22;
+let ROW_H = 26;
+let ROW_GAP = 3;
 // 媒体轨：视频在上、音频在下（跟剪辑软件的习惯一致），下面是图层、最底下是字幕
-const MEDIA_TOP = RULER_H + 4;
-const VID_H = 26;
-const AUD_H = 30;
-const TRACK_TOP = MEDIA_TOP + VID_H + 3 + AUD_H + 7;
+let MEDIA_TOP = RULER_H + 4;
+let VID_H = 30;
+let AUD_H = 34;
+let TRACK_TOP = MEDIA_TOP + VID_H + 3 + AUD_H + 7;
+
+function layoutMetrics() {
+  const k = uiScale();
+  RULER_H = Math.round(22 * k);
+  ROW_H = Math.round(26 * k);
+  ROW_GAP = Math.round(3 * k);
+  VID_H = Math.round(30 * k);
+  AUD_H = Math.round(34 * k);
+  MEDIA_TOP = RULER_H + 4;
+  TRACK_TOP = MEDIA_TOP + VID_H + 3 + AUD_H + 7;
+}
+
+/** 应用界面大小：CSS 变量 + 画布尺寸，两边一起改 */
+function applyUiScale(k, save) {
+  state.uiScale = clamp(k, 0.85, 1.6);
+  try { document.documentElement.style.setProperty('--ui', String(state.uiScale)); } catch (_) {}
+  if (save !== false) { try { localStorage.setItem('motionkit.uiScale', String(state.uiScale)); } catch (_) {} }
+  layoutMetrics();
+  resize(); drawTimeline(); renderRight(); blit();
+}
+{
+  let k = 1;
+  try { k = Number(localStorage.getItem('motionkit.uiScale') || 1) || 1; } catch (_) {}
+  state.uiScale = clamp(k, 0.85, 1.6);
+  try { document.documentElement.style.setProperty('--ui', String(state.uiScale)); } catch (_) {}
+  layoutMetrics();
+}
 let rowMap = new Map();
 let clipRowMap = new Map();      // clipId -> { band, x, w, y, h }（时间轴上的命中区）
 let transMarkMap = new Map();    // clipId -> { x, w, y, h }（两个片段中间那个转场小方块）
@@ -412,7 +452,7 @@ function drawTransitionMarks(list, y, h, sx) {
     tlCtx.lineWidth = 1;
     tlCtx.stroke();
     tlCtx.fillStyle = has ? '#2a0f04' : 'rgba(255,255,255,0.75)';
-    tlCtx.font = '700 10px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+    tlCtx.font = uiFont(12, 700) + getComputedStyle(document.body).getPropertyValue('--sans');
     tlCtx.textAlign = 'center';
     tlCtx.textBaseline = 'middle';
     tlCtx.fillText('⋈', cx, cy + 0.5);
@@ -466,7 +506,7 @@ function drawClipBlock(c, bx, y, bw, h, isAudio, isSel, track) {
 
   // 名字（压在左上）
   const label = (c.kind === 'image' ? '图片 ' : c.kind === 'audio' ? '音频 ' : '') + (c.name || '');
-  tlCtx.font = '600 10.5px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+  tlCtx.font = uiFont(12.5, 600) + getComputedStyle(document.body).getPropertyValue('--sans');
   const tw = Math.min(bw - 12, tlCtx.measureText(label).width + 8);
   if (tw > 14) {
     tlCtx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -484,7 +524,7 @@ function drawClipBlock(c, bx, y, bw, h, isAudio, isSel, track) {
   if ((c.speed || 1) !== 1) tags.push((c.speed).toFixed(2).replace(/0$/, '') + '×');
   if (c.grade) tags.push('调色');
   if (tags.length) {
-    tlCtx.font = '700 9.5px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    tlCtx.font = uiFont(11.5, 700) + getComputedStyle(document.body).getPropertyValue('--mono');
     const txt = tags.join(' ');
     const tw2 = tlCtx.measureText(txt).width + 8;
     if (bw > tw2 + 20) {
@@ -555,7 +595,7 @@ function drawClipTrack(band, y, h, x0, x1, sx) {
     tlCtx.strokeStyle = band === 'audio' ? 'rgba(255,204,0,0.75)' : 'rgba(0,229,255,0.75)';
     tlCtx.lineWidth = 1; tlCtx.stroke();
     tlCtx.fillStyle = band === 'audio' ? '#ffe9a8' : '#cdf3ff';
-    tlCtx.font = '600 11px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+    tlCtx.font = uiFont(13, 600) + getComputedStyle(document.body).getPropertyValue('--sans');
     tlCtx.save();
     tlCtx.beginPath(); tlCtx.rect(sx(0) + 4, y, Math.max(10, bw - 8), h); tlCtx.clip();
     tlCtx.fillText((band === 'audio' ? '音频  ' : '') + (band === 'audio' ? state.media.audioName : state.media.videoName || '')
@@ -564,7 +604,7 @@ function drawClipTrack(band, y, h, x0, x1, sx) {
     return;
   }
   tlCtx.fillStyle = '#4a505b';
-  tlCtx.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  tlCtx.font = uiFont(13) + getComputedStyle(document.body).getPropertyValue('--mono');
   tlCtx.fillText(band === 'audio'
     ? '音频轨 · 未载入（拖一首歌进来会自动分析卡点）'
     : '视频轨 · 未载入（把视频 / 图片拖进画面区）', x0 + 8, y + h / 2 + 4);
@@ -587,7 +627,7 @@ function drawTimeline() {
   // 刻度按"看得见的那一段"来定，放大之后才不会还是 5 秒一根
   const step = niceStep(V.span, (x1 - x0) / 90);
   tlCtx.strokeStyle = '#2a2d34'; tlCtx.lineWidth = 1;
-  tlCtx.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  tlCtx.font = uiFont(12) + getComputedStyle(document.body).getPropertyValue('--mono');
   tlCtx.textBaseline = 'middle';
   const firstTick = Math.floor(V.start / step) * step;
   for (let t = firstTick; t <= V.start + V.span + 1e-6; t += step) {
@@ -651,7 +691,7 @@ function drawTimeline() {
     roundRectPath(tlCtx, bx, y, bw, ROW_H, 3); tlCtx.fill();
     tlCtx.globalAlpha = 1;
     tlCtx.fillStyle = isMain ? '#1a0a04' : '#e9ecf1';
-    tlCtx.font = '600 11px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+    tlCtx.font = uiFont(13, 600) + getComputedStyle(document.body).getPropertyValue('--sans');
     const nm = (tpl ? tpl.name : L.template) + '  ' + L.start.toFixed(2) + 's→' + L.end.toFixed(2) + 's';
     tlCtx.save(); tlCtx.beginPath(); tlCtx.rect(bx + 6, y, bw - 12, ROW_H); tlCtx.clip();
     tlCtx.fillText(nm, bx + 7, y + ROW_H / 2 + 0.5);
@@ -887,12 +927,13 @@ const TL_ICONS = {
 let btnUndo = null, btnRedo = null, btnSplit = null, btnCopy = null, btnClipDel = null, btnSnap = null;
 let btnZoomIn = null, btnZoomOut = null, btnZoomFit = null, tlZoomLabel = null;
 
-function iconBtn(icon, title, onClick) {
+function iconBtn(icon, title, onClick, label) {
   const b = document.createElement('button');
   b.className = 'tl-btn';
   b.title = title;
   b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"'
-    + ' stroke-linecap="round" stroke-linejoin="round">' + TL_ICONS[icon] + '</svg>';
+    + ' stroke-linecap="round" stroke-linejoin="round">' + TL_ICONS[icon] + '</svg>'
+    + (label ? '<span>' + label + '</span>' : '');
   b.addEventListener('click', onClick);
   return b;
 }
@@ -903,17 +944,17 @@ function buildTimelineTools() {
   bar.textContent = '';
   const sep = () => { const s = document.createElement('span'); s.className = 'tl-sep'; return s; };
 
-  btnUndo = iconBtn('undo', '撤销（Ctrl+Z）', () => historyStep(-1));
-  btnRedo = iconBtn('redo', '重做（Ctrl+Shift+Z）', () => historyStep(1));
+  btnUndo = iconBtn('undo', '撤销（Ctrl+Z）', () => historyStep(-1), '撤销');
+  btnRedo = iconBtn('redo', '重做（Ctrl+Shift+Z）', () => historyStep(1), '重做');
   bar.appendChild(btnUndo); bar.appendChild(btnRedo);
   bar.appendChild(sep());
 
-  btnSplit = iconBtn('cut', '在播放头切开选中的片段（S）', () => splitClipAt(state.t));
-  btnCopy = iconBtn('copy', '复制选中的片段接在后面（Ctrl+D）', () => duplicateSelectedClip());
+  btnSplit = iconBtn('cut', '在播放头切开选中的片段（S）', () => splitClipAt(state.t), '切开');
+  btnCopy = iconBtn('copy', '复制选中的片段接在后面（Ctrl+D）', () => duplicateSelectedClip(), '复制');
   btnClipDel = iconBtn('trash', '删掉选中的片段，没选片段时删图层（Del）', () => {
     if (selectedClip()) deleteSelectedClip();
     else deleteSelectedLayers();
-  });
+  }, '删除');
   bar.appendChild(btnSplit); bar.appendChild(btnCopy); bar.appendChild(btnClipDel);
   bar.appendChild(sep());
 
@@ -921,7 +962,7 @@ function buildTimelineTools() {
   btnSnap = iconBtn('magnet', '拖动片段时吸附播放头 / 相邻边缘', () => {
     state.clipSnap = !state.clipSnap;
     updateToolButtons();
-  });
+  }, '吸附');
   bar.appendChild(btnSnap);
 
   bar.appendChild(sep());
@@ -1701,6 +1742,17 @@ function rightPanelLayer(body, L) {
 /** 工程页：画面尺寸 / 帧率 / 时长 + 载入的素材信息 */
 function rightPanelScene(body) {
   {
+    const gu = group('界面');
+    gu.appendChild(selectField('界面大小', String(state.uiScale),
+      [{ value: '0.9', label: '小' }, { value: '1', label: '标准（默认）' },
+        { value: '1.15', label: '大' }, { value: '1.3', label: '特大' }],
+      (v) => applyUiScale(Number(v), true)));
+    const un = document.createElement('div');
+    un.className = 'fx-note';
+    un.textContent = '字和图标一起放大（时间轴上的字也跟着大）。浏览器里按 Ctrl + 加号 / 减号是另一回事，那个会连画面预览一起缩放。';
+    gu.appendChild(un);
+    body.appendChild(gu);
+
     const g = group('画面');
     g.appendChild(numField('宽', state.scene.width, 64, 8192, 1, (v) => { state.scene.width = Math.round(v); resize(); }));
     g.appendChild(numField('高', state.scene.height, 64, 8192, 1, (v) => { state.scene.height = Math.round(v); resize(); }));
@@ -5439,6 +5491,7 @@ window.MotionKit = {
     .map((L) => ({ template: L.template, start: L.start, end: L.end, clipId: L.meta && L.meta.clipId })),
   tlView: () => tlView(),
   tlZoomFit: () => tlZoomFit(),
+  applyUiScale: (k) => applyUiScale(k, false),
   clipById: (id) => clipById(id),
   assetState: (id) => {
     const a = state.assets.get(id);
