@@ -458,6 +458,26 @@ input[type="color"]:disabled { cursor: not-allowed; }
 
 /* ---------- 字幕换装：一句一行的单独换样子 ---------- */
 .cap-list { margin-top: 6px; border-top: 1px solid var(--line); }
+
+/* ---------- 时间轴上方的工具栏（剪映 / PR 那种一排图标） ---------- */
+.tl-tools {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 6px 4px; border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, #16181d, #101216);
+}
+.tl-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  width: 28px; height: 24px; padding: 0; border: 1px solid transparent; border-radius: 4px;
+  background: transparent; color: var(--ink); cursor: pointer;
+}
+.tl-btn:hover { background: #23262d; border-color: var(--line); }
+.tl-btn:disabled { opacity: .3; cursor: default; }
+.tl-btn:disabled:hover { background: transparent; border-color: transparent; }
+.tl-btn.on { background: #2a1a12; border-color: #6b3a22; color: #ffb08a; }
+.tl-btn svg { width: 15px; height: 15px; display: block; }
+.tl-sep { width: 1px; height: 16px; background: var(--line); margin: 0 3px; }
+.tl-tools .grow { flex: 1 1 auto; }
+.tl-tools .tl-hint { font-size: 10.5px; color: var(--dim); font-family: var(--mono); }
 .cap-row {
   display: flex; align-items: center; gap: 8px;
   padding: 4px 0; border-bottom: 1px solid #1e2126;

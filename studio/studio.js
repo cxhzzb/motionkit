@@ -205,6 +205,7 @@ function updateTransport() {
   $('tcTotal').textContent = timecode(state.scene.duration, state.scene.fps, true);
   if (!scrubbing) $('scrub').value = String(Math.round((state.t / Math.max(0.001, state.scene.duration)) * 1000));
   $('btnPlay').textContent = state.playing ? '❚❚' : '▶';
+  updateToolButtons();      // 撤销 / 切开 / 复制 / 删除 的可用状态跟着选择走
 
   // 走带栏的「⚡ 闪白」：画面一直闪的时候，一抬眼就能关掉，不用翻右侧面板
   const flashes = (state.scene.fx || []).filter((s) => s.type === 'flash' || s.type === 'invert');
@@ -673,6 +674,154 @@ function fmtShort(t) {
 }
 
 // ---------------------------------------------------------------- 时间轴交互
+// ---------------------------------------------------------------- 撤销 / 重做
+/**
+ * 撤销栈。
+ *
+ * 记法和自动保存是同一个思路：每 350ms 比一次工程内容，变了就把这一版压栈
+ * （比在每个改参数的地方插钩子可靠 —— 那种做法迟早漏掉几个入口）。
+ *
+ * 两个细节：
+ *   · 拖动 / 框选过程中不记，一次拖拽只留一条历史；
+ *   · 松手后 800ms 内的小改动并进上一条，免得打字打十个字留下十条历史。
+ */
+const HISTORY_MAX = 60;
+const history = { list: [], at: -1, last: '', lastAt: 0 };
+function busyEditing() { return !!(pdrag || dragClip || marquee || tlMarquee || drag || scrubbing); }
+
+function historyReset() {
+  history.list = [];
+  history.at = 0;
+  try { history.last = JSON.stringify(state.scene.toJSON()); } catch (_) { history.last = ''; }
+  history.list.push(history.last);
+  history.lastAt = Date.now();
+  updateToolButtons();
+}
+
+function historyTick() {
+  if (busyEditing()) return;
+  let json = '';
+  try { json = JSON.stringify(state.scene.toJSON()); } catch (_) { return; }
+  if (json === history.last) return;
+  const now = Date.now();
+  if (now - history.lastAt < 800 && history.at > 0) {
+    history.list[history.at] = json;          // 并进上一条
+  } else {
+    history.list = history.list.slice(0, history.at + 1);
+    history.list.push(json);
+    if (history.list.length > HISTORY_MAX) history.list.shift();
+    history.at = history.list.length - 1;
+  }
+  history.last = json;
+  history.lastAt = now;
+  updateToolButtons();
+}
+
+function historyStep(delta) {
+  const to = history.at + delta;
+  if (to < 0 || to >= history.list.length) return false;
+  history.at = to;
+  history.last = history.list[to];
+  history.lastAt = Date.now();
+  restoreHistory(history.list[to]);
+  updateToolButtons();
+  toast(delta < 0 ? '撤销一步' : '重做一步');
+  return true;
+}
+
+/** 把某一版工程装回去（时间轴位置和片段选中尽量保住） */
+function restoreHistory(json) {
+  const t = state.t;
+  const clipSel = state.clipSel;
+  state.scene = Scene.fromJSON(JSON.parse(json));
+  state.selection = null;
+  state.selected = new Set();
+  state.clipSel = state.scene.clips.some((c) => c.id === clipSel) ? clipSel : null;
+  markIndexDirty();
+  resize(); drawTimeline(); renderRight(); renderAt(t); blit();
+  autosaveNow(true);
+}
+
+function duplicateSelectedClip() {
+  const c = selectedClip();
+  if (!c) { toast('先点一个片段'); return null; }
+  const copy = new Clip(Object.assign({}, c.toJSON(), { id: null, start: c.end }));
+  state.scene.clips.push(copy);
+  state.clipSel = copy.id;
+  clipsFitDuration(); markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
+  toast('复制了一段');
+  return copy;
+}
+
+// ---------------------------------------------------------------- 时间轴工具栏
+const TL_ICONS = {
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+  redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>',
+  cut: '<circle cx="6" cy="18" r="2.6"/><circle cx="18" cy="18" r="2.6"/><path d="M7.9 16.1 19 4"/><path d="M16.1 16.1 5 4"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+  trash: '<path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M10 11v6M14 11v6"/>',
+  magnet: '<path d="M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4z"/><path d="M6 8h4M14 8h4"/>',
+};
+
+let btnUndo = null, btnRedo = null, btnSplit = null, btnCopy = null, btnClipDel = null, btnSnap = null;
+
+function iconBtn(icon, title, onClick) {
+  const b = document.createElement('button');
+  b.className = 'tl-btn';
+  b.title = title;
+  b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"'
+    + ' stroke-linecap="round" stroke-linejoin="round">' + TL_ICONS[icon] + '</svg>';
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function buildTimelineTools() {
+  const bar = $('tlTools');
+  if (!bar) return;
+  bar.textContent = '';
+  const sep = () => { const s = document.createElement('span'); s.className = 'tl-sep'; return s; };
+
+  btnUndo = iconBtn('undo', '撤销（Ctrl+Z）', () => historyStep(-1));
+  btnRedo = iconBtn('redo', '重做（Ctrl+Shift+Z）', () => historyStep(1));
+  bar.appendChild(btnUndo); bar.appendChild(btnRedo);
+  bar.appendChild(sep());
+
+  btnSplit = iconBtn('cut', '在播放头切开选中的片段（S）', () => splitClipAt(state.t));
+  btnCopy = iconBtn('copy', '复制选中的片段接在后面（Ctrl+D）', () => duplicateSelectedClip());
+  btnClipDel = iconBtn('trash', '删掉选中的片段，没选片段时删图层（Del）', () => {
+    if (selectedClip()) deleteSelectedClip();
+    else deleteSelectedLayers();
+  });
+  bar.appendChild(btnSplit); bar.appendChild(btnCopy); bar.appendChild(btnClipDel);
+  bar.appendChild(sep());
+
+  state.clipSnap = state.clipSnap !== false;
+  btnSnap = iconBtn('magnet', '拖动片段时吸附播放头 / 相邻边缘', () => {
+    state.clipSnap = !state.clipSnap;
+    updateToolButtons();
+  });
+  bar.appendChild(btnSnap);
+
+  const grow = document.createElement('span');
+  grow.className = 'grow';
+  bar.appendChild(grow);
+  const hint = document.createElement('span');
+  hint.className = 'tl-hint';
+  hint.textContent = '拖片段挪位置 · 拖两边白条裁剪 · S 切开';
+  bar.appendChild(hint);
+  updateToolButtons();
+}
+
+function updateToolButtons() {
+  if (btnUndo) btnUndo.disabled = history.at <= 0;
+  if (btnRedo) btnRedo.disabled = history.at >= history.list.length - 1;
+  const c = selectedClip();
+  if (btnSplit) btnSplit.disabled = !c || state.t <= c.start + 0.05 || state.t >= c.end - 0.05;
+  if (btnCopy) btnCopy.disabled = !c;
+  if (btnClipDel) btnClipDel.disabled = !c && !state.selection && !state.selected.size;
+  if (btnSnap) btnSnap.classList.toggle('on', state.clipSnap !== false);
+}
+
 /** 像素 → 秒（不做卡点吸附；拖片段时用这个，不然每一动都被吸走） */
 function tlTimeAtRaw(clientX) {
   const r = tl.getBoundingClientRect();
@@ -688,6 +837,7 @@ function tlPxToTime(px) {
 
 /** 拖片段时吸一下：播放头 / 时间轴两头 / 别的片段边缘 */
 function snapClipTime(t, ignoreId) {
+  if (state.clipSnap === false) return t;
   const tol = tlPxToTime(7);
   let best = t, bestD = tol;
   const cands = [0, state.scene.duration, state.t];
@@ -1472,12 +1622,7 @@ function rightPanelClip(body) {
     const acts = document.createElement('div');
     acts.className = 'btn-row';
     acts.appendChild(btn('在播放头切开', () => splitClipAt(state.t)));
-    acts.appendChild(btn('复制一段接在后面', () => {
-      const copy = new Clip(Object.assign({}, c.toJSON(), { id: null, start: c.end }));
-      state.scene.clips.push(copy);
-      state.clipSel = copy.id;
-      clipsFitDuration(); drawTimeline(); renderRight(); toast('复制了一段');
-    }));
+    acts.appendChild(btn('复制一段接在后面', () => duplicateSelectedClip()));
     acts.appendChild(btn('删掉', () => deleteSelectedClip(), 'danger'));
     g0.appendChild(acts);
   }
@@ -3240,15 +3385,7 @@ async function applyPreset(file) {
   const inline = (window.__PRESETS__ || []).find((it) => it.file === file);
   if (inline) data = inline.data;
   else data = await (await fetch('../presets/' + file)).json();
-  const sc = Scene.fromJSON(data);
-  const media = state.media;
-  state.scene = sc;
-  state.media = media;
-  state.selection = null;
-    state.selected = new Set();
-    rightTab = 'scene';
-  resetLayerIndex();
-  resize(); drawTimeline(); renderRight(); updateBeatInfo();
+  adoptScene(data);          // 走统一入口：选择清空、素材接回、撤销栈重起
 }
 
 // ---------------------------------------------------------------- 工程存取
@@ -3859,6 +3996,16 @@ dlg.addEventListener('click', async (e) => {
 
 // 快捷键
 window.addEventListener('keydown', (e) => {
+  // 撤销 / 重做 / 复制：在真正的文本框里让浏览器自己来
+  const el = e.target;
+  const typing = !!el && (el.tagName === 'TEXTAREA'
+    || (el.tagName === 'INPUT' && /^(text|search|url|email|password|number)$/i.test(el.type || 'text')));
+  if ((e.ctrlKey || e.metaKey) && !typing) {
+    const k = String(e.key || '').toLowerCase();
+    if (k === 'z') { e.preventDefault(); historyStep(e.shiftKey ? 1 : -1); return; }
+    if (k === 'y') { e.preventDefault(); historyStep(1); return; }
+    if (k === 'd') { e.preventDefault(); duplicateSelectedClip(); return; }
+  }
   if (/input|textarea|select/i.test(e.target.tagName)) return;
   // Alt + 方向键 = 微调选中的图层（Shift 加速 10 倍），原本的方向键留给走带
   if (e.altKey && /^Arrow(Left|Right|Up|Down)$/.test(e.key)) {
@@ -4514,6 +4661,7 @@ function adoptScene(json) {
   resetLayerIndex();
   resize(); drawTimeline(); renderRight(); updateBeatInfo();
   if (state.scene.clips.length) restoreAssets();     // 片段要配上素材才有画面
+  historyReset();                                    // 换工程了，撤销栈重新起算
 }
 
 function clearLocalProject() {
@@ -4598,6 +4746,8 @@ if (!NO_PERSIST) {
     if (document.visibilityState === 'hidden') autosaveNow(true);
   });
 }
+// 撤销：比自动保存勤一点，改完差不多半秒就能撤
+setInterval(historyTick, 350);
 
 // ---------------------------------------------------------------- 初始化
 // 本地服务是不是旧版本？（旧版本没有新加的接口，会莫名其妙 404）
@@ -4620,6 +4770,8 @@ if (!NO_PERSIST) {
 
 buildEditOverlay();
 restoreAutosave();          // 先把上次的工程接回来，后面的初始化都在它上面跑
+buildTimelineTools();       // 时间轴上方那排图标（撤销 / 切开 / 复制 / 删 / 吸附）
+historyReset();             // 撤销栈从"刚打开的这一版"起算
 buildTemplateList();
 renderRight();
 updateBeatInfo();
@@ -4649,6 +4801,7 @@ initAgentPanel({
     if (!state.media.video) state.media.videoName = state.media.videoName || '';
     resize(); drawTimeline(); renderRight(); updateBeatInfo();
     setTime(0);
+    historyReset();
   },
 });
 
@@ -4660,9 +4813,11 @@ window.MotionKit = {
     state.scene = Scene.fromJSON(json);
     state.selection = null;
     state.selected = new Set();
+    state.clipSel = null;
     rightTab = 'scene';
     resetLayerIndex();
     resize(); drawTimeline(); renderRight(); updateBeatInfo();
+    if (state.scene.clips.length) restoreAssets();
     return state.scene;
   },
   blit,
@@ -4725,6 +4880,9 @@ window.MotionKit = {
   addImageFile: (file) => loadVideoFile(file, { noClip: true }).then((a) => addClip(a)),
   loadVideoAsClip: (file) => loadVideoFile(file),
   splitAt: (t) => splitClipAt(t),
+  undo: () => historyStep(-1),
+  redo: () => historyStep(1),
+  historyInfo: () => ({ at: history.at, len: history.list.length }),
   clipRows: () => [...clipRowMap.entries()].map(([id, g]) => Object.assign({ id }, g)),
   clipById: (id) => clipById(id),
   videoSupport: () => ({ mp4: pickVideoMime('mp4'), webm: pickVideoMime('webm') }),
