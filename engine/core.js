@@ -267,7 +267,11 @@ export class Caption {
  * 同一份素材可以被切成好几段（in/dur 不一样），所以"素材"和"片段"是分开的两层。
  */
 export class Clip {
-  constructor({ id = null, kind = 'video', assetId = null, name = '', start = 0, in: inPoint = 0, dur = 1, volume = 1, trans = null } = {}) {
+  constructor({
+    id = null, kind = 'video', assetId = null, name = '', start = 0, in: inPoint = 0, dur = 1,
+    volume = 1, speed = 1, track = 0, scale = null, x = 0, y = 0, opacity = 1,
+    grade = null, fadeIn = 0, fadeOut = 0, trans = null,
+  } = {}) {
     this.id = id || `c${Clip._id++}`;
     this.kind = kind;
     this.assetId = assetId;
@@ -276,14 +280,35 @@ export class Clip {
     this.in = inPoint;
     this.dur = dur;
     this.volume = volume;
+    this.speed = speed;       // 变速：1 = 原速，2 = 两倍速（时间轴 1 秒吃掉素材 2 秒）
+    this.track = track;       // 第几条视频轨：0 = 底轨，往上数字越大越盖在上面
+    this.scale = scale;       // null = 铺满画面（cover）；数字 = 占画面宽度的比例（画中画用）
+    this.x = x; this.y = y;   // 归一化位移（相对画面）
+    this.opacity = opacity;
+    this.grade = grade;       // 调色：{brightness,contrast,saturation,hue,blur,grayscale,sepia,invert}
+    this.fadeIn = fadeIn;     // 音频淡入 / 淡出（秒）
+    this.fadeOut = fadeOut;
     this.trans = trans;     // { template, dur } = 这一段开头和上一段之间有个转场
   }
   get end() { return this.start + this.dur; }
   covers(t) { return t >= this.start && t < this.end; }
   /** 时间轴上的 t 对应素材里的第几秒 */
-  sourceAt(t) { return this.in + (t - this.start); }
+  /** 时间轴上的 t 对应素材里的第几秒（变速之后的） */
+  sourceAt(t) { return this.in + (t - this.start) * (this.speed || 1); }
+  /** 这一段在素材里吃掉多少秒 */
+  get sourceSpan() { return this.dur * (this.speed || 1); }
   toJSON() {
     const o = { id: this.id, kind: this.kind, assetId: this.assetId, name: this.name, start: this.start, in: this.in, dur: this.dur, volume: this.volume };
+    // 默认值不落盘，工程文件干净一点
+    if (this.speed !== 1) o.speed = this.speed;
+    if (this.track) o.track = this.track;
+    if (this.scale !== null) o.scale = this.scale;
+    if (this.x) o.x = this.x;
+    if (this.y) o.y = this.y;
+    if (this.opacity !== 1) o.opacity = this.opacity;
+    if (this.grade) o.grade = this.grade;
+    if (this.fadeIn) o.fadeIn = this.fadeIn;
+    if (this.fadeOut) o.fadeOut = this.fadeOut;
     if (this.trans) o.trans = this.trans;
     return o;
   }
@@ -339,6 +364,19 @@ export class Scene {
     let hit = null;
     for (const c of this.clips) if (c.kind === 'audio' && c.covers(t)) hit = c;
     return hit;
+  }
+  /**
+   * 某一时刻所有要画的画面片段，从下往上排（track 小的先画）。
+   * 多视频轨叠加就靠这个：同一条轨上后面盖前面，轨号大的盖轨号小的。
+   */
+  visualClipsAt(t) {
+    return this.clips
+      .filter((c) => c.kind !== 'audio' && c.covers(t))
+      .sort((a, b) => (a.track || 0) - (b.track || 0));
+  }
+  /** 某一时刻所有要发声的音频片段（可能不止一条，交叉淡化时要一起算） */
+  audioClipsAt(t) {
+    return this.clips.filter((c) => c.kind === 'audio' && c.covers(t));
   }
   /** 所有片段排完之后的结束时间 */
   get clipsEnd() { return this.clips.reduce((m, c) => Math.max(m, c.end), 0); }
