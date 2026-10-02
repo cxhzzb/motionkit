@@ -478,6 +478,10 @@ input[type="color"]:disabled { cursor: not-allowed; }
 .tl-sep { width: 1px; height: 16px; background: var(--line); margin: 0 3px; }
 .tl-tools .grow { flex: 1 1 auto; }
 .tl-tools .tl-hint { font-size: 10.5px; color: var(--dim); font-family: var(--mono); }
+
+/* 转场弹窗 */
+.trans-dur { margin-bottom: 10px; }
+.dlg-grid .ex.sel { border-color: var(--accent); background: #25140f; }
 .cap-row {
   display: flex; align-items: center; gap: 8px;
   padding: 4px 0; border-bottom: 1px solid #1e2126;

@@ -226,6 +226,20 @@
   </div>
 </dialog>
 
+<dialog id="transDlg" class="dlg">
+  <h3>转场 <span class="badge" id="transWho">—</span></h3>
+  <div class="mini" style="color:#8b929e;line-height:1.7;margin:-4px 0 10px">
+    转场骑在切口上（前后各占一半）。选一个效果就加上去，再点别的可以换。
+  </div>
+  <div class="trans-dur" id="transDurRow"></div>
+  <div class="dlg-grid" id="transGrid"></div>
+  <div class="dlg-foot">
+    <span class="dim" id="transInfo"></span>
+    <button id="btnTransDel" class="ghost">去掉转场</button>
+    <button id="btnTransClose" class="ghost">关闭</button>
+  </div>
+</dialog>
+
 <input id="fileVideo" type="file" accept="video/*,image/*" hidden />
 <input id="fileAudio" type="file" accept="audio/*" hidden />
 <input id="fileSubs" type="file" accept=".srt,.vtt,.ass,.ssa,.txt" hidden />

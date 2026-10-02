@@ -192,7 +192,7 @@ export class BeatMap {
  * 模板只负责画自己的东西，时间的解释权全部交给引擎。
  */
 export class Layer {
-  constructor({ template, start = 0, end = 1, params = {}, seed = null, opacity = 1, blend = 'source-over', enabled = true, name = '', transform = null, group = '' } = {}) {
+  constructor({ template, start = 0, end = 1, params = {}, seed = null, opacity = 1, blend = 'source-over', enabled = true, name = '', transform = null, group = '', meta = null } = {}) {
     this.id = Layer._id++;
     this.template = template;          // 模板 id 字符串
     this.start = start;
@@ -205,12 +205,14 @@ export class Layer {
     this.name = name || template;
     this.transform = normalizeTransform(transform);
     this.group = group;                // 来源分组，比如 "beat" = 卡点批量铺出来的
+    this.meta = meta;                  // 附加归属（比如"这个转场层挂在哪个片段上"），不用就不落盘
   }
   get duration() { return Math.max(0, this.end - this.start); }
   covers(t) { return this.enabled && t >= this.start && t < this.end; }
   toJSON() {
     const o = { template: this.template, start: this.start, end: this.end, params: this.params, seed: this.seed, opacity: this.opacity, blend: this.blend, enabled: this.enabled, name: this.name, transform: this.transform };
     if (this.group) o.group = this.group;   // 没分组就不落盘，免得工程文件里全是空字段
+    if (this.meta) o.meta = this.meta;
     return o;
   }
 }
@@ -265,7 +267,7 @@ export class Caption {
  * 同一份素材可以被切成好几段（in/dur 不一样），所以"素材"和"片段"是分开的两层。
  */
 export class Clip {
-  constructor({ id = null, kind = 'video', assetId = null, name = '', start = 0, in: inPoint = 0, dur = 1, volume = 1 } = {}) {
+  constructor({ id = null, kind = 'video', assetId = null, name = '', start = 0, in: inPoint = 0, dur = 1, volume = 1, trans = null } = {}) {
     this.id = id || `c${Clip._id++}`;
     this.kind = kind;
     this.assetId = assetId;
@@ -274,13 +276,16 @@ export class Clip {
     this.in = inPoint;
     this.dur = dur;
     this.volume = volume;
+    this.trans = trans;     // { template, dur } = 这一段开头和上一段之间有个转场
   }
   get end() { return this.start + this.dur; }
   covers(t) { return t >= this.start && t < this.end; }
   /** 时间轴上的 t 对应素材里的第几秒 */
   sourceAt(t) { return this.in + (t - this.start); }
   toJSON() {
-    return { id: this.id, kind: this.kind, assetId: this.assetId, name: this.name, start: this.start, in: this.in, dur: this.dur, volume: this.volume };
+    const o = { id: this.id, kind: this.kind, assetId: this.assetId, name: this.name, start: this.start, in: this.in, dur: this.dur, volume: this.volume };
+    if (this.trans) o.trans = this.trans;
+    return o;
   }
   static fromJSON(o) { return new Clip(o || {}); }
 }

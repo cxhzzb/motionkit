@@ -62,6 +62,7 @@ let previewCtx = preview.getContext('2d');
 // ---------------------------------------------------------------- 渲染
 function renderAt(t) {
   const s = state.scene;
+  syncTransitionLayers();     // 转场层永远跟着片段走（片段怎么改的都会被这里兜住）
   if (off.canvas.width !== s.width || off.canvas.height !== s.height) {
     off.canvas.width = s.width; off.canvas.height = s.height;
   }
@@ -79,7 +80,9 @@ function drawMedia(ctx, sc, t) {
   if (state.suppressMedia) return;
   // 有片段：按时间轴找此刻该显示的那一条
   if (sc.clips.length) {
-    const c = sc.activeVisualClip(t);
+    // 转场区间内：画面在中点换段，转场模板（一个真图层）盖在上面把这一下遮住
+    const tr = activeTransitionAt(t);
+    const c = tr ? (t < tr.center ? tr.prev : tr.clip) : sc.activeVisualClip(t);
     if (!c) return;                                  // 片段之间没铺到 = 黑场
     const a = assetById(c.assetId);
     if (!a || !a.el) return;
@@ -189,6 +192,13 @@ function loop(ts) {
     if (state.t >= dur) {
       if ($('chkLoop').checked) { setTime(0); state.t = 0; }
       else { state.t = dur; pause(); }
+    }
+    // 放大之后播放头跑出可见区，时间轴自己跟着滚
+    if ((state.tlZoom || 1) > 1.01) {
+      const V = tlView();
+      if (state.t < V.start || state.t > V.start + V.span * 0.9) {
+        state.tlStart = clamp(state.t - V.span * 0.25, 0, V.maxStart);
+      }
     }
   }
 
@@ -335,6 +345,36 @@ const AUD_H = 30;
 const TRACK_TOP = MEDIA_TOP + VID_H + 3 + AUD_H + 7;
 let rowMap = new Map();
 let clipRowMap = new Map();      // clipId -> { band, x, w, y, h }（时间轴上的命中区）
+let transMarkMap = new Map();    // clipId -> { x, w, y, h }（两个片段中间那个转场小方块）
+
+/** 相邻两段中间的小方块：点一下就能加 / 换 / 去掉转场（剪映那个位置） */
+function drawTransitionMarks(list, y, h, sx) {
+  const sorted = list.slice().sort((a, b) => a.start - b.start);
+  for (let i = 1; i < sorted.length; i++) {
+    const c = sorted[i], prev = sorted[i - 1];
+    if (Math.abs(prev.end - c.start) > 0.08) continue;      // 中间有缝就不给转场
+    const cx = sx(c.start);
+    const cy = y + h / 2;
+    const w = 13, hh = h - 6;
+    const has = !!c.trans;
+    tlCtx.save();
+    tlCtx.beginPath();
+    roundRectPath(tlCtx, cx - w / 2, cy - hh / 2, w, hh, 3);
+    tlCtx.fillStyle = has ? 'rgba(255,120,60,0.95)' : 'rgba(12,14,18,0.85)';
+    tlCtx.fill();
+    tlCtx.strokeStyle = has ? '#ffd0b0' : 'rgba(255,255,255,0.5)';
+    tlCtx.lineWidth = 1;
+    tlCtx.stroke();
+    tlCtx.fillStyle = has ? '#2a0f04' : 'rgba(255,255,255,0.75)';
+    tlCtx.font = '700 10px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+    tlCtx.textAlign = 'center';
+    tlCtx.textBaseline = 'middle';
+    tlCtx.fillText('⋈', cx, cy + 0.5);
+    tlCtx.textAlign = 'left';
+    tlCtx.restore();
+    transMarkMap.set(c.id, { x: cx - w / 2 - 2, w: w + 4, y: cy - hh / 2, h: hh });
+  }
+}
 
 const CLIP_COLOR = {
   video: { fill: 'rgba(0,229,255,0.20)', line: 'rgba(0,229,255,0.80)', text: '#d6f6ff' },
@@ -410,6 +450,8 @@ function drawClipTrack(band, y, h, x0, x1, sx) {
   tlCtx.fillRect(x0, y, x1 - x0, h);
   const list = state.scene.clips.filter((c) => clipBand(c.kind) === band);
   if (list.length) {
+    tlCtx.save();
+    tlCtx.beginPath(); tlCtx.rect(x0, y, x1 - x0, h); tlCtx.clip();   // 放大后片段会超出可见区
     for (const c of list) {
       const bx = sx(c.start);
       const bw = Math.max(6, sx(c.end) - bx);
@@ -417,6 +459,8 @@ function drawClipTrack(band, y, h, x0, x1, sx) {
       drawClipBlock(c, bx, cy, bw, ch, band === 'audio', c.id === state.clipSel);
       clipRowMap.set(c.id, { band, x: bx, w: bw, y: cy, h: ch });
     }
+    tlCtx.restore();
+    if (band === 'video') drawTransitionMarks(list, y, h, sx);
     return;
   }
   // 没有片段：老工程还有单个素材的话，把它当一整条画出来（读起来和以前一样）
@@ -465,7 +509,8 @@ function drawTimeline() {
   const { w, h } = tlGeom();
   const s = state.scene;
   const x0 = 8, x1 = w - 8;
-  const sx = (t) => x0 + (t / Math.max(0.001, s.duration)) * (x1 - x0);
+  const V = tlView();
+  const sx = (t) => V.x0 + (t - V.start) * V.pxPerSec;
   const bg = '#121317';
   tlCtx.clearRect(0, 0, w, h);
   tlCtx.fillStyle = bg; tlCtx.fillRect(0, 0, w, h);
@@ -473,12 +518,16 @@ function drawTimeline() {
   // 标尺
   tlCtx.fillStyle = '#0e0f12';
   tlCtx.fillRect(0, 0, w, RULER_H);
-  const step = niceStep(s.duration, (x1 - x0) / 90);
+  // 刻度按"看得见的那一段"来定，放大之后才不会还是 5 秒一根
+  const step = niceStep(V.span, (x1 - x0) / 90);
   tlCtx.strokeStyle = '#2a2d34'; tlCtx.lineWidth = 1;
   tlCtx.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--mono');
   tlCtx.textBaseline = 'middle';
-  for (let t = 0; t <= s.duration + 1e-6; t += step) {
+  const firstTick = Math.floor(V.start / step) * step;
+  for (let t = firstTick; t <= V.start + V.span + 1e-6; t += step) {
+    if (t < 0) continue;
     const x = sx(t);
+    if (x < x0 - 20 || x > x1 + 20) continue;
     tlCtx.beginPath(); tlCtx.moveTo(x + 0.5, 0); tlCtx.lineTo(x + 0.5, h); tlCtx.stroke();
     tlCtx.fillStyle = '#5c626d';
     tlCtx.fillText(fmtShort(t), x + 4, RULER_H / 2);
@@ -486,8 +535,9 @@ function drawTimeline() {
 
   // 拍点
   const bm = s.beat;
-  const beats = bm.hitsIn(0, s.duration, 1);
-  const strong = new Set(bm.hitsIn(0, s.duration, 0.25).filter((_, i) => i % 4 === 0).map((v) => +v.toFixed(4)));
+  const beats = bm.hitsIn(Math.max(0, V.start), Math.min(s.duration, V.start + V.span), 1);
+  const strong = new Set(bm.hitsIn(Math.max(0, V.start), Math.min(s.duration, V.start + V.span), 0.25)
+    .filter((_, i) => i % 4 === 0).map((v) => +v.toFixed(4)));
   for (const b of beats) {
     const x = sx(b);
     const isStrong = strong.has(+b.toFixed(4));
@@ -501,6 +551,7 @@ function drawTimeline() {
   const vidY = MEDIA_TOP;
   const audY = MEDIA_TOP + VID_H + 3;
   clipRowMap = new Map();
+  transMarkMap = new Map();
   drawClipTrack('video', vidY, VID_H, x0, x1, sx);
   drawClipTrack('audio', audY, AUD_H, x0, x1, sx);
 
@@ -737,6 +788,7 @@ function restoreHistory(json) {
   state.selection = null;
   state.selected = new Set();
   state.clipSel = state.scene.clips.some((c) => c.id === clipSel) ? clipSel : null;
+  syncTransitionLayers();
   markIndexDirty();
   resize(); drawTimeline(); renderRight(); renderAt(t); blit();
   autosaveNow(true);
@@ -748,7 +800,7 @@ function duplicateSelectedClip() {
   const copy = new Clip(Object.assign({}, c.toJSON(), { id: null, start: c.end }));
   state.scene.clips.push(copy);
   state.clipSel = copy.id;
-  clipsFitDuration(); markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
+  clipsFitDuration(); syncTransitionLayers(); markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
   toast('复制了一段');
   return copy;
 }
@@ -761,9 +813,13 @@ const TL_ICONS = {
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
   trash: '<path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M10 11v6M14 11v6"/>',
   magnet: '<path d="M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4z"/><path d="M6 8h4M14 8h4"/>',
+  zoomIn: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.3-4.3"/><path d="M11 8.5v5M8.5 11h5"/>',
+  zoomOut: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.3-4.3"/><path d="M8.5 11h5"/>',
+  fit: '<path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/>',
 };
 
 let btnUndo = null, btnRedo = null, btnSplit = null, btnCopy = null, btnClipDel = null, btnSnap = null;
+let btnZoomIn = null, btnZoomOut = null, btnZoomFit = null, tlZoomLabel = null;
 
 function iconBtn(icon, title, onClick) {
   const b = document.createElement('button');
@@ -802,6 +858,16 @@ function buildTimelineTools() {
   });
   bar.appendChild(btnSnap);
 
+  bar.appendChild(sep());
+  btnZoomOut = iconBtn('zoomOut', '缩小时间轴（Ctrl/Alt + 滚轮也行）', () => tlZoomStep(-1));
+  btnZoomIn = iconBtn('zoomIn', '放大时间轴（Ctrl/Alt + 滚轮也行）', () => tlZoomStep(1));
+  btnZoomFit = iconBtn('fit', '整条铺满', () => tlZoomFit());
+  tlZoomLabel = document.createElement('span');
+  tlZoomLabel.className = 'tl-hint';
+  tlZoomLabel.style.marginLeft = '2px';
+  bar.appendChild(btnZoomOut); bar.appendChild(btnZoomIn); bar.appendChild(btnZoomFit);
+  bar.appendChild(tlZoomLabel);
+
   const grow = document.createElement('span');
   grow.className = 'grow';
   bar.appendChild(grow);
@@ -820,19 +886,65 @@ function updateToolButtons() {
   if (btnCopy) btnCopy.disabled = !c;
   if (btnClipDel) btnClipDel.disabled = !c && !state.selection && !state.selected.size;
   if (btnSnap) btnSnap.classList.toggle('on', state.clipSnap !== false);
+  const V = tlView();
+  if (btnZoomOut) btnZoomOut.disabled = V.zoom <= 1.001;
+  if (btnZoomFit) btnZoomFit.disabled = V.zoom <= 1.001;
+  if (tlZoomLabel) tlZoomLabel.textContent = V.zoom <= 1.001 ? '整条' : Math.round(V.zoom * 100) + '%';
 }
 
 /** 像素 → 秒（不做卡点吸附；拖片段时用这个，不然每一动都被吸走） */
+/**
+ * 时间轴的"取景框"：缩放 + 横向滚动。
+ *
+ *   tlZoom = 1 表示整条铺满（默认，和以前一样）；放大后只显示其中一段，
+ *   tlStart 是左边缘的时间。滚轮 / 工具按钮 / 播放头都会动它。
+ */
+function tlView() {
+  const w = Math.max(1, tl.clientWidth - 16);
+  const dur = Math.max(0.1, state.scene.duration);
+  const zoom = clamp(state.tlZoom || 1, 1, 400);
+  const pxPerSec = (w / dur) * zoom;
+  const span = w / pxPerSec;
+  const maxStart = Math.max(0, dur - span);
+  const start = clamp(state.tlStart || 0, 0, maxStart);
+  state.tlStart = start;
+  return { x0: 8, x1: 8 + w, w, dur, zoom, pxPerSec, span, start, maxStart };
+}
+
+/** 以某个时间点为中心缩放（滚轮缩放用） */
+function tlZoomAt(factor, anchorT) {
+  const before = tlView();
+  const t = anchorT === undefined ? before.start + before.span / 2 : anchorT;
+  state.tlZoom = clamp(before.zoom * factor, 1, 400);
+  const after = tlView();
+  // 让锚点在屏幕上的位置尽量不动
+  state.tlStart = clamp(t - (t - before.start) * (after.span / before.span), 0, after.maxStart);
+  drawTimeline();
+  updateToolButtons();
+}
+
+function tlZoomStep(delta) {
+  const v = tlView();
+  tlZoomAt(delta > 0 ? 1.4 : 1 / 1.4, v.start + v.span / 2);
+}
+
+function tlZoomFit() {
+  state.tlZoom = 1;
+  state.tlStart = 0;
+  drawTimeline();
+  updateToolButtons();
+}
+
 function tlTimeAtRaw(clientX) {
   const r = tl.getBoundingClientRect();
-  const x0 = 8, x1 = r.width - 8;
-  return clamp((clientX - r.left - x0) / (x1 - x0), 0, 1) * state.scene.duration;
+  const V = tlView();
+  const t = V.start + ((clientX - r.left) - V.x0) / V.pxPerSec;
+  return clamp(t, 0, state.scene.duration);
 }
 
 /** 一根手指头大概几个像素 = 几秒（吸附容差用） */
 function tlPxToTime(px) {
-  const w = Math.max(1, tl.clientWidth - 16);
-  return (px / w) * state.scene.duration;
+  return px / tlView().pxPerSec;
 }
 
 /** 拖片段时吸一下：播放头 / 时间轴两头 / 别的片段边缘 */
@@ -885,6 +997,7 @@ function applyClipDrag(e) {
     c.dur = right - ns;
   }
   clipsFitDuration();
+  syncTransitionLayers();          // 切口跟着片段走
   drawTimeline(); renderAt(state.t); blit();
   if (rightTab === 'clip') renderRight();
 }
@@ -901,6 +1014,7 @@ function splitClipAt(t) {
   c.dur = t - c.start;
   state.scene.clips.push(right);
   state.clipSel = right.id;
+  syncTransitionLayers();
   markIndexDirty(); drawTimeline(); renderAt(state.t); blit(); renderRight();
   toast('在 ' + t.toFixed(2) + 's 切开');
   return right;
@@ -911,21 +1025,19 @@ function deleteSelectedClip() {
   if (!c) return 0;
   state.scene.clips = state.scene.clips.filter((x) => x.id !== c.id);
   state.clipSel = null;
+  syncTransitionLayers();
   drawTimeline(); renderAt(state.t); blit(); renderRight();
   toast('删掉片段');
   return 1;
 }
 
 function tlTimeAt(clientX) {
-  const r = tl.getBoundingClientRect();
-  const x0 = 8, x1 = r.width - 8;
-  const p = clamp((clientX - r.left - x0) / (x1 - x0), 0, 1);
-  let t = p * state.scene.duration;
+  let t = tlTimeAtRaw(clientX);
   if ($('chkSnap').checked && state.scene.beat) {
     const snapped = state.scene.beat.snap(t, 4, 0.12);
     t = snapped;
   }
-  return t;
+  return clamp(t, 0, state.scene.duration);
 }
 
 tl.addEventListener('pointerdown', (e) => {
@@ -935,6 +1047,13 @@ tl.addEventListener('pointerdown', (e) => {
   // 媒体轨上的片段：点选 / 拖动 / 拉边裁剪
   const band = mediaBandAt(y);
   if (band) {
+    // 先看有没有点在"转场小方块"上（它压在片段接缝处，比点片段优先）
+    const mark = [...transMarkMap].find(([, g]) => mx >= g.x && mx <= g.x + g.w
+      && y >= g.y && y <= g.y + g.h);
+    if (mark) {
+      openTransitionDialog(clipById(mark[0]));
+      return;
+    }
     const hit = [...clipRowMap].find(([, g]) => g.band === band && mx >= g.x - 3 && mx <= g.x + g.w + 3);
     if (hit) {
       const [id, g] = hit;
@@ -1054,6 +1173,23 @@ tl.addEventListener('pointerup', endDrag);
 tl.addEventListener('pointercancel', endDrag);
 // 滚轮：上下翻图层（层数多的时候时间轴装不下）
 tl.addEventListener('wheel', (e) => {
+  // Ctrl / Alt + 滚轮 = 以鼠标位置为中心缩放（剪辑软件的习惯）
+  if (e.ctrlKey || e.altKey || e.metaKey) {
+    e.preventDefault();
+    tlZoomAt(e.deltaY < 0 ? 1.25 : 1 / 1.25, tlTimeAtRaw(e.clientX));
+    return;
+  }
+  // Shift + 滚轮 = 左右平移（放大之后才有得平移）
+  if (e.shiftKey) {
+    const V = tlView();
+    if (V.zoom > 1.01) {
+      e.preventDefault();
+      const step = Math.max(0.05, V.span * 0.12) * (e.deltaY > 0 ? 1 : -1);
+      state.tlStart = clamp(V.start + step, 0, V.maxStart);
+      drawTimeline();
+      return;
+    }
+  }
   const dy = e.deltaY > 0 ? Math.max(14, Math.abs(e.deltaY) * 0.6) : -Math.max(14, Math.abs(e.deltaY) * 0.6);
   if (tlScrollBy(dy)) e.preventDefault();
 }, { passive: false });
@@ -1625,6 +1761,23 @@ function rightPanelClip(body) {
     acts.appendChild(btn('复制一段接在后面', () => duplicateSelectedClip()));
     acts.appendChild(btn('删掉', () => deleteSelectedClip(), 'danger'));
     g0.appendChild(acts);
+
+    // 转场：接缝处那个小方块点一下也能开，这里再给个明面上的入口
+    const prev = prevClipOf(c);
+    const tro = document.createElement('div');
+    tro.className = 'btn-row';
+    if (prev && Math.abs(prev.end - c.start) < 0.08) {
+      tro.appendChild(btn(c.trans ? '换转场（' + templateName(c.trans.template) + '）' : '加转场（接缝处）',
+        () => openTransitionDialog(c)));
+      if (c.trans) tro.appendChild(btn('去掉转场', () => clearTransition(c)));
+    } else {
+      const e2 = document.createElement('div');
+      e2.className = 'empty';
+      e2.style.padding = '4px 0';
+      e2.textContent = prev ? '和上一段之间有空隙，贴紧了才能加转场' : '这一段前面没有紧挨着的片段';
+      tro.appendChild(e2);
+    }
+    g0.appendChild(tro);
   }
   body.appendChild(g0);
 
@@ -2857,6 +3010,153 @@ function addClip(asset, opts = {}) {
 function clipById(id) { return state.scene.clips.find((c) => c.id === id) || null; }
 function selectedClip() { return clipById(state.clipSel); }
 function sortClips() { state.scene.clips.sort((a, b) => a.start - b.start); }
+
+// ---------------------------------------------------------------- 转场
+/**
+ * 转场挂在"后一段"上：clip.trans = { template, dur }，
+ * 时间上一半在前一段、一半在后一段（切口为中心，剪映也是这么算的）。
+ *
+ * 渲染上不搞两路合成 —— 引擎里那 10 个转场模板本来就是"盖在切口上的一层效果"，
+ * 所以做法是：转场区间内，画面在中点换段（前半段 A、后半段 B），转场模板盖在上面
+ * 把这一下遮住。模板本身是一个真的图层（group = 'clip-trans'），
+ * 所以参数面板、时间轴、导出全都照常，还能单独调它的参数。
+ */
+function transitionTemplates() { return listTemplates().filter((t) => (t.category || '') === 'transition'); }
+function templateName(id) {
+  const t = listTemplates().find((x) => x.id === id);
+  return t ? t.name : id;
+}
+
+/** 同一轨上、紧挨在这个片段前面的那一段 */
+function prevClipOf(c) {
+  const band = clipBand(c.kind);
+  let best = null;
+  for (const x of state.scene.clips) {
+    if (x.id === c.id || clipBand(x.kind) !== band) continue;
+    if (x.end <= c.start + 0.001 && (!best || x.end > best.end)) best = x;
+  }
+  return best;
+}
+
+/** 这个转场占的时间区间；没转场、或者前面没有可接的片段就返回 null */
+function transWindow(c) {
+  if (!c || !c.trans) return null;
+  const prev = prevClipOf(c);
+  if (!prev) return null;
+  const dur = Math.max(0.1, c.trans.dur || 0.5);
+  const cut = c.start;
+  return { prev, clip: c, center: cut, start: cut - dur / 2, end: cut + dur / 2, dur };
+}
+
+function transLayerOf(clipId) {
+  return state.scene.layers.find((L) => L.group === 'clip-trans' && L.meta && L.meta.clipId === clipId) || null;
+}
+
+/** 让转场层跟着片段走：片段挪了、裁了、删了，转场都要跟 */
+function syncTransitionLayers() {
+  // 没有转场就什么都不做（这个函数每帧都会被叫一次，见 renderAt）
+  if (!state.scene.clips.some((c) => c.trans) && !state.scene.layers.some((L) => L.group === 'clip-trans')) return;
+  const keep = new Set();
+  for (const c of state.scene.clips) {
+    const w = transWindow(c);
+    const L = transLayerOf(c.id);
+    if (!w) { if (L) state.scene.layers = state.scene.layers.filter((x) => x !== L); continue; }
+    keep.add(c.id);
+    const name = '转场 · ' + (w.prev.name || '上一段') + ' → ' + (c.name || '下一段');
+    if (L) {
+      L.start = +w.start.toFixed(3);
+      L.end = +w.end.toFixed(3);
+      L.template = c.trans.template;
+      L.name = name;
+    } else {
+      state.scene.add({
+        template: c.trans.template, start: +w.start.toFixed(3), end: +w.end.toFixed(3),
+        seed: 'trans-' + c.id, name, group: 'clip-trans', meta: { clipId: c.id },
+      });
+    }
+  }
+  // 片段没了 / 转场撤了，留下的空壳层要清掉
+  state.scene.layers = state.scene.layers.filter((L) => L.group !== 'clip-trans'
+    || (L.meta && L.meta.clipId && keep.has(L.meta.clipId)));
+}
+
+function applyTransition(clip, template, dur) {
+  if (!clip) return false;
+  const prev = prevClipOf(clip);
+  if (!prev) { toast('这一段前面没有紧挨着的片段，接不上转场'); return false; }
+  clip.trans = { template, dur: clamp(dur || 0.5, 0.1, 3) };
+  syncTransitionLayers();
+  markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
+  toast('转场：' + templateName(template));
+  return true;
+}
+
+function clearTransition(clip) {
+  if (!clip || !clip.trans) return false;
+  clip.trans = null;
+  syncTransitionLayers();
+  markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
+  toast('去掉转场');
+  return true;
+}
+
+/** 此刻正处在哪个转场里 */
+function activeTransitionAt(t) {
+  for (const c of state.scene.clips) {
+    if (!c.trans) continue;
+    const w = transWindow(c);
+    if (w && t >= w.start && t < w.end) return w;
+  }
+  return null;
+}
+
+// ---- 转场选择弹窗（点相邻两段中间那个小方块打开） ----
+let transTarget = null;
+state.transDur = 0.5;
+
+function openTransitionDialog(clip) {
+  if (!clip) return;
+  const prev = prevClipOf(clip);
+  if (!prev) { toast('这一段前面没有紧挨着的片段'); return; }
+  transTarget = clip;
+  const dlg = $('transDlg');
+  if (!dlg) return;
+  $('transWho').textContent = (prev.name || '上一段') + ' → ' + (clip.name || '下一段');
+  const grid = $('transGrid');
+  grid.textContent = '';
+  for (const t of transitionTemplates()) {
+    const b = document.createElement('button');
+    b.className = 'ex' + (clip.trans && clip.trans.template === t.id ? ' sel' : '');
+    b.innerHTML = '<b>' + escapeHtml(t.name) + '</b><span>' + escapeHtml(t.hint || '') + '</span>';
+    b.addEventListener('click', () => {
+      applyTransition(clip, t.id, state.transDur);
+      openTransitionDialog(clip);          // 重画一下，把选中态挪过来
+    });
+    grid.appendChild(b);
+  }
+  const row = $('transDurRow');
+  row.textContent = '';
+  row.appendChild(numField('转场时长(秒)', clip.trans ? clip.trans.dur : state.transDur, 0.2, 2, 0.1, (v) => {
+    state.transDur = v;
+    if (clip.trans) { clip.trans.dur = v; syncTransitionLayers(); drawTimeline(); renderAt(state.t); blit(); }
+  }));
+  $('transInfo').textContent = clip.trans
+    ? '当前：' + templateName(clip.trans.template) + ' · ' + clip.trans.dur.toFixed(1) + 's'
+    : '还没加转场（现在是硬切）';
+  $('btnTransDel').disabled = !clip.trans;
+  dlg.showModal();
+}
+
+{
+  const dlg = $('transDlg');
+  if (dlg) {
+    $('btnTransClose').addEventListener('click', () => dlg.close());
+    $('btnTransDel').addEventListener('click', () => {
+      clearTransition(transTarget);
+      dlg.close();
+    });
+  }
+}
 
 /** 某个片段的素材总长（图片没有上限，返回 0 表示随便拉） */
 function clipSourceDur(c) {
@@ -4659,6 +4959,7 @@ function adoptScene(json) {
   state.clipSel = null;
   rightTab = 'scene';
   resetLayerIndex();
+  syncTransitionLayers();
   resize(); drawTimeline(); renderRight(); updateBeatInfo();
   if (state.scene.clips.length) restoreAssets();     // 片段要配上素材才有画面
   historyReset();                                    // 换工程了，撤销栈重新起算
@@ -4816,6 +5117,7 @@ window.MotionKit = {
     state.clipSel = null;
     rightTab = 'scene';
     resetLayerIndex();
+    syncTransitionLayers();
     resize(); drawTimeline(); renderRight(); updateBeatInfo();
     if (state.scene.clips.length) restoreAssets();
     return state.scene;
@@ -4884,6 +5186,11 @@ window.MotionKit = {
   redo: () => historyStep(1),
   historyInfo: () => ({ at: history.at, len: history.list.length }),
   clipRows: () => [...clipRowMap.entries()].map(([id, g]) => Object.assign({ id }, g)),
+  transMarks: () => [...transMarkMap.entries()].map(([id, g]) => Object.assign({ id }, g)),
+  transLayers: () => state.scene.layers.filter((L) => L.group === 'clip-trans')
+    .map((L) => ({ template: L.template, start: L.start, end: L.end, clipId: L.meta && L.meta.clipId })),
+  tlView: () => tlView(),
+  tlZoomFit: () => tlZoomFit(),
   clipById: (id) => clipById(id),
   videoSupport: () => ({ mp4: pickVideoMime('mp4'), webm: pickVideoMime('webm') }),
   registerTemplate,
