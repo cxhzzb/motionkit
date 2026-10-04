@@ -131,6 +131,16 @@ const delBtn = [...document.querySelectorAll('#rightBody button')].find((b) => b
 const nBefore = S.clips.length;
 if (delBtn) { delBtn.click(); await sleep(200); }
 report.checks.deleteClip = S.clips.length === nBefore - 1;
+const remainingClip = S.clips[0];
+report.checks.assetKeptWhileStillUsed = !!remainingClip
+  && MK.state.assets.has(remainingClip.assetId);
+if (remainingClip) {
+  MK.state.clipSel = remainingClip.id;
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+  await sleep(250);
+}
+report.checks.assetClearedAfterLastClip = !remainingClip
+  || (!MK.state.assets.has(remainingClip.assetId) && !MK.state.media.video);
 
 // ---- ⑦ 端到端：红 0~0.5s，蓝 0.5~1.0s，导出 MP4 后颜色要对得上
 S.clips.length = 0;

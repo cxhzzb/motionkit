@@ -121,6 +121,7 @@ export const lookCard = {
     { key: 'startIndex', label: '起始编号', type: 'number', default: 6, min: 0, max: 99, step: 1 },
     { key: 'stagger', label: '每条几拍', type: 'number', default: 2, min: 0.25, max: 8, step: 0.25 },
     { key: 'hold', label: '常驻不消失', type: 'bool', default: false },
+    { key: 'bgHeight', label: '背景高度倍率', type: 'number', default: 1.3, min: 0.3, max: 3, step: 0.05 },
     { key: 'fill', label: '卡片底色', type: 'color', default: '#ffffff' },
     { key: 'textColor', label: '文字颜色', type: 'color', default: '#0a0a0a' },
     P.accent('orange'),
@@ -158,7 +159,7 @@ export const lookCard = {
       const num = `${p.title} ${String(p.startIndex + i).padStart(2, '0')}`;
       const bodyLines = wrap(ctx, item, p.width - padX * 2 - fs * 3.2, { font: FONTS.sans, size: fs });
       const bw = p.width;
-      const bh = padY * 2 + bodyLines.length * lineH;
+      const bh = (padY * 2 + bodyLines.length * lineH) * clamp(p.bgHeight ?? 1.3, 0.3, 3);
 
       ctx.save();
       ctx.globalAlpha *= vis;

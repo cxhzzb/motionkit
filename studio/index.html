@@ -59,8 +59,10 @@
   </div>
   <div class="top-actions">
     <button id="btnOpenVideo" class="ghost">载入视频 / 图片</button>
+    <button id="btnOpenDownload" class="ghost">下载视频</button>
     <button id="btnOpenAudio" class="ghost">载入音频(卡点)</button>
     <button id="btnOpenSubs" class="ghost">导入字幕</button>
+    <button id="btnAutoCaption" class="ghost">自动字幕</button>
     <span class="sep"></span>
     <select id="selPreset" class="ghost select"><option value="">载入预设…</option></select>
     <button id="btnNewProject" class="ghost" title="清空当前工程，从空白开始">新建</button>
@@ -237,6 +239,21 @@
     <span class="dim" id="transInfo"></span>
     <button id="btnTransDel" class="ghost">去掉转场</button>
     <button id="btnTransClose" class="ghost">关闭</button>
+  </div>
+</dialog>
+
+<dialog id="downloadDlg" class="dlg download-dlg">
+  <h3>下载网络视频</h3>
+  <div class="download-copy">粘贴视频页面或直接视频链接，下载完成后会自动载入时间轴。</div>
+  <input id="downloadUrl" class="sync-input download-url" type="url"
+         placeholder="https://www.youtube.com/watch?v=... / https://example.com/video.mp4" />
+  <div id="downloadState" class="download-state">
+    支持 yt-dlp 能识别的网站和直链；下载文件保存在项目的 downloads/ 目录。
+  </div>
+  <div class="dlg-foot">
+    <span id="downloadFoot" class="dim"></span>
+    <button id="btnCloseDownload" class="ghost">关闭</button>
+    <button id="btnDownloadGo" class="primary">开始下载并载入</button>
   </div>
 </dialog>
 

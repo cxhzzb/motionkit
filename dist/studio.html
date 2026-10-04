@@ -210,6 +210,15 @@ button.ai:hover { border-color: #5a6f9e; background: linear-gradient(135deg, #22
 
 /* ---------- 预览里的直接操控（选择框 / 手柄 / 改字浮窗） ---------- */
 .sync-dlg { width: min(560px, 92vw); }
+.download-dlg { width: min(640px, 92vw); }
+.download-copy { color: var(--dim); font-size: var(--fs-12); line-height: 1.6; margin: -5px 0 10px; }
+.download-url { margin-bottom: 8px; }
+.download-state {
+  min-height: 48px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 5px;
+  background: #0a0b0d; color: var(--dim); font-size: var(--fs-11); line-height: 1.6; white-space: pre-wrap;
+}
+.download-state.ok { color: var(--ok); border-color: #1d4a2c; background: #0c1b12; }
+.download-state.bad { color: #ff9a7a; border-color: #4a241c; background: #24100c; }
 .sync-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px;
   padding: 4px 2px 10px; font-family: var(--mono); font-size: var(--fs-11);
@@ -669,8 +678,10 @@ input[type="color"]:disabled { cursor: not-allowed; }
   </div>
   <div class="top-actions">
     <button id="btnOpenVideo" class="ghost">载入视频 / 图片</button>
+    <button id="btnOpenDownload" class="ghost">下载视频</button>
     <button id="btnOpenAudio" class="ghost">载入音频(卡点)</button>
     <button id="btnOpenSubs" class="ghost">导入字幕</button>
+    <button id="btnAutoCaption" class="ghost">自动字幕</button>
     <span class="sep"></span>
     <select id="selPreset" class="ghost select"><option value="">载入预设…</option></select>
     <button id="btnNewProject" class="ghost" title="清空当前工程，从空白开始">新建</button>
@@ -847,6 +858,21 @@ input[type="color"]:disabled { cursor: not-allowed; }
     <span class="dim" id="transInfo"></span>
     <button id="btnTransDel" class="ghost">去掉转场</button>
     <button id="btnTransClose" class="ghost">关闭</button>
+  </div>
+</dialog>
+
+<dialog id="downloadDlg" class="dlg download-dlg">
+  <h3>下载网络视频</h3>
+  <div class="download-copy">粘贴视频页面或直接视频链接，下载完成后会自动载入时间轴。</div>
+  <input id="downloadUrl" class="sync-input download-url" type="url"
+         placeholder="https://www.youtube.com/watch?v=... / https://example.com/video.mp4" />
+  <div id="downloadState" class="download-state">
+    支持 yt-dlp 能识别的网站和直链；下载文件保存在项目的 downloads/ 目录。
+  </div>
+  <div class="dlg-foot">
+    <span id="downloadFoot" class="dim"></span>
+    <button id="btnCloseDownload" class="ghost">关闭</button>
+    <button id="btnDownloadGo" class="primary">开始下载并载入</button>
   </div>
 </dialog>
 
@@ -4327,6 +4353,7 @@ const lookCard = {
     { key: 'startIndex', label: '起始编号', type: 'number', default: 6, min: 0, max: 99, step: 1 },
     { key: 'stagger', label: '每条几拍', type: 'number', default: 2, min: 0.25, max: 8, step: 0.25 },
     { key: 'hold', label: '常驻不消失', type: 'bool', default: false },
+    { key: 'bgHeight', label: '背景高度倍率', type: 'number', default: 1.3, min: 0.3, max: 3, step: 0.05 },
     { key: 'fill', label: '卡片底色', type: 'color', default: '#ffffff' },
     { key: 'textColor', label: '文字颜色', type: 'color', default: '#0a0a0a' },
     P.accent('orange'),
@@ -4364,7 +4391,7 @@ const lookCard = {
       const num = `${p.title} ${String(p.startIndex + i).padStart(2, '0')}`;
       const bodyLines = wrap(ctx, item, p.width - padX * 2 - fs * 3.2, { font: FONTS.sans, size: fs });
       const bw = p.width;
-      const bh = padY * 2 + bodyLines.length * lineH;
+      const bh = (padY * 2 + bodyLines.length * lineH) * clamp(p.bgHeight ?? 1.3, 0.3, 3);
 
       ctx.save();
       ctx.globalAlpha *= vis;
@@ -9661,14 +9688,53 @@ function splitClipAt(t) {
   return right;
 }
 
+/** 释放一份不再被时间轴引用的素材，包括预览元素、URL 和 IndexedDB 缓存。 */
+function releaseAssetIfUnused(assetId) {
+  if (!assetId || state.scene.clips.some((c) => c.assetId === assetId)) return false;
+  const a = assetById(assetId);
+  if (!a) return false;
+
+  state.assets.delete(assetId);
+  if (a.el) {
+    try { a.el.pause(); } catch (_) {}
+    try { a.el.removeAttribute('src'); a.el.load(); } catch (_) {}
+  }
+  try { URL.revokeObjectURL(a.url); } catch (_) {}
+  idbDel('asset:' + assetId).catch(() => {});
+
+  if (state.media.video === a.el) {
+    state.media.video = null;
+    state.media.videoName = '';
+    state.media.videoFile = null;
+    state.media.videoMeta = null;
+    state.media.videoDur = 0;
+    idbDel('video').catch(() => {});
+  }
+  if (state.media.audio === a.el) {
+    state.media.audio = null;
+    state.media.audioName = '';
+    state.media.audioFile = null;
+    state.media.audioMeta = null;
+    state.media.audioDur = 0;
+    state.media.peaks = null;
+    state.analysis = null;
+    idbDel('audio').catch(() => {});
+  }
+  updateBeatInfo();
+  applyAudio();
+  return true;
+}
+
 function deleteSelectedClip() {
   const c = selectedClip();
   if (!c) return 0;
+  const assetId = c.assetId;
   state.scene.clips = state.scene.clips.filter((x) => x.id !== c.id);
   state.clipSel = null;
+  const cleared = releaseAssetIfUnused(assetId);
   syncTransitionLayers();
   drawTimeline(); renderAt(state.t); blit(); renderRight();
-  toast('删掉片段');
+  toast(cleared ? '已删掉片段和素材' : '删掉片段');
   return 1;
 }
 
@@ -10430,6 +10496,7 @@ function rightPanelClip(body) {
   const row = document.createElement('div');
   row.className = 'btn-row';
   row.appendChild(btn('载入视频 / 图片', () => $('fileVideo').click()));
+  row.appendChild(btn('下载网络视频', openDownloadDialog));
   row.appendChild(btn('载入音频', () => $('fileAudio').click()));
   g0.appendChild(row);
 
@@ -10638,7 +10705,9 @@ function rightPanelSubs(body) {
     gc.appendChild(cinfo);
     const row = document.createElement('div');
     row.className = 'btn-row';
+    row.appendChild(btn('自动识别语音', autoTranscribeCaptions, 'primary'));
     row.appendChild(btn('导入 SRT / ASS / VTT', () => $('fileSubs').click()));
+    row.appendChild(btn('导出 SRT', exportSrt));
     row.appendChild(btn('切成短句（适合弹字）', () => {
       state.scene.captions = state.scene.captions
         .flatMap((c) => splitForKinetic([c], { maxChars: 12 }))
@@ -12138,23 +12207,105 @@ async function loadAudioFile(file, opts = {}) {
   }
 }
 
+function installCaptionItems(items, opts = {}) {
+  const list = (items || []).map((c) => ({
+    start: Number(c.start) || 0,
+    end: Number(c.end) || 0,
+    text: String(c.text || '').trim(),
+    words: c.words || null,
+  })).filter((c) => c.text && c.end > c.start);
+  if (!list.length) return 0;
+  state.scene.captions = list.map((c) => {
+    const words = c.words && c.words.length ? c.words
+      : (state.analysis ? estimateWordTimings(c, state.analysis) : null);
+    return new Caption({ ...c, words });
+  });
+  // 自动补一条卡点字幕图层
+  if (!state.scene.layers.some((l) => l.template === 'subtitle-kinetic')) {
+    state.scene.add({
+      template: 'subtitle-kinetic', start: 0, end: state.scene.duration,
+      seed: 'subs-' + (++state.layerSeq), name: '卡点字幕',
+    });
+  }
+  drawTimeline(); renderRight(); renderAt(state.t); blit();
+  if (opts.notify) alert(opts.notify.replace('{n}', list.length));
+  return list.length;
+}
+
 function loadSubtitleFile(file) {
   const r = new FileReader();
   r.onload = async () => {
     const items = parseSubtitles(r.result);
     if (!items.length) { alert('没解析出字幕，检查一下文件格式'); return; }
-    state.scene.captions = items.map((c) => new Caption(c));
-    if (state.analysis) {
-      state.scene.captions = state.scene.captions.map((c) => new Caption({ ...c, words: estimateWordTimings(c, state.analysis) }));
-    }
-    // 自动补一条卡点字幕图层
-    if (!state.scene.layers.some((l) => l.template === 'subtitle-kinetic')) {
-      state.scene.add({ template: 'subtitle-kinetic', start: 0, end: state.scene.duration, seed: 'subs-' + (++state.layerSeq), name: '卡点字幕' });
-    }
-    drawTimeline(); renderRight();
-    alert(`导入 ${items.length} 条字幕`);
+    installCaptionItems(items, { notify: '导入 {n} 条字幕' });
   };
   r.readAsText(file, 'utf-8');
+}
+
+let captionBusy = false;
+
+async function autoTranscribeCaptions() {
+  if (captionBusy) return;
+  const file = state.media.videoFile || state.media.audioFile;
+  if (!file) { alert('先载入视频或音频，再自动识别字幕。'); return; }
+  if (location.protocol === 'file:') {
+    alert('自动字幕需要开发模式：请用 npm run studio / 启动工作室.bat 打开。');
+    return;
+  }
+
+  captionBusy = true;
+  let lastProgress = 0.02;
+  showBusy('正在准备自动字幕…', lastProgress);
+  try {
+    const res = await fetch('/api/captions/transcribe', {
+      method: 'POST',
+      headers: { 'x-file-name': encodeURIComponent(file.name) },
+      body: file,
+    });
+    if (!res.ok || !res.body) {
+      throw new Error(res.status === 404 ? '本地服务是旧版本，请重启工作室' : ('HTTP ' + res.status));
+    }
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    let result = null;
+    for (;;) {
+      const step = await reader.read();
+      if (step.done) break;
+      buf += dec.decode(step.value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        let msg = null;
+        try { msg = JSON.parse(line); } catch (_) { continue; }
+        if (msg.type === 'progress' || msg.type === 'log') {
+          lastProgress = Math.max(lastProgress, clamp(msg.progress || 0, 0.02, 0.98));
+          showBusy(msg.msg || '正在识别语音…', lastProgress);
+        } else if (msg.type === 'error') {
+          throw new Error([msg.msg, msg.detail].filter(Boolean).join('\n'));
+        } else if (msg.type === 'result') {
+          result = msg.result || msg;
+        }
+      }
+    }
+
+    if (!result) throw new Error('没有收到识别结果');
+    if (result.error && !(result.segments || []).length) throw new Error(result.error);
+    const count = installCaptionItems(result.segments || []);
+    if (!count) throw new Error('没有识别到可用语音，检查素材里是否有人声');
+    hideBusy();
+    toast(`自动字幕完成：${count} 条`);
+    alert(`自动字幕完成：识别到 ${count} 条字幕，可直接在字幕页修改或导出 SRT。`);
+  } catch (e) {
+    hideBusy();
+    alert('自动字幕失败：' + (e.message || e));
+  } finally {
+    captionBusy = false;
+    hideBusy();
+  }
 }
 
 // ---------------------------------------------------------------- Busy 指示
@@ -12566,6 +12717,7 @@ function exportBeats() {
 }
 
 function exportSrt() {
+  if (!state.scene.captions.length) { alert('还没有字幕，先自动识别或导入 SRT / ASS / VTT。'); return; }
   const srt = toSRT(state.scene.captions.map((c) => ({ start: c.start, end: c.end, text: c.text })));
   downloadBlob(new Blob([srt], { type: 'text/plain;charset=utf-8' }), `motionkit_${Date.now()}.srt`);
 }
@@ -13023,6 +13175,85 @@ function setIndexTab(which) {
   if (idxPaneOpen) rebuildLayerIndex();
 }
 
+// ---------------------------------------------------------------- 网络视频下载
+const downloadDlg = $('downloadDlg');
+let downloadBusy = false;
+let downloadAbort = null;
+
+function setDownloadState(text, level = '') {
+  const el = $('downloadState');
+  el.textContent = text;
+  el.className = 'download-state' + (level ? ' ' + level : '');
+}
+
+function setDownloadBusy(busy, text = '') {
+  downloadBusy = busy;
+  $('downloadUrl').disabled = busy;
+  $('btnDownloadGo').disabled = busy;
+  $('downloadFoot').textContent = text;
+}
+
+function openDownloadDialog() {
+  setDownloadState('支持 yt-dlp 能识别的网站和直链；下载文件保存在项目的 downloads/ 目录。');
+  $('downloadFoot').textContent = '';
+  downloadDlg.showModal();
+  setTimeout(() => $('downloadUrl').focus(), 30);
+}
+
+async function downloadUrlToStudio() {
+  if (downloadBusy) return;
+  const raw = $('downloadUrl').value.trim();
+  let parsed;
+  try {
+    parsed = new URL(raw);
+    if (!/^https?:$/.test(parsed.protocol)) throw new Error();
+  } catch (_) {
+    setDownloadState('请输入完整的 http / https 视频网址。', 'bad');
+    return;
+  }
+  if (location.protocol === 'file:') {
+    setDownloadState('下载视频需要开发模式。请用 npm run studio / 启动工作室.bat 打开，不要直接打开 dist/studio.html。', 'bad');
+    return;
+  }
+
+  downloadAbort = new AbortController();
+  setDownloadBusy(true, '正在下载，可能需要几分钟…');
+  setDownloadState('正在连接并下载：' + parsed.hostname);
+  try {
+    const r = await fetch('/api/video/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: raw }),
+      signal: downloadAbort.signal,
+    });
+    const text = await r.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (_) {}
+    if (!r.ok || !data || !data.ok) {
+      throw new Error((data && data.error) || text.slice(0, 300) || ('HTTP ' + r.status));
+    }
+
+    setDownloadState('下载完成：\n' + data.path + '\n正在载入编辑器…');
+    const fileRes = await fetch(data.url, { cache: 'no-store', signal: downloadAbort.signal });
+    if (!fileRes.ok) throw new Error('下载文件已保存，但本地读取失败');
+    const blob = await fileRes.blob();
+    const mime = blob.type && blob.type !== 'application/octet-stream'
+      ? blob.type
+      : (data.mime || 'video/mp4');
+    const file = new File([blob], data.name || 'network-video.mp4', { type: mime, lastModified: Date.now() });
+    if (data.kind === 'audio' || /^audio\//.test(mime)) await loadAudioFile(file);
+    else await loadVideoFile(file);
+    setDownloadState('已下载并载入：\n' + data.path, 'ok');
+    toast('网络视频已下载并载入');
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    setDownloadState('下载失败：' + (e.message || e), 'bad');
+  } finally {
+    downloadAbort = null;
+    setDownloadBusy(false, '');
+  }
+}
+
 // ---------------------------------------------------------------- 交互绑定
 $('btnPlay').addEventListener('click', togglePlay);
 $('btnToStart').addEventListener('click', () => setTime(0));
@@ -13058,6 +13289,17 @@ $('searchLayer').addEventListener('input', (e) => {
   }
 }
 $('btnOpenVideo').addEventListener('click', () => $('fileVideo').click());
+$('btnOpenDownload').addEventListener('click', openDownloadDialog);
+$('btnAutoCaption').addEventListener('click', autoTranscribeCaptions);
+$('btnDownloadGo').addEventListener('click', downloadUrlToStudio);
+$('downloadUrl').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); downloadUrlToStudio(); }
+});
+$('btnCloseDownload').addEventListener('click', () => downloadDlg.close());
+downloadDlg.addEventListener('close', () => {
+  if (downloadAbort) downloadAbort.abort();
+  setDownloadBusy(false, '');
+});
 $('btnOpenAudio').addEventListener('click', () => $('fileAudio').click());
 $('btnOpenSubs').addEventListener('click', () => $('fileSubs').click());
 $('btnSaveProject').addEventListener('click', saveProject);
@@ -13828,6 +14070,15 @@ async function idbDel(key) {
     tx.onerror = () => { db.close(); resolve(false); };
   });
 }
+async function idbClearMedia() {
+  const db = await idbOpen();
+  return new Promise((resolve) => {
+    const tx = db.transaction('media', 'readwrite');
+    tx.objectStore('media').clear();
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); resolve(false); };
+  });
+}
 
 /** 素材存一份到 IndexedDB（太大就只记名字） */
 function persistMedia(kind, file) {
@@ -13923,16 +14174,22 @@ function adoptScene(json) {
 function clearLocalProject() {
   try { localStorage.removeItem(AUTOSAVE_KEY); } catch (_) {}
   autosaveLast = '';
-  idbDel('video').catch(() => {});
-  idbDel('audio').catch(() => {});
+  idbClearMedia().catch(() => {});
 }
 
 /** 新建空白工程 */
 function newProject(silent) {
   if (!silent && !confirm('新建空白工程？当前工程会被清空。\n（之前用「保存工程」存出来的文件不受影响）')) return;
   state.scene = new Scene({ width: 1920, height: 1080, fps: 24, duration: 10, transparent: true });
-  for (const a of state.assets.values()) { try { URL.revokeObjectURL(a.url); } catch (_) {} }
+  for (const a of state.assets.values()) {
+    if (a.el) {
+      try { a.el.pause(); } catch (_) {}
+      try { a.el.removeAttribute('src'); a.el.load(); } catch (_) {}
+    }
+    try { URL.revokeObjectURL(a.url); } catch (_) {}
+  }
   state.assets.clear();
+  idbClearMedia().catch(() => {});
   state.clipSel = null;
   state.media = { video: null, audio: null, videoName: '', audioName: '', videoFile: null, videoMeta: null, audioMeta: null };
   state.analysis = null;
@@ -14008,7 +14265,7 @@ setInterval(historyTick, 350);
 // ---------------------------------------------------------------- 初始化
 // 本地服务是不是旧版本？（旧版本没有新加的接口，会莫名其妙 404）
 {
-  const NEED = 6;   // 和 tools/serve.mjs 的 APP_VERSION 保持一致
+  const NEED = 8;   // 和 tools/serve.mjs 的 APP_VERSION 保持一致
   fetch('/api/ping', { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : null))
     .then((j) => {

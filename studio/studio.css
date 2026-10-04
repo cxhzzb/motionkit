@@ -203,6 +203,15 @@ button.ai:hover { border-color: #5a6f9e; background: linear-gradient(135deg, #22
 
 /* ---------- 预览里的直接操控（选择框 / 手柄 / 改字浮窗） ---------- */
 .sync-dlg { width: min(560px, 92vw); }
+.download-dlg { width: min(640px, 92vw); }
+.download-copy { color: var(--dim); font-size: var(--fs-12); line-height: 1.6; margin: -5px 0 10px; }
+.download-url { margin-bottom: 8px; }
+.download-state {
+  min-height: 48px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 5px;
+  background: #0a0b0d; color: var(--dim); font-size: var(--fs-11); line-height: 1.6; white-space: pre-wrap;
+}
+.download-state.ok { color: var(--ok); border-color: #1d4a2c; background: #0c1b12; }
+.download-state.bad { color: #ff9a7a; border-color: #4a241c; background: #24100c; }
 .sync-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px;
   padding: 4px 2px 10px; font-family: var(--mono); font-size: var(--fs-11);

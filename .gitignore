@@ -1,5 +1,6 @@
 # 渲染出来的临时帧 / 视频，别提交
 .out/
+downloads/
 *.mov
 *.webm
 *.mp4

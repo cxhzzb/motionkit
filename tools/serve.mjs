@@ -8,6 +8,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import url from 'node:url';
+import dns from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { spawn } from 'node:child_process';
 import { makeZip } from '../engine/zip.js';
 
@@ -17,7 +19,8 @@ const OPEN_BROWSER = ARGV.includes('--open');
 const PORT = Number(ARGV.find((a) => /^\d+$/.test(a)) || 5178);
 const PORT_MAX = PORT + 12;
 // 加了新接口就把这个数字 +1：启动器发现端口上跑的是旧版本，会把它换掉再起新的
-const APP_VERSION = Number(process.env.MK_APP_VERSION || 6);
+const APP_VERSION = Number(process.env.MK_APP_VERSION || 8);
+const DOWNLOAD_DIR = path.join(ROOT, 'downloads');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -28,7 +31,9 @@ const MIME = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp', '.svg': 'image/svg+xml',
   '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+  '.mkv': 'video/x-matroska', '.m4v': 'video/mp4',
   '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac', '.opus': 'audio/ogg', '.flac': 'audio/flac',
   '.txt': 'text/plain; charset=utf-8', '.srt': 'text/plain; charset=utf-8',
 };
 
@@ -274,6 +279,207 @@ function readBody(req) {
   });
 }
 
+function privateAddress(addr) {
+  const ip = String(addr || '').replace(/^\[|\]$/g, '');
+  const family = isIP(ip);
+  if (family === 4) {
+    const p = ip.split('.').map(Number);
+    return p[0] === 0 || p[0] === 10 || p[0] === 127 || p[0] >= 224
+      || (p[0] === 100 && p[1] >= 64 && p[1] <= 127)
+      || (p[0] === 169 && p[1] === 254)
+      || (p[0] === 172 && p[1] >= 16 && p[1] <= 31)
+      || (p[0] === 192 && p[1] === 168);
+  }
+  if (family === 6) {
+    const h = ip.toLowerCase();
+    if (h === '::' || h === '::1') return true;
+    if (/^f[cd]/.test(h) || /^fe[89ab]/.test(h)) return true;
+    const v4 = h.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (v4) return privateAddress(v4[1]);
+  }
+  return false;
+}
+
+async function assertPublicDownloadUrl(u) {
+  const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (!host || host === 'localhost' || !host.includes('.') || /\.(local|internal|localhost)$/.test(host)) {
+    throw new Error('这个地址看起来是内网或本机地址，已拒绝下载');
+  }
+  if (privateAddress(host)) throw new Error('不能下载内网或本机地址');
+  let addrs = [];
+  try { addrs = await dns.lookup(host, { all: true, verbatim: true }); } catch (_) {}
+  if (addrs.some((x) => privateAddress(x.address))) throw new Error('域名解析到了内网地址，已拒绝下载');
+}
+
+function mediaKindFor(file) {
+  return /\.(mp3|wav|m4a|aac|opus|flac)$/i.test(file) ? 'audio' : 'video';
+}
+
+function mimeForFile(file) {
+  return MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
+}
+
+function pickDownloadedFile(dir) {
+  const files = [];
+  for (const name of fs.readdirSync(dir)) {
+    if (/\.(part|ytdl|json|jpg|jpeg|png|webp|vtt|srt|ass)$/i.test(name)) continue;
+    const abs = path.join(dir, name);
+    try {
+      const st = fs.statSync(abs);
+      if (st.isFile()) files.push({ abs, size: st.size });
+    } catch (_) {}
+  }
+  files.sort((a, b) => b.size - a.size);
+  return files[0] || null;
+}
+
+async function downloadVideoApi(req, res) {
+  const body = await readBody(req);
+  const raw = String(body.url || '').trim();
+  if (!raw) { json(res, { ok: false, error: '先粘贴一个视频网址' }, 400); return; }
+  if (raw.length > 4096) { json(res, { ok: false, error: '网址太长了' }, 400); return; }
+
+  let source;
+  try {
+    source = new URL(raw);
+    if (!/^https?:$/.test(source.protocol)) throw new Error('只支持 http / https 网址');
+    if (source.username || source.password) throw new Error('网址里不要带账号密码');
+    await assertPublicDownloadUrl(source);
+  } catch (e) {
+    json(res, { ok: false, error: e.message }, 400);
+    return;
+  }
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const outDir = path.join(DOWNLOAD_DIR, `${stamp}-${Math.random().toString(36).slice(2, 7)}`);
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const args = [
+    '--no-playlist',
+    '--no-warnings',
+    '--newline',
+    '--restrict-filenames',
+    '--merge-output-format', 'mp4',
+    '--remux-video', 'mp4',
+    '-f', 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b',
+    '-o', path.join(outDir, '%(title).80s-%(id)s.%(ext)s'),
+    '--',
+    raw,
+  ];
+
+  const child = spawn('yt-dlp', args, { cwd: ROOT, env: process.env });
+  let stdout = '';
+  let stderr = '';
+  let finished = false;
+  const stopIfGone = () => {
+    if (finished) return;
+    finished = true;
+    try { child.kill('SIGTERM'); } catch (_) {}
+  };
+  req.on('aborted', stopIfGone);
+  res.on('close', () => { if (!res.writableEnded) stopIfGone(); });
+
+  child.stdout.on('data', (d) => { stdout = (stdout + d.toString('utf8')).slice(-12000); });
+  child.stderr.on('data', (d) => { stderr = (stderr + d.toString('utf8')).slice(-12000); });
+  child.on('error', (e) => {
+    finished = true;
+    json(res, { ok: false, error: '找不到 yt-dlp：' + e.message }, 500);
+  });
+  child.on('close', (code) => {
+    if (finished && code !== 0) return;
+    finished = true;
+    const picked = pickDownloadedFile(outDir);
+    if (code !== 0 || !picked) {
+      const detail = (stderr || stdout).trim().split('\n').slice(-8).join('\n');
+      json(res, { ok: false, error: detail || '下载失败，可能是网址不支持或需要登录' }, 400);
+      return;
+    }
+    const rel = path.relative(ROOT, picked.abs).replace(/\\/g, '/');
+    json(res, {
+      ok: true,
+      url: '/' + rel.split('/').map(encodeURIComponent).join('/'),
+      path: picked.abs,
+      name: path.basename(picked.abs),
+      size: picked.size,
+      kind: mediaKindFor(picked.abs),
+      mime: mimeForFile(picked.abs),
+    });
+  });
+}
+
+async function transcribeCaptionsApi(req, res) {
+  const rawName = decodeURIComponent(String(req.headers['x-file-name'] || 'input.mp4'));
+  const safe = rawName.replace(/[\\/:*?"<>|]/g, '_').slice(-80) || 'input.mp4';
+  const lang = decodeURIComponent(String(req.headers['x-lang'] || '')).trim();
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const workDir = path.join(ROOT, 'projects', 'captions-' + stamp);
+  const upload = path.join(workDir, 'source_' + safe);
+  const outJson = path.join(workDir, 'transcript.json');
+  fs.mkdirSync(workDir, { recursive: true });
+
+  res.writeHead(200, {
+    'Content-Type': 'application/x-ndjson; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Accel-Buffering': 'no',
+  });
+  const send = (obj) => { try { res.write(JSON.stringify(obj) + '\n'); } catch (_) {} };
+  send({ type: 'progress', progress: 0.02, msg: '正在保存素材…' });
+
+  const sink = fs.createWriteStream(upload);
+  req.pipe(sink);
+  req.on('aborted', () => { try { sink.close(); } catch (_) {} });
+  sink.on('error', (e) => { send({ type: 'error', msg: '写入素材失败：' + e.message }); res.end(); });
+  sink.on('finish', () => {
+    const args = [
+      path.join(ROOT, 'agent/transcribe.py'),
+      '--video', upload,
+      '--json', outJson,
+    ];
+    if (lang) args.push('--lang', lang);
+
+    const p = spawn('python', args, { cwd: ROOT, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+    let tail = '';
+    const onLog = (raw) => {
+      for (const line of String(raw || '').split(/\r?\n/)) {
+        const msg = line.trim();
+        if (!msg) continue;
+        tail = (tail + '\n' + msg).slice(-4000);
+        const progress = /加载本地语音模型/.test(msg) ? 0.18
+          : /本地转写中|调用语音识别接口/.test(msg) ? 0.45
+            : /段数=/.test(msg) ? 0.96
+              : 0.12;
+        send({ type: 'log', progress, msg });
+      }
+    };
+    p.stdout.on('data', onLog);
+    p.stderr.on('data', onLog);
+    p.on('error', (e) => { send({ type: 'error', msg: '启动 Python 失败：' + e.message }); res.end(); });
+    p.on('close', (code) => {
+      if (code !== 0) {
+        send({ type: 'error', msg: '语音识别失败（退出码 ' + code + '）', detail: tail.slice(-1200) });
+        res.end();
+        return;
+      }
+      try {
+        const result = JSON.parse(fs.readFileSync(outJson, 'utf8'));
+        send({
+          type: 'result',
+          progress: 1,
+          result: {
+            segments: result.segments || [],
+            provider: result.provider || null,
+            error: result.error || null,
+            file: outJson,
+          },
+        });
+      } catch (e) {
+        send({ type: 'error', msg: '读取识别结果失败：' + e.message });
+      }
+      res.end();
+    });
+  });
+}
+
 const SSH_DIR = path.join(os.homedir(), '.ssh');
 // 专门给 GitHub 用的一把，不碰你机器上原有的密钥
 const SSH_KEY = path.join(SSH_DIR, 'id_ed25519_github');
@@ -420,7 +626,7 @@ async function gitApi(p, req, res) {
     const outFile = path.join(parent, `${folder}-传给新电脑-${stamp}.zip`);
     // 用工程自带的 zip 写入器（纯 JS，文件名走 UTF-8，中文名不会变乱码）；
     // 外面套一层同名文件夹，解压出来是整整齐齐的一个工程目录
-    const SKIP = new Set(['projects', '.out', 'node_modules', '__pycache__', '.gitmodules']);
+    const SKIP = new Set(['projects', 'downloads', '.out', 'node_modules', '__pycache__', '.gitmodules']);
     const files = [];
     let bytes = 0;
     (function walk(dirAbs, rel) {
@@ -462,6 +668,8 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/agent/status') { agentStatus(res); return; }
   if (p === '/api/agent/run' && req.method === 'POST') { agentRun(req, res); return; }
   if (p === '/api/agent/fill' && req.method === 'POST') { fillRun(req, res); return; }
+  if (p === '/api/captions/transcribe' && req.method === 'POST') { transcribeCaptionsApi(req, res); return; }
+  if (p === '/api/video/download' && req.method === 'POST') { downloadVideoApi(req, res); return; }
   if (p.startsWith('/api/git/')) {
     try { if (await gitApi(p, req, res)) return; } catch (e) { json(res, { ok: false, error: e.message }, 500); return; }
   }
