@@ -867,7 +867,8 @@ input[type="color"]:disabled { cursor: not-allowed; }
   <input id="downloadUrl" class="sync-input download-url" type="url"
          placeholder="https://www.youtube.com/watch?v=... / https://example.com/video.mp4" />
   <div id="downloadState" class="download-state">
-    支持 yt-dlp 能识别的网站和直链；下载文件保存在项目的 downloads/ 目录。
+    支持常见视频网站和直接视频链接；下载文件保存在项目的 downloads/ 目录。
+    下不动的话多半是没装 yt-dlp：pip install -U yt-dlp。
   </div>
   <div class="dlg-foot">
     <span id="downloadFoot" class="dim"></span>
@@ -1020,7 +1021,7 @@ input[type="color"]:disabled { cursor: not-allowed; }
   </div>
 </dialog>
 
-<script>window.__PRESETS__=[{"file":"slopcore.json","name":"Slopcore 全套（视频同款 · 12 秒）","data":{"name":"slopcore","width":1920,"height":1080,"fps":24,"duration":12,"bg":null,"transparent":true,"beat":{"bpm":128,"offset":0.06,"duration":12,"source":"bpm"},"captions":[{"start":0.6,"end":2.4,"text":"Ladies, gentlemen, agents."},{"start":2.6,"end":4.4,"text":"This is not an AI billboard."},{"start":4.6,"end":6.4,"text":"Prepare to walk."},{"start":6.6,"end":8.4,"text":"Stop hiring humans."},{"start":8.6,"end":10.4,"text":"You have 18 months to escape."},{"start":10.6,"end":12,"text":"Lock in."}],"layers":[{"template":"hud-frame","start":0,"end":12,"seed":"slop-hud","name":"HUD 全屏框","params":{"labelLeft":"SIGNAL","labelRight":"REC","tickerTop":"ESCAPE VELOCITY  11.2 KM/S  PERMANENT UNDERCLASS  ZERO-DAY","tickerBottom":"SIGNAL LOCKED  AGENT ONLINE  TOKENS BURNED  NVIDIA GTC  129 BILLION","inset":46,"noise":0.6}},{"template":"title-mark","start":0.3,"end":2.3,"seed":"slop-title","name":"标题定格","params":{"title":"ESCAPE VELOCITY","kicker":"SLOPCORE / TRANSMISSION 01","note":"MADE IN SAN FRANCISCO","position":"0.5,0.5","size":150}},{"template":"terminal-prompt","start":1.6,"end":5.2,"seed":"slop-term","name":"终端面板","params":{"title":"PROMPT","lines":"command+shift+k 出戏\n> spawn 213 agents\n> burn 12.9B tokens\n> status: LOCKED IN","position":"0.06,0.34","width":440,"charDelay":0.02}},{"template":"stat-counter","start":1.2,"end":5,"seed":"slop-stat","name":"数字滚动计数","params":{"value":25,"suffix":"%","label":"PROBABILITY OF DOOM","position":"0.78,0.22","size":132}},{"template":"look-card","start":4.6,"end":8.6,"seed":"slop-look","name":"编号卡片","params":{"items":"Our Waymo hit someone.\nRISK PAUSED.\nNot an AI billboard.\nA real leather jacket.","position":"0.08,0.30","width":380,"startIndex":6,"stagger":2}},{"template":"kinetic-type","start":2.6,"end":7.4,"seed":"slop-kt","name":"卡点大字","params":{"text":"LOOK 06\nZERO-DAY.\nSTARGATE:\nLOCK IN","beatsPerStep":2,"size":168,"position":"0.55,0.62"}},{"template":"word-grid","start":7.4,"end":12,"seed":"slop-grid","name":"词块宫格","params":{"text":"ESCAPE VELOCITY PERMANENT UNDERCLASS 18 MONTHS LOCK IN FEEL THE ENGINE WE ARE SO BACK","cols":5,"position":"0.5,0.42","cellW":262,"cellH":76,"beatsPerStep":1}},{"template":"shipping-label","start":8.4,"end":12,"seed":"slop-label","name":"吊牌 / 条码卡","params":{"product":"ESCAPE VELOCITY","sku":"EV-11.2 / KM-S","position":"0.72,0.30","rotate":-6}},{"template":"dial-gauge","start":6,"end":10,"seed":"slop-dial","name":"圆盘仪表","params":{"value":0.68,"position":"0.15,0.76","radius":70,"label":"HUMANITY"}},{"template":"param-ticks","start":3,"end":9,"seed":"slop-pt","name":"参数刻度簇","params":{"position":"0.06,0.66","width":280,"rows":4}},{"template":"note-bubble","start":5.4,"end":7.6,"seed":"slop-note","name":"注释气泡","params":{"text":"command+shift+k","position":"0.34,0.70","width":320}},{"template":"ticker-strip","start":9.6,"end":12,"seed":"slop-tick","name":"跑马灯条","params":{"position":"0.06,0.90,0.88","height":34,"text":"SIGNAL LOCKED · AGENT ONLINE · TOKENS BURNED · COUNTRY OF GENIUSES"}},{"template":"subtitle-kinetic","start":0,"end":12,"seed":"slop-subs","name":"卡点字幕","params":{"style":"bar","position":"0.5,0.87","size":42,"maxWidth":0.72}}],"fx":[{"type":"grain","amount":0.12},{"type":"scanlines","amount":0.14,"step":3},{"type":"chromatic","amount":3,"animated":true,"jitter":1.5},{"type":"vignette","amount":0.5},{"type":"flash","fillColor":"#ffffff","hits":"beats","duration":0.06,"amount":0.18}]}},{"file":"slopcore-3min.json","name":"Slopcore 全套 · 3 分钟长片（180 秒 / 40 图层）","data":{"name":"slopcore-180s","width":1920,"height":1080,"fps":30,"duration":180,"bg":null,"transparent":true,"beat":{"bpm":128,"offset":0,"duration":180,"source":"manual"},"captions":[],"layers":[{"template":"hud-frame","start":0,"end":180,"opacity":1,"seed":"hud-frame-00","name":"HUD 全屏框（铺满全程）","params":{"color":"#efece4","accent":"#ff5a24","noise":0.6,"speed":0.9,"inset":46,"labelLeft":"SIGNAL","labelRight":"REC","meter":true,"rulers":true,"tickerTop":"ESCAPE VELOCITY  11.2 KM/S  PERMANENT UNDERCLASS  ZERO-DAY  NO EXIT","tickerBottom":"SIGNAL LOCKED  AGENT ONLINE  TOKENS BURNED  NVIDIA GTC  129 BILLION"}},{"template":"title-mark","start":0.15,"end":6.4,"opacity":1,"seed":"title-mark-01","name":"标题定格 · 开场","params":{"title":"ESCAPE VELOCITY","kicker":"SLOPCORE / TRANSMISSION 01","note":"MADE IN SAN FRANCISCO","position":"0.5,0.50","size":168,"fit":true,"maxWidth":0.86,"rule":true}},{"template":"terminal-prompt","start":1.2,"end":7,"opacity":1,"seed":"terminal-prompt-02","name":"终端面板 · 开机","params":{"title":"PROMPT","position":"0.06,0.62","width":520,"size":21,"lineHeight":1.7,"charDelay":0.03,"fill":"#0a0a0b","color":"#efece4","accent":"#ff5a24","lines":"> recording 1920x1080 30p\n> audio 48k stereo\n> duration 180s\n> status: SIGNAL LOCKED"}},{"template":"glitch-burst","start":7,"end":7.45,"opacity":1,"seed":"glitch-burst-03","name":"转场 · SIGNAL TRACKING","params":{}},{"template":"kinetic-type","start":7.45,"end":14.45,"opacity":1,"seed":"kinetic-type-04","name":"卡点大字 · SIGNAL TRACKING","params":{"text":"SIGNAL TRACKING\nESCAPE VELOCITY","mode":"slam","position":"0.5,0.52","size":150,"align":"center","fit":true,"maxWidth":0.8,"ghost":true,"beatsPerStep":2}},{"template":"word-grid","start":7.6,"end":25.367,"opacity":1,"seed":"word-grid-05","name":"词块宫格 · SIGNAL TRACKING","params":{"color":"#efece4","accent":"#ff5a24","text":"ESCAPE VELOCITY PERMANENT UNDERCLASS LOCK IN SIGNAL TRACKING","position":"0.5,0.47","fontSize":40,"cols":4,"cellW":300,"cellH":84,"beatsPerStep":1}},{"template":"stat-counter","start":14.433,"end":24.342,"opacity":1,"seed":"stat-counter-06","name":"数字滚动计数 · SIGNAL TRACKING","params":{"color":"#efece4","accent":"#ff5a24","position":"0.65,0.31","label":"SIGNAL SIGNAL","value":60,"suffix":"%","size":104,"bar":true}},{"template":"param-ticks","start":21.267,"end":31.175,"opacity":1,"seed":"param-ticks-07","name":"参数刻度簇 · SIGNAL TRACKING","params":{"color":"#efece4","accent":"#ff5a24","position":"0.07,0.58","width":330,"rows":4,"live":true,"frame":true}},{"template":"note-bubble","start":28.1,"end":34.283,"opacity":1,"seed":"note-bubble-08","name":"注释气泡 · SIGNAL TRACKING","params":{"color":"#efece4","accent":"#ff5a24","text":"> escape\n> signal tracking","position":"0.61,0.62","width":420,"size":19}},{"template":"shutter-wipe","start":34.333,"end":34.783,"opacity":1,"seed":"shutter-wipe-09","name":"转场 · SYSTEM DRIFT","params":{}},{"template":"kinetic-type","start":34.783,"end":41.783,"opacity":1,"seed":"kinetic-type-10","name":"卡点大字 · SYSTEM DRIFT","params":{"text":"SYSTEM DRIFT\nZERO-DAY STARGATE","mode":"slam","position":"0.5,0.52","size":150,"align":"center","fit":true,"maxWidth":0.8,"ghost":true,"beatsPerStep":2}},{"template":"dial-gauge","start":34.933,"end":44.842,"opacity":1,"seed":"dial-gauge-11","name":"圆盘仪表 · SYSTEM DRIFT","params":{"color":"#efece4","accent":"#ff5a24","position":"0.81,0.46","label":"SYSTEM","value":0.49,"radius":96,"showValue":true}},{"template":"look-card","start":41.767,"end":51.675,"opacity":1,"seed":"look-card-12","name":"编号卡片 · SYSTEM DRIFT","params":{"accent":"#ff5a24","title":"LOOK","startIndex":9,"position":"0.07,0.58","width":460,"size":22,"stagger":2,"hold":true,"items":"SYSTEM DRIFT\nSEQUENCE 02\nNO EXIT"}},{"template":"note-bubble","start":48.6,"end":58.508,"opacity":1,"seed":"note-bubble-13","name":"注释气泡 · SYSTEM DRIFT","params":{"color":"#efece4","accent":"#ff5a24","text":"> zero-day\n> system drift","position":"0.61,0.62","width":420,"size":19}},{"template":"terminal-prompt","start":55.433,"end":61.617,"opacity":1,"seed":"terminal-prompt-14","name":"终端面板 · SYSTEM DRIFT","params":{"color":"#efece4","accent":"#ff5a24","title":"DVR LOG","position":"0.07,0.30","width":500,"size":20,"fill":"#0a0a0b","lines":"> segment 02\n> SYSTEM DRIFT\n> signal locked"}},{"template":"halftone-rise","start":61.667,"end":62.117,"opacity":1,"seed":"halftone-rise-15","name":"转场 · DVR REVIEW","params":{}},{"template":"kinetic-type","start":62.117,"end":69.117,"opacity":1,"seed":"kinetic-type-16","name":"卡点大字 · DVR REVIEW","params":{"text":"DVR REVIEW\nRECORDED BAYOU","mode":"slam","position":"0.5,0.52","size":150,"align":"center","fit":true,"maxWidth":0.8,"ghost":true,"beatsPerStep":2}},{"template":"terminal-prompt","start":62.267,"end":72.175,"opacity":1,"seed":"terminal-prompt-17","name":"终端面板 · DVR REVIEW","params":{"color":"#efece4","accent":"#ff5a24","title":"DVR LOG","position":"0.07,0.58","width":500,"size":20,"fill":"#0a0a0b","lines":"> segment 03\n> DVR REVIEW\n> signal locked"}},{"template":"ticker-strip","start":69.1,"end":79.008,"opacity":1,"seed":"ticker-strip-18","name":"跑马灯条 · DVR REVIEW","params":{"color":"#efece4","accent":"#ff5a24","position":"0.08,0.81,0.84","size":15,"speed":1,"height":34,"text":"DVR REVIEW  ·  RECORDED  ·  BAYOU  ·  DUSK  ·  NO  ·  BOUNTY  ·  SIGNAL  ·  LOST"}},{"template":"param-ticks","start":75.933,"end":85.842,"opacity":1,"seed":"param-ticks-19","name":"参数刻度簇 · DVR REVIEW","params":{"color":"#efece4","accent":"#ff5a24","position":"0.07,0.30","width":330,"rows":4,"live":true,"frame":true}},{"template":"look-card","start":82.767,"end":88.95,"opacity":1,"seed":"look-card-20","name":"编号卡片 · DVR REVIEW","params":{"accent":"#ff5a24","title":"LOOK","startIndex":12,"position":"0.63,0.34","width":460,"size":22,"stagger":2,"hold":true,"items":"DVR REVIEW\nSEQUENCE 03\nNO EXIT"}},{"template":"scan-wipe","start":89,"end":89.45,"opacity":1,"seed":"scan-wipe-21","name":"转场 · HARD LOCK","params":{}},{"template":"kinetic-type","start":89.45,"end":96.45,"opacity":1,"seed":"kinetic-type-22","name":"卡点大字 · HARD LOCK","params":{"text":"HARD LOCK\nLOCKED IN","mode":"slam","position":"0.5,0.52","size":150,"align":"center","fit":true,"maxWidth":0.8,"ghost":true,"beatsPerStep":2}},{"template":"stat-counter","start":89.6,"end":99.508,"opacity":1,"seed":"stat-counter-23","name":"数字滚动计数 · HARD LOCK","params":{"color":"#efece4","accent":"#ff5a24","position":"0.63,0.59","label":"SIGNAL HARD","value":81,"suffix":"%","size":104,"bar":true}},{"template":"dial-gauge","start":96.433,"end":106.342,"opacity":1,"seed":"dial-gauge-24","name":"圆盘仪表 · HARD LOCK","params":{"color":"#efece4","accent":"#ff5a24","position":"0.17,0.43","label":"HARD","value":0.67,"radius":96,"showValue":true}},{"template":"shipping-label","start":103.267,"end":113.175,"opacity":1,"seed":"shipping-label-25","name":"吊牌 / 条码卡 · HARD LOCK","params":{"accent":"#ff5a24","product":"ESCAPE VELOCITY","sku":"HARD-04","care":"DO NOT PANIC / KEEP MOVING","width":340,"rotate":-2}},{"template":"word-grid","start":110.1,"end":116.283,"opacity":1,"seed":"word-grid-26","name":"词块宫格 · HARD LOCK","params":{"color":"#efece4","accent":"#ff5a24","text":"LOCKED IN NO EXIT STAY DOWN FINAL CALL HARD LOCK","position":"0.5,0.47","fontSize":40,"cols":4,"cellW":300,"cellH":84,"beatsPerStep":1}},{"template":"rgb-split","start":116.333,"end":116.783,"opacity":1,"seed":"rgb-split-27","name":"转场 · ZERO-DAY","params":{}},{"template":"kinetic-type","start":116.783,"end":123.783,"opacity":1,"seed":"kinetic-type-28","name":"卡点大字 · ZERO-DAY","params":{"text":"ZERO-DAY\nZERO-DAY PROTOCOL","mode":"slam","position":"0.5,0.52","size":150,"align":"center","fit":true,"maxWidth":0.8,"ghost":true,"beatsPerStep":2}},{"template":"look-card","start":116.933,"end":126.842,"opacity":1,"seed":"look-card-29","name":"编号卡片 · ZERO-DAY","params":{"accent":"#ff5a24","title":"LOOK","startIndex":18,"position":"0.07,0.30","width":460,"size":22,"stagger":2,"hold":true,"items":"ZERO-DAY\nSEQUENCE 05\nNO EXIT"}},{"template":"stat-counter","start":123.767,"end":133.675,"opacity":1,"seed":"stat-counter-30","name":"数字滚动计数 · ZERO-DAY","params":{"color":"#efece4","accent":"#ff5a24","position":"0.65,0.31","label":"SIGNAL ZERO-DAY","value":88,"suffix":"%","size":104,"bar":true}},{"template":"note-bubble","start":130.6,"end":140.508,"opacity":1,"seed":"note-bubble-31","name":"注释气泡 · ZERO-DAY","params":{"color":"#efece4","accent":"#ff5a24","text":"> zero-day\n> zero-day","position":"0.07,0.58","width":420,"size":19}},{"template":"ticker-strip","start":137.433,"end":143.617,"opacity":1,"seed":"ticker-strip-32","name":"跑马灯条 · ZERO-DAY","params":{"color":"#efece4","accent":"#ff5a24","position":"0.08,0.81,0.84","size":15,"speed":1,"height":34,"text":"ZERO-DAY  ·  ZERO-DAY  ·  PROTOCOL  ·  BREACH  ·  SILENT  ·  RUN"}},{"template":"zoom-punch","start":143.667,"end":144.117,"opacity":1,"seed":"zoom-punch-33","name":"转场 · ESCAPE VELOCITY","params":{}},{"template":"kinetic-type","start":144.117,"end":151.117,"opacity":1,"seed":"kinetic-type-34","name":"卡点大字 · ESCAPE VELOCITY","params":{"text":"ESCAPE VELOCITY\nESCAPE VELOCITY","mode":"slam","position":"0.5,0.52","size":150,"align":"center","fit":true,"maxWidth":0.8,"ghost":true,"beatsPerStep":2}},{"template":"word-grid","start":144.267,"end":162.033,"opacity":1,"seed":"word-grid-35","name":"词块宫格 · ESCAPE VELOCITY","params":{"color":"#efece4","accent":"#ff5a24","text":"ESCAPE VELOCITY RUN FASTER BEYOND CONTROL ESCAPE VELOCITY","position":"0.5,0.47","fontSize":40,"cols":4,"cellW":300,"cellH":84,"beatsPerStep":1}},{"template":"ticker-strip","start":151.1,"end":161.008,"opacity":1,"seed":"ticker-strip-36","name":"跑马灯条 · ESCAPE VELOCITY","params":{"color":"#efece4","accent":"#ff5a24","position":"0.08,0.81,0.84","size":15,"speed":1,"height":34,"text":"ESCAPE VELOCITY  ·  ESCAPE  ·  VELOCITY  ·  RUN  ·  FASTER  ·  BEYOND  ·  CONTROL"}},{"template":"dial-gauge","start":157.933,"end":167.842,"opacity":1,"seed":"dial-gauge-37","name":"圆盘仪表 · ESCAPE VELOCITY","params":{"color":"#efece4","accent":"#ff5a24","position":"0.81,0.74","label":"ESCAPE","value":0.85,"radius":96,"showValue":true}},{"template":"shipping-label","start":164.767,"end":170.95,"opacity":1,"seed":"shipping-label-38","name":"吊牌 / 条码卡 · ESCAPE VELOCITY","params":{"accent":"#ff5a24","product":"ESCAPE VELOCITY","sku":"ESCAPE-06","care":"DO NOT PANIC / KEEP MOVING","width":340,"rotate":-2}},{"template":"title-mark","start":171,"end":180,"opacity":1,"seed":"title-mark-39","name":"标题定格 · 收尾","params":{"title":"ESCAPE\nVELOCITY","kicker":"END OF TRANSMISSION","note":"128 BPM · 3:00 · SIGNAL LOCKED","position":"0.5,0.50","size":150,"fit":true,"maxWidth":0.8}}],"fx":[{"type":"grain","amount":0.12},{"type":"scanlines","amount":0.14,"step":3},{"type":"chromatic","amount":3,"animated":true,"jitter":1.5},{"type":"vignette","amount":0.5},{"type":"flash","fillColor":"#ffffff","hits":"beats","every":2,"duration":0.06,"amount":0.18}]}},{"file":"slopcore-captionstyles.json","name":"字幕换装演示（六句台词六个样子 · 12 秒）","data":{"name":"slopcore-captionstyles","width":1920,"height":1080,"fps":24,"duration":12,"bg":null,"transparent":true,"beat":{"bpm":128,"offset":0.06,"duration":12,"source":"bpm"},"captions":[{"start":0.6,"end":2.4,"text":"Ladies, gentlemen, agents."},{"start":2.6,"end":4.4,"text":"This is not an AI billboard."},{"start":4.6,"end":6.4,"text":"Prepare to walk."},{"start":6.6,"end":8.4,"text":"Stop hiring humans."},{"start":8.6,"end":10.4,"text":"You have 18 months to escape."},{"start":10.6,"end":12,"text":"Lock in."}],"layers":[{"template":"hud-frame","start":0,"end":12,"seed":"slop-hud","name":"HUD 全屏框","params":{"labelLeft":"SIGNAL","labelRight":"REC","tickerTop":"ESCAPE VELOCITY  11.2 KM/S  PERMANENT UNDERCLASS  ZERO-DAY","tickerBottom":"SIGNAL LOCKED  AGENT ONLINE  TOKENS BURNED  NVIDIA GTC  129 BILLION","inset":46,"noise":0.6}},{"template":"title-mark","start":0.3,"end":2.3,"seed":"slop-title","name":"标题定格","params":{"title":"ESCAPE VELOCITY","kicker":"SLOPCORE / TRANSMISSION 01","note":"MADE IN SAN FRANCISCO","position":"0.5,0.5","size":150}},{"template":"terminal-prompt","start":1.6,"end":5.2,"seed":"slop-term","name":"终端面板","params":{"title":"PROMPT","lines":"command+shift+k 出戏\n> spawn 213 agents\n> burn 12.9B tokens\n> status: LOCKED IN","position":"0.06,0.34","width":440,"charDelay":0.02}},{"template":"stat-counter","start":1.2,"end":5,"seed":"slop-stat","name":"数字滚动计数","params":{"value":25,"suffix":"%","label":"PROBABILITY OF DOOM","position":"0.78,0.22","size":132}},{"template":"look-card","start":4.6,"end":8.6,"seed":"slop-look","name":"编号卡片","params":{"items":"Our Waymo hit someone.\nRISK PAUSED.\nNot an AI billboard.\nA real leather jacket.","position":"0.08,0.30","width":380,"startIndex":6,"stagger":2}},{"template":"kinetic-type","start":2.6,"end":7.4,"seed":"slop-kt","name":"卡点大字","params":{"text":"LOOK 06\nZERO-DAY.\nSTARGATE:\nLOCK IN","beatsPerStep":2,"size":168,"position":"0.55,0.62"}},{"template":"word-grid","start":7.4,"end":12,"seed":"slop-grid","name":"词块宫格","params":{"text":"ESCAPE VELOCITY PERMANENT UNDERCLASS 18 MONTHS LOCK IN FEEL THE ENGINE WE ARE SO BACK","cols":5,"position":"0.5,0.42","cellW":262,"cellH":76,"beatsPerStep":1}},{"template":"shipping-label","start":8.4,"end":12,"seed":"slop-label","name":"吊牌 / 条码卡","params":{"product":"ESCAPE VELOCITY","sku":"EV-11.2 / KM-S","position":"0.72,0.30","rotate":-6}},{"template":"dial-gauge","start":6,"end":10,"seed":"slop-dial","name":"圆盘仪表","params":{"value":0.68,"position":"0.15,0.76","radius":70,"label":"HUMANITY"}},{"template":"param-ticks","start":3,"end":9,"seed":"slop-pt","name":"参数刻度簇","params":{"position":"0.06,0.66","width":280,"rows":4}},{"template":"note-bubble","start":5.4,"end":7.6,"seed":"slop-note","name":"注释气泡","params":{"text":"command+shift+k","position":"0.34,0.70","width":320}},{"template":"ticker-strip","start":9.6,"end":12,"seed":"slop-tick","name":"跑马灯条","params":{"position":"0.06,0.90,0.88","height":34,"text":"SIGNAL LOCKED · AGENT ONLINE · TOKENS BURNED · COUNTRY OF GENIUSES"}},{"template":"ticker-strip","start":0.45,"end":2.75,"params":{"text":"01   Ladies, gentlemen, agents.","position":"0.06,0.78,0.88","height":34,"size":17,"speed":1,"color":"#f2ece0","accent":"#ff5a24"},"seed":"cap-01","name":"字幕换装 01 · 跑马灯条","opacity":1,"blend":"source-over","enabled":true,"group":"caption-reskin"},{"template":"word-grid","start":2.45,"end":4.75,"params":{"text":"This is not an AI billboard.","cols":4,"position":"0.5,0.54","cellW":300,"cellH":84,"fontSize":34,"beatsPerStep":1,"color":"#f2ece0","accent":"#ff5a24"},"seed":"cap-02","name":"字幕换装 02 · 词块宫格","opacity":1,"blend":"source-over","enabled":true,"group":"caption-reskin"},{"template":"callout-pin","start":4.45,"end":6.75,"params":{"index":"3","text":"Prepare to walk.","point":"0.62,0.44","dir":"tl","len":190,"size":26,"plate":"#0a0a0c","color":"#f2ece0","accent":"#ff5a24","inDur":0.35,"outDur":0.25},"seed":"cap-03","name":"字幕换装 03 · 索引标注","opacity":1,"blend":"source-over","enabled":true,"group":"caption-reskin"},{"template":"note-bubble","start":6.45,"end":8.75,"params":{"text":"Stop hiring humans.","width":520,"size":22,"color":"#f2ece0","accent":"#ff5a24","position":"0.56,0.30"},"seed":"cap-04","name":"字幕换装 04 · 注释气泡","opacity":1,"blend":"source-over","enabled":true,"group":"caption-reskin"},{"template":"look-card","start":8.45,"end":10.75,"params":{"title":"LINE","startIndex":5,"items":"You have 18 months to escape.","width":520,"size":22,"stagger":1,"hold":true,"accent":"#ff5a24","position":"0.07,0.58"},"seed":"cap-05","name":"字幕换装 05 · 编号卡片","opacity":1,"blend":"source-over","enabled":true,"group":"caption-reskin"},{"template":"shipping-label","start":10.45,"end":12,"params":{"product":"Lock in.","sku":"LINE-06","care":"","width":340,"rotate":3,"accent":"#ff5a24","position":"0.62,0.30"},"seed":"cap-06","name":"字幕换装 06 · 吊牌","opacity":1,"blend":"source-over","enabled":true,"group":"caption-reskin"}],"fx":[{"type":"grain","amount":0.12},{"type":"scanlines","amount":0.14,"step":3},{"type":"chromatic","amount":3,"animated":true,"jitter":1.5},{"type":"vignette","amount":0.5},{"type":"flash","fillColor":"#ffffff","hits":"beats","duration":0.06,"amount":0.18}]}},{"file":"demo-scene.json","name":"快速演示（HUD + 卡点大字 · 6 秒）","data":{"name":"demo","width":1920,"height":1080,"fps":24,"duration":6,"bg":null,"transparent":true,"beat":{"bpm":120,"offset":0,"duration":6,"source":"bpm"},"captions":[{"start":0.4,"end":2.2,"text":"This is not an AI billboard."},{"start":2.4,"end":4.2,"text":"You have 18 months to escape."},{"start":4.4,"end":5.8,"text":"Lock in."}],"layers":[{"template":"hud-frame","start":0,"end":6,"opacity":1,"seed":"demo-hud","name":"HUD 全屏框","params":{"labelLeft":"SIGNAL","labelRight":"REC"}},{"template":"kinetic-type","start":0.2,"end":3.6,"seed":"demo-kt","name":"卡点大字","params":{"text":"LOCK IN\nESCAPE VELOCITY\nPERMANENT UNDERCLASS","beatsPerStep":2,"size":150,"position":"0.5,0.46"}},{"template":"word-grid","start":3.4,"end":6,"seed":"demo-grid","name":"词块宫格","params":{"text":"ESCAPE VELOCITY PERMANENT UNDERCLASS 18 MONTHS LOCK IN FEEL THE ENGINE WE ARE SO BACK","cols":5,"position":"0.5,0.44","cellW":260,"cellH":74}},{"template":"stat-counter","start":0.6,"end":4.6,"seed":"demo-stat","name":"数字滚动计数","params":{"value":25,"suffix":"%","label":"PROBABILITY","position":"0.76,0.24","size":120}},{"template":"dial-gauge","start":3.4,"end":6,"seed":"demo-dial","name":"圆盘仪表","params":{"value":0.72,"position":"0.83,0.74","radius":66,"label":"HUMANITY"}},{"template":"subtitle-kinetic","start":0,"end":6,"seed":"demo-subs","name":"卡点字幕","params":{"style":"bar","position":"0.5,0.87","size":40}}],"fx":[{"type":"grain","amount":0.1},{"type":"scanlines","amount":0.12,"step":3},{"type":"chromatic","amount":2.5,"animated":true,"jitter":1.2},{"type":"vignette","amount":0.45}]}},{"file":"design-demo.json","name":"设计排版（杂志标题 / 名字条 / 片尾名单 · 12 秒）","data":{"name":"design-demo","width":1920,"height":1080,"fps":24,"duration":12,"bg":null,"transparent":true,"beat":{"bpm":100,"offset":0,"duration":12,"source":"manual"},"captions":[],"layers":[{"template":"editorial-title","start":0.3,"end":3.6,"opacity":1,"seed":"design-editorial","name":"杂志标题","params":{"title":"夜里的河","kicker":"CHAPTER ONE","note":"2026 · 纪录片 · 4K","index":"01 / 06","position":"0.5,0.50","align":"center","size":132,"rule":true,"plate":"","inDur":0.55,"outDur":0.4}},{"template":"name-bar","start":4,"end":7.2,"opacity":1,"seed":"design-namebar","name":"名字条","params":{"name":"张野","role":"摄影指导 · DIRECTOR OF PHOTOGRAPHY","pos":"bl","margin":72,"width":0.42,"size":40}},{"template":"credits-roll","start":7.6,"end":12,"opacity":1,"seed":"design-credits","name":"片尾名单","params":{"title":"CREW","lines":"导演|张野\n摄影|李默\n剪辑|王川\n调色|陈小雨\n音乐|——\n特别感谢|所有熬夜的人","speed":46,"size":30,"width":0.56,"align":"split"}}],"fx":[]}},{"file":"rock-2min.json","name":"摇滚 2 分钟（大标题 / 胶带段落标 / 副歌砸字 · 120 秒）","data":{"name":"rock-2min","width":1920,"height":1080,"fps":30,"duration":120,"bg":null,"transparent":true,"beat":{"bpm":127.87,"offset":0.2728,"duration":120,"source":"auto"},"captions":[],"layers":[{"template":"rock-title","start":0.35,"end":6.5,"opacity":1,"seed":"rock-open","name":"摇滚大标题","params":{"text":"NIGHT DRIVE","sub":"AUTO CUT · 128 BPM","tag":"SIDE A","size":170,"maxWidth":0.8}},{"template":"tape-label","start":25.834,"end":28.574,"opacity":1,"seed":"tape-1","name":"胶带标签 · CHORUS 1","params":{"label":"CHORUS 1","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"rock-title","start":25.924,"end":29.974,"opacity":1,"seed":"rock-1","name":"摇滚大标题 · CHORUS 1","params":{"text":"TURN IT UP","sub":"CHORUS 1","tag":"CHORUS","size":176,"maxWidth":0.78}},{"template":"tape-label","start":38.959,"end":41.699,"opacity":1,"seed":"tape-2","name":"胶带标签 · BUILD 1","params":{"label":"BUILD 1","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"tape-label","start":57.239,"end":59.979,"opacity":1,"seed":"tape-3","name":"胶带标签 · CHORUS 2","params":{"label":"CHORUS 2","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"rock-title","start":57.329,"end":61.379,"opacity":1,"seed":"rock-3","name":"摇滚大标题 · CHORUS 2","params":{"text":"LOUDER","sub":"CHORUS 2","tag":"CHORUS","size":176,"maxWidth":0.78}},{"template":"tape-label","start":71.775,"end":74.515,"opacity":1,"seed":"tape-4","name":"胶带标签 · VERSE 2","params":{"label":"VERSE 2","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"tape-label","start":81.614,"end":84.354,"opacity":1,"seed":"tape-5","name":"胶带标签 · CHORUS 3","params":{"label":"CHORUS 3","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"rock-title","start":81.704,"end":85.754,"opacity":1,"seed":"rock-5","name":"摇滚大标题 · CHORUS 3","params":{"text":"NO SURRENDER","sub":"CHORUS 3","tag":"CHORUS","size":176,"maxWidth":0.78}},{"template":"tape-label","start":96.614,"end":99.354,"opacity":1,"seed":"tape-6","name":"胶带标签 · BUILD 2","params":{"label":"BUILD 2","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"tape-label","start":112.555,"end":115.295,"opacity":1,"seed":"tape-7","name":"胶带标签 · VERSE 3","params":{"label":"VERSE 3","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"rock-title","start":114.8,"end":119.6,"opacity":1,"seed":"rock-end","name":"摇滚大标题 · 收尾","params":{"text":"THAT'S ALL","sub":"THANKS FOR WATCHING","tag":"SIDE B","size":132,"maxWidth":0.7}}],"fx":[{"type":"grain","amount":0.1},{"type":"vignette","amount":0.42},{"type":"chromatic","amount":2.2,"animated":true,"jitter":0.8},{"type":"flash","fillColor":"#ffffff","hits":"beats","every":2,"duration":0.05,"amount":0.1}]}},{"file":"focus-demo.json","name":"聚焦标注（聚焦框 / 索引标注 / 索引清单 / 放大镜 · 12 秒）","data":{"name":"focus-demo","width":1920,"height":1080,"fps":30,"duration":12,"bg":null,"transparent":true,"beat":{"bpm":120,"offset":0,"duration":12,"source":"manual"},"captions":[],"layers":[{"template":"focus-box","start":0.2,"end":3.4,"opacity":1,"seed":"focus-1","name":"聚焦框","params":{"region":"0.28,0.30,0.42,0.38","label":"DETAIL","index":"01","dim":0.5}},{"template":"callout-pin","start":3.7,"end":6.3,"opacity":1,"seed":"focus-2","name":"索引标注 ①","params":{"index":"1","text":"光源位置","point":"0.42,0.58","dir":"tr","len":200}},{"template":"callout-pin","start":4.1,"end":6.3,"opacity":1,"seed":"focus-3","name":"索引标注 ②","params":{"index":"2","text":"主体轮廓","point":"0.62,0.38","dir":"bl","len":210}},{"template":"index-list","start":6.6,"end":9.6,"opacity":1,"seed":"focus-4","name":"索引清单","params":{"position":"0.06,0.30","step":0.85}},{"template":"magnifier","start":9.8,"end":12,"opacity":1,"seed":"focus-5","name":"放大镜","params":{"center":"0.52,0.46","radius":230,"zoom":2.4,"label":"×2.4"}}],"fx":[]}},{"file":"data-demo.json","name":"数据标注（柱状图 / 折线图 / 手绘圈注 / 地图定位 / 分屏对比 / 章节进度 · 16 秒）","data":{"name":"data-demo","width":1920,"height":1080,"fps":30,"duration":16,"bg":null,"transparent":true,"beat":{"bpm":120,"offset":0,"duration":16,"source":"manual"},"captions":[],"layers":[{"template":"bar-chart","start":0.2,"end":3.6,"opacity":1,"seed":"dm-1","name":"柱状图","params":{"position":"0.5,0.5"}},{"template":"line-chart","start":4,"end":7.4,"opacity":1,"seed":"dm-2","name":"折线图","params":{"position":"0.5,0.5"}},{"template":"hand-mark","start":7.8,"end":10.2,"opacity":1,"seed":"dm-3","name":"手绘圈注","params":{"mode":"circle","region":"0.36,0.38,0.28,0.24"}},{"template":"locator","start":7.8,"end":10.2,"opacity":1,"seed":"dm-4","name":"地图定位","params":{"region":"0.36,0.38,0.28,0.24","cardPos":"br"}},{"template":"split-compare","start":10.6,"end":13.4,"opacity":1,"seed":"dm-5","name":"分屏对比","params":{"auto":true,"sweep":2.2}},{"template":"chapter-bar","start":13.8,"end":16,"opacity":1,"seed":"dm-6","name":"章节进度","params":{"chapters":"0|开场\n5|走访\n9|发现\n13|收尾"}}],"fx":[]}},{"file":"chaos-demo.json","name":"秩序 / 混沌（五屏序列：网格 → 断裂 → 爆散 → 墨 · 20 秒）","data":{"name":"chaos-demo","width":1920,"height":1080,"fps":30,"duration":20,"bg":null,"transparent":true,"beat":{"bpm":96,"offset":0,"duration":20,"source":"manual"},"captions":[],"layers":[{"template":"series-index","start":0,"end":4,"opacity":1,"seed":"cs-1","name":"01 · 秩序","params":{"index":"01","note":"THE GRID\nIS REAL.","from":"ORDER","to":"CHAOS","page":"/01","title":"THE GRID\nIS REAL","titlePos":"0.075,0.66","titleSize":88,"inDur":0.7}},{"template":"grid-field","start":0,"end":4,"opacity":1,"seed":"cg-1","name":"网格 · 干净","params":{"chaos":0.06,"mode":"grid","cols":18,"rows":11,"blocks":6}},{"template":"series-index","start":4,"end":8,"opacity":1,"seed":"cs-2","name":"02 · 扭曲","params":{"index":"02","note":"CONTROL\nIS AN ILLUSION.","from":"ORDER","to":"CHAOS","page":"/02","title":"","inDur":0.7}},{"template":"grid-field","start":4,"end":8,"opacity":1,"seed":"cg-2","name":"网格 · 扭曲","params":{"chaos":0.42,"mode":"warp","cols":18,"rows":11,"blocks":10}},{"template":"series-index","start":8,"end":12,"opacity":1,"seed":"cs-3","name":"03 · 断裂","params":{"index":"03","note":"THE LINES\nSTART TO BREAK.","from":"ORDER","to":"CHAOS","page":"/03","title":"THE GRID\nIS LYING","titlePos":"0.075,0.60","titleSize":92,"inDur":0.7}},{"template":"grid-field","start":8,"end":12,"opacity":1,"seed":"cg-3","name":"网格 · 断裂","params":{"chaos":0.68,"mode":"break","cols":18,"rows":11,"blocks":22}},{"template":"ink-scatter","start":8.4,"end":12,"opacity":0.55,"seed":"ci-3","name":"碎块","params":{"mode":"blocks","count":14,"inkBlobs":0,"lines":4,"drift":0.2}},{"template":"series-index","start":12,"end":16,"opacity":1,"seed":"cs-4","name":"04 · 爆散","params":{"index":"04","note":"STRUCTURE\nSURRENDERS.","from":"ORDER","to":"CHAOS","page":"/04","title":"","inDur":0.7}},{"template":"grid-field","start":12,"end":16,"opacity":1,"seed":"cg-4","name":"网格 · 爆散","params":{"chaos":0.95,"mode":"burst","cols":18,"rows":11,"blocks":40,"blockScale":1.3}},{"template":"ink-scatter","start":12.6,"end":16,"opacity":0.8,"seed":"ci-4","name":"墨点","params":{"mode":"blocks","count":22,"inkBlobs":0,"lines":10,"drift":0.35}},{"template":"series-index","start":16.2,"end":20,"opacity":1,"seed":"cs-5","name":"05 · 混沌即创造","params":{"index":"05","note":"BEAUTY LIVES\nBEYOND CONTROL.","page":"/05","paper":true,"frame":false,"from":"CHAOS.","to":"That's where creation happens.","arrow":false,"title":"","inDur":0.9}},{"template":"ink-scatter","start":16,"end":20,"opacity":1,"seed":"ci-5","name":"05 · 墨（压在纸面上）","params":{"mode":"ink","count":18,"inkBlobs":6,"size":1.15,"drift":0.4,"accentCount":1}}],"fx":[{"type":"grain","amount":0.06},{"type":"vignette","amount":0.12}]}}];window.__MOTIONKIT_BUNDLED__=true;</script>
+<script>window.__PRESETS__=[{"file":"slopcore.json","name":"Slopcore 全套（视频同款 · 12 秒）","data":{"name":"slopcore","width":1920,"height":1080,"fps":24,"duration":12,"bg":null,"transparent":true,"beat":{"bpm":128,"offset":0.06,"duration":12,"source":"bpm"},"captions":[{"start":0.6,"end":2.4,"text":"Ladies, gentlemen, agents."},{"start":2.6,"end":4.4,"text":"This is not an AI billboard."},{"start":4.6,"end":6.4,"text":"Prepare to walk."},{"start":6.6,"end":8.4,"text":"Stop hiring humans."},{"start":8.6,"end":10.4,"text":"You have 18 months to escape."},{"start":10.6,"end":12,"text":"Lock in."}],"layers":[{"template":"hud-frame","start":0,"end":12,"seed":"slop-hud","name":"HUD 全屏框","params":{"labelLeft":"SIGNAL","labelRight":"REC","tickerTop":"ESCAPE VELOCITY  11.2 KM/S  PERMANENT UNDERCLASS  ZERO-DAY","tickerBottom":"SIGNAL LOCKED  AGENT ONLINE  TOKENS BURNED  NVIDIA GTC  129 BILLION","inset":46,"noise":0.6}},{"template":"title-mark","start":0.3,"end":2.3,"seed":"slop-title","name":"标题定格","params":{"title":"ESCAPE VELOCITY","kicker":"SLOPCORE / TRANSMISSION 01","note":"MADE IN SAN FRANCISCO","position":"0.5,0.5","size":150}},{"template":"terminal-prompt","start":1.6,"end":5.2,"seed":"slop-term","name":"终端面板","params":{"title":"PROMPT","lines":"command+shift+k 出戏\n> spawn 213 agents\n> burn 12.9B tokens\n> status: LOCKED IN","position":"0.06,0.34","width":440,"charDelay":0.02}},{"template":"stat-counter","start":1.2,"end":5,"seed":"slop-stat","name":"数字滚动计数","params":{"value":25,"suffix":"%","label":"PROBABILITY OF DOOM","position":"0.78,0.22","size":132}},{"template":"look-card","start":4.6,"end":8.6,"seed":"slop-look","name":"编号卡片","params":{"items":"Our Waymo hit someone.\nRISK PAUSED.\nNot an AI billboard.\nA real leather jacket.","position":"0.08,0.30","width":380,"startIndex":6,"stagger":2}},{"template":"kinetic-type","start":2.6,"end":7.4,"seed":"slop-kt","name":"卡点大字","params":{"text":"LOOK 06\nZERO-DAY.\nSTARGATE:\nLOCK IN","beatsPerStep":2,"size":168,"position":"0.55,0.62"}},{"template":"word-grid","start":7.4,"end":12,"seed":"slop-grid","name":"词块宫格","params":{"text":"ESCAPE VELOCITY PERMANENT UNDERCLASS 18 MONTHS LOCK IN FEEL THE ENGINE WE ARE SO BACK","cols":5,"position":"0.5,0.42","cellW":262,"cellH":76,"beatsPerStep":1}},{"template":"shipping-label","start":8.4,"end":12,"seed":"slop-label","name":"吊牌 / 条码卡","params":{"product":"ESCAPE VELOCITY","sku":"EV-11.2 / KM-S","position":"0.72,0.30","rotate":-6}},{"template":"dial-gauge","start":6,"end":10,"seed":"slop-dial","name":"圆盘仪表","params":{"value":0.68,"position":"0.15,0.76","radius":70,"label":"HUMANITY"}},{"template":"param-ticks","start":3,"end":9,"seed":"slop-pt","name":"参数刻度簇","params":{"position":"0.06,0.66","width":280,"rows":4}},{"template":"note-bubble","start":5.4,"end":7.6,"seed":"slop-note","name":"注释气泡","params":{"text":"command+shift+k","position":"0.34,0.70","width":320}},{"template":"ticker-strip","start":9.6,"end":12,"seed":"slop-tick","name":"跑马灯条","params":{"position":"0.06,0.90,0.88","height":34,"text":"SIGNAL LOCKED · AGENT ONLINE · TOKENS BURNED · COUNTRY OF GENIUSES"}},{"template":"subtitle-kinetic","start":0,"end":12,"seed":"slop-subs","name":"卡点字幕","params":{"style":"bar","position":"0.5,0.87","size":42,"maxWidth":0.72}}],"fx":[{"type":"grain","amount":0.12},{"type":"scanlines","amount":0.14,"step":3},{"type":"chromatic","amount":3,"animated":true,"jitter":1.5},{"type":"vignette","amount":0.5},{"type":"flash","fillColor":"#ffffff","hits":"beats","duration":0.06,"amount":0.18}]}},{"file":"slopcore-3min.json","name":"Slopcore 全套 · 3 分钟长片（180 秒 / 40 图层）","data":{"name":"slopcore-180s","width":1920,"height":1080,"fps":30,"duration":180,"bg":null,"transparent":true,"beat":{"bpm":128,"offset":0,"duration":180,"source":"manual"},"captions":[],"layers":[{"template":"hud-frame","start":0,"end":180,"opacity":1,"seed":"hud-frame-00","name":"HUD 全屏框（铺满全程）","params":{"color":"#efece4","accent":"#ff5a24","noise":0.6,"speed":0.9,"inset":46,"labelLeft":"SIGNAL","labelRight":"REC","meter":true,"rulers":true,"tickerTop":"ESCAPE VELOCITY  11.2 KM/S  PERMANENT UNDERCLASS  ZERO-DAY  NO EXIT","tickerBottom":"SIGNAL LOCKED  AGENT ONLINE  TOKENS BURNED  NVIDIA GTC  129 BILLION"}},{"template":"title-mark","start":0.15,"end":6.4,"opacity":1,"seed":"title-mark-01","name":"标题定格 · 开场","params":{"title":"ESCAPE VELOCITY","kicker":"SLOPCORE / TRANSMISSION 01","note":"MADE IN SAN FRANCISCO","position":"0.5,0.50","size":168,"fit":true,"maxWidth":0.86,"rule":true}},{"template":"terminal-prompt","start":1.2,"end":7,"opacity":1,"seed":"terminal-prompt-02","name":"终端面板 · 开机","params":{"title":"PROMPT","position":"0.06,0.62","width":520,"size":21,"lineHeight":1.7,"charDelay":0.03,"fill":"#0a0a0b","color":"#efece4","accent":"#ff5a24","lines":"> recording 1920x1080 30p\n> audio 48k stereo\n> duration 180s\n> status: SIGNAL LOCKED"}},{"template":"glitch-burst","start":7,"end":7.45,"opacity":1,"seed":"glitch-burst-03","name":"转场 · SIGNAL TRACKING","params":{}},{"template":"kinetic-type","start":7.45,"end":14.45,"opacity":1,"seed":"kinetic-type-04","name":"卡点大字 · SIGNAL TRACKING","params":{"text":"SIGNAL TRACKING\nESCAPE VELOCITY","mode":"slam","position":"0.5,0.52","size":150,"align":"center","fit":true,"maxWidth":0.8,"ghost":true,"beatsPerStep":2}},{"template":"word-grid","start":7.6,"end":25.367,"opacity":1,"seed":"word-grid-05","name":"词块宫格 · SIGNAL TRACKING","params":{"color":"#efece4","accent":"#ff5a24","text":"ESCAPE VELOCITY PERMANENT UNDERCLASS LOCK IN SIGNAL TRACKING","position":"0.5,0.47","fontSize":40,"cols":4,"cellW":300,"cellH":84,"beatsPerStep":1}},{"template":"stat-counter","start":14.433,"end":24.342,"opacity":1,"seed":"stat-counter-06","name":"数字滚动计数 · SIGNAL TRACKING","params":{"color":"#efece4","accent":"#ff5a24","position":"0.65,0.31","label":"SIGNAL SIGNAL","value":60,"suffix":"%","size":104,"bar":true}},{"template":"param-ticks","start":21.267,"end":31.175,"opacity":1,"seed":"param-ticks-07","name":"参数刻度簇 · SIGNAL TRACKING","params":{"color":"#efece4","accent":"#ff5a24","position":"0.07,0.58","width":330,"rows":4,"live":true,"frame":true}},{"template":"note-bubble","start":28.1,"end":34.283,"opacity":1,"seed":"note-bubble-08","name":"注释气泡 · SIGNAL TRACKING","params":{"color":"#efece4","accent":"#ff5a24","text":"> escape\n> signal tracking","position":"0.61,0.62","width":420,"size":19}},{"template":"shutter-wipe","start":34.333,"end":34.783,"opacity":1,"seed":"shutter-wipe-09","name":"转场 · SYSTEM DRIFT","params":{}},{"template":"kinetic-type","start":34.783,"end":41.783,"opacity":1,"seed":"kinetic-type-10","name":"卡点大字 · SYSTEM DRIFT","params":{"text":"SYSTEM DRIFT\nZERO-DAY STARGATE","mode":"slam","position":"0.5,0.52","size":150,"align":"center","fit":true,"maxWidth":0.8,"ghost":true,"beatsPerStep":2}},{"template":"dial-gauge","start":34.933,"end":44.842,"opacity":1,"seed":"dial-gauge-11","name":"圆盘仪表 · SYSTEM DRIFT","params":{"color":"#efece4","accent":"#ff5a24","position":"0.81,0.46","label":"SYSTEM","value":0.49,"radius":96,"showValue":true}},{"template":"look-card","start":41.767,"end":51.675,"opacity":1,"seed":"look-card-12","name":"编号卡片 · SYSTEM DRIFT","params":{"accent":"#ff5a24","title":"LOOK","startIndex":9,"position":"0.07,0.58","width":460,"size":22,"stagger":2,"hold":true,"items":"SYSTEM DRIFT\nSEQUENCE 02\nNO EXIT"}},{"template":"note-bubble","start":48.6,"end":58.508,"opacity":1,"seed":"note-bubble-13","name":"注释气泡 · SYSTEM DRIFT","params":{"color":"#efece4","accent":"#ff5a24","text":"> zero-day\n> system drift","position":"0.61,0.62","width":420,"size":19}},{"template":"terminal-prompt","start":55.433,"end":61.617,"opacity":1,"seed":"terminal-prompt-14","name":"终端面板 · SYSTEM DRIFT","params":{"color":"#efece4","accent":"#ff5a24","title":"DVR LOG","position":"0.07,0.30","width":500,"size":20,"fill":"#0a0a0b","lines":"> segment 02\n> SYSTEM DRIFT\n> signal locked"}},{"template":"halftone-rise","start":61.667,"end":62.117,"opacity":1,"seed":"halftone-rise-15","name":"转场 · DVR REVIEW","params":{}},{"template":"kinetic-type","start":62.117,"end":69.117,"opacity":1,"seed":"kinetic-type-16","name":"卡点大字 · DVR REVIEW","params":{"text":"DVR REVIEW\nRECORDED BAYOU","mode":"slam","position":"0.5,0.52","size":150,"align":"center","fit":true,"maxWidth":0.8,"ghost":true,"beatsPerStep":2}},{"template":"terminal-prompt","start":62.267,"end":72.175,"opacity":1,"seed":"terminal-prompt-17","name":"终端面板 · DVR REVIEW","params":{"color":"#efece4","accent":"#ff5a24","title":"DVR LOG","position":"0.07,0.58","width":500,"size":20,"fill":"#0a0a0b","lines":"> segment 03\n> DVR REVIEW\n> signal locked"}},{"template":"ticker-strip","start":69.1,"end":79.008,"opacity":1,"seed":"ticker-strip-18","name":"跑马灯条 · DVR REVIEW","params":{"color":"#efece4","accent":"#ff5a24","position":"0.08,0.81,0.84","size":15,"speed":1,"height":34,"text":"DVR REVIEW  ·  RECORDED  ·  BAYOU  ·  DUSK  ·  NO  ·  BOUNTY  ·  SIGNAL  ·  LOST"}},{"template":"param-ticks","start":75.933,"end":85.842,"opacity":1,"seed":"param-ticks-19","name":"参数刻度簇 · DVR REVIEW","params":{"color":"#efece4","accent":"#ff5a24","position":"0.07,0.30","width":330,"rows":4,"live":true,"frame":true}},{"template":"look-card","start":82.767,"end":88.95,"opacity":1,"seed":"look-card-20","name":"编号卡片 · DVR REVIEW","params":{"accent":"#ff5a24","title":"LOOK","startIndex":12,"position":"0.63,0.34","width":460,"size":22,"stagger":2,"hold":true,"items":"DVR REVIEW\nSEQUENCE 03\nNO EXIT"}},{"template":"scan-wipe","start":89,"end":89.45,"opacity":1,"seed":"scan-wipe-21","name":"转场 · HARD LOCK","params":{}},{"template":"kinetic-type","start":89.45,"end":96.45,"opacity":1,"seed":"kinetic-type-22","name":"卡点大字 · HARD LOCK","params":{"text":"HARD LOCK\nLOCKED IN","mode":"slam","position":"0.5,0.52","size":150,"align":"center","fit":true,"maxWidth":0.8,"ghost":true,"beatsPerStep":2}},{"template":"stat-counter","start":89.6,"end":99.508,"opacity":1,"seed":"stat-counter-23","name":"数字滚动计数 · HARD LOCK","params":{"color":"#efece4","accent":"#ff5a24","position":"0.63,0.59","label":"SIGNAL HARD","value":81,"suffix":"%","size":104,"bar":true}},{"template":"dial-gauge","start":96.433,"end":106.342,"opacity":1,"seed":"dial-gauge-24","name":"圆盘仪表 · HARD LOCK","params":{"color":"#efece4","accent":"#ff5a24","position":"0.17,0.43","label":"HARD","value":0.67,"radius":96,"showValue":true}},{"template":"shipping-label","start":103.267,"end":113.175,"opacity":1,"seed":"shipping-label-25","name":"吊牌 / 条码卡 · HARD LOCK","params":{"accent":"#ff5a24","product":"ESCAPE VELOCITY","sku":"HARD-04","care":"DO NOT PANIC / KEEP MOVING","width":340,"rotate":-2}},{"template":"word-grid","start":110.1,"end":116.283,"opacity":1,"seed":"word-grid-26","name":"词块宫格 · HARD LOCK","params":{"color":"#efece4","accent":"#ff5a24","text":"LOCKED IN NO EXIT STAY DOWN FINAL CALL HARD LOCK","position":"0.5,0.47","fontSize":40,"cols":4,"cellW":300,"cellH":84,"beatsPerStep":1}},{"template":"rgb-split","start":116.333,"end":116.783,"opacity":1,"seed":"rgb-split-27","name":"转场 · ZERO-DAY","params":{}},{"template":"kinetic-type","start":116.783,"end":123.783,"opacity":1,"seed":"kinetic-type-28","name":"卡点大字 · ZERO-DAY","params":{"text":"ZERO-DAY\nZERO-DAY PROTOCOL","mode":"slam","position":"0.5,0.52","size":150,"align":"center","fit":true,"maxWidth":0.8,"ghost":true,"beatsPerStep":2}},{"template":"look-card","start":116.933,"end":126.842,"opacity":1,"seed":"look-card-29","name":"编号卡片 · ZERO-DAY","params":{"accent":"#ff5a24","title":"LOOK","startIndex":18,"position":"0.07,0.30","width":460,"size":22,"stagger":2,"hold":true,"items":"ZERO-DAY\nSEQUENCE 05\nNO EXIT"}},{"template":"stat-counter","start":123.767,"end":133.675,"opacity":1,"seed":"stat-counter-30","name":"数字滚动计数 · ZERO-DAY","params":{"color":"#efece4","accent":"#ff5a24","position":"0.65,0.31","label":"SIGNAL ZERO-DAY","value":88,"suffix":"%","size":104,"bar":true}},{"template":"note-bubble","start":130.6,"end":140.508,"opacity":1,"seed":"note-bubble-31","name":"注释气泡 · ZERO-DAY","params":{"color":"#efece4","accent":"#ff5a24","text":"> zero-day\n> zero-day","position":"0.07,0.58","width":420,"size":19}},{"template":"ticker-strip","start":137.433,"end":143.617,"opacity":1,"seed":"ticker-strip-32","name":"跑马灯条 · ZERO-DAY","params":{"color":"#efece4","accent":"#ff5a24","position":"0.08,0.81,0.84","size":15,"speed":1,"height":34,"text":"ZERO-DAY  ·  ZERO-DAY  ·  PROTOCOL  ·  BREACH  ·  SILENT  ·  RUN"}},{"template":"zoom-punch","start":143.667,"end":144.117,"opacity":1,"seed":"zoom-punch-33","name":"转场 · ESCAPE VELOCITY","params":{}},{"template":"kinetic-type","start":144.117,"end":151.117,"opacity":1,"seed":"kinetic-type-34","name":"卡点大字 · ESCAPE VELOCITY","params":{"text":"ESCAPE VELOCITY\nESCAPE VELOCITY","mode":"slam","position":"0.5,0.52","size":150,"align":"center","fit":true,"maxWidth":0.8,"ghost":true,"beatsPerStep":2}},{"template":"word-grid","start":144.267,"end":162.033,"opacity":1,"seed":"word-grid-35","name":"词块宫格 · ESCAPE VELOCITY","params":{"color":"#efece4","accent":"#ff5a24","text":"ESCAPE VELOCITY RUN FASTER BEYOND CONTROL ESCAPE VELOCITY","position":"0.5,0.47","fontSize":40,"cols":4,"cellW":300,"cellH":84,"beatsPerStep":1}},{"template":"ticker-strip","start":151.1,"end":161.008,"opacity":1,"seed":"ticker-strip-36","name":"跑马灯条 · ESCAPE VELOCITY","params":{"color":"#efece4","accent":"#ff5a24","position":"0.08,0.81,0.84","size":15,"speed":1,"height":34,"text":"ESCAPE VELOCITY  ·  ESCAPE  ·  VELOCITY  ·  RUN  ·  FASTER  ·  BEYOND  ·  CONTROL"}},{"template":"dial-gauge","start":157.933,"end":167.842,"opacity":1,"seed":"dial-gauge-37","name":"圆盘仪表 · ESCAPE VELOCITY","params":{"color":"#efece4","accent":"#ff5a24","position":"0.81,0.74","label":"ESCAPE","value":0.85,"radius":96,"showValue":true}},{"template":"shipping-label","start":164.767,"end":170.95,"opacity":1,"seed":"shipping-label-38","name":"吊牌 / 条码卡 · ESCAPE VELOCITY","params":{"accent":"#ff5a24","product":"ESCAPE VELOCITY","sku":"ESCAPE-06","care":"DO NOT PANIC / KEEP MOVING","width":340,"rotate":-2}},{"template":"title-mark","start":171,"end":180,"opacity":1,"seed":"title-mark-39","name":"标题定格 · 收尾","params":{"title":"ESCAPE\nVELOCITY","kicker":"END OF TRANSMISSION","note":"128 BPM · 3:00 · SIGNAL LOCKED","position":"0.5,0.50","size":150,"fit":true,"maxWidth":0.8}}],"fx":[{"type":"grain","amount":0.12},{"type":"scanlines","amount":0.14,"step":3},{"type":"chromatic","amount":3,"animated":true,"jitter":1.5},{"type":"vignette","amount":0.5},{"type":"flash","fillColor":"#ffffff","hits":"beats","every":2,"duration":0.06,"amount":0.18}]}},{"file":"slopcore-captionstyles.json","name":"字幕换装演示（六句台词六个样子 · 12 秒）","data":{"name":"slopcore-captionstyles","width":1920,"height":1080,"fps":24,"duration":12,"bg":null,"transparent":true,"beat":{"bpm":128,"offset":0.06,"duration":12,"source":"bpm"},"captions":[{"start":0.6,"end":2.4,"text":"Ladies, gentlemen, agents."},{"start":2.6,"end":4.4,"text":"This is not an AI billboard."},{"start":4.6,"end":6.4,"text":"Prepare to walk."},{"start":6.6,"end":8.4,"text":"Stop hiring humans."},{"start":8.6,"end":10.4,"text":"You have 18 months to escape."},{"start":10.6,"end":12,"text":"Lock in."}],"layers":[{"template":"hud-frame","start":0,"end":12,"seed":"slop-hud","name":"HUD 全屏框","params":{"labelLeft":"SIGNAL","labelRight":"REC","tickerTop":"ESCAPE VELOCITY  11.2 KM/S  PERMANENT UNDERCLASS  ZERO-DAY","tickerBottom":"SIGNAL LOCKED  AGENT ONLINE  TOKENS BURNED  NVIDIA GTC  129 BILLION","inset":46,"noise":0.6}},{"template":"title-mark","start":0.3,"end":2.3,"seed":"slop-title","name":"标题定格","params":{"title":"ESCAPE VELOCITY","kicker":"SLOPCORE / TRANSMISSION 01","note":"MADE IN SAN FRANCISCO","position":"0.5,0.5","size":150}},{"template":"terminal-prompt","start":1.6,"end":5.2,"seed":"slop-term","name":"终端面板","params":{"title":"PROMPT","lines":"command+shift+k 出戏\n> spawn 213 agents\n> burn 12.9B tokens\n> status: LOCKED IN","position":"0.06,0.34","width":440,"charDelay":0.02}},{"template":"stat-counter","start":1.2,"end":5,"seed":"slop-stat","name":"数字滚动计数","params":{"value":25,"suffix":"%","label":"PROBABILITY OF DOOM","position":"0.78,0.22","size":132}},{"template":"look-card","start":4.6,"end":8.6,"seed":"slop-look","name":"编号卡片","params":{"items":"Our Waymo hit someone.\nRISK PAUSED.\nNot an AI billboard.\nA real leather jacket.","position":"0.08,0.30","width":380,"startIndex":6,"stagger":2}},{"template":"kinetic-type","start":2.6,"end":7.4,"seed":"slop-kt","name":"卡点大字","params":{"text":"LOOK 06\nZERO-DAY.\nSTARGATE:\nLOCK IN","beatsPerStep":2,"size":168,"position":"0.55,0.62"}},{"template":"word-grid","start":7.4,"end":12,"seed":"slop-grid","name":"词块宫格","params":{"text":"ESCAPE VELOCITY PERMANENT UNDERCLASS 18 MONTHS LOCK IN FEEL THE ENGINE WE ARE SO BACK","cols":5,"position":"0.5,0.42","cellW":262,"cellH":76,"beatsPerStep":1}},{"template":"shipping-label","start":8.4,"end":12,"seed":"slop-label","name":"吊牌 / 条码卡","params":{"product":"ESCAPE VELOCITY","sku":"EV-11.2 / KM-S","position":"0.72,0.30","rotate":-6}},{"template":"dial-gauge","start":6,"end":10,"seed":"slop-dial","name":"圆盘仪表","params":{"value":0.68,"position":"0.15,0.76","radius":70,"label":"HUMANITY"}},{"template":"param-ticks","start":3,"end":9,"seed":"slop-pt","name":"参数刻度簇","params":{"position":"0.06,0.66","width":280,"rows":4}},{"template":"note-bubble","start":5.4,"end":7.6,"seed":"slop-note","name":"注释气泡","params":{"text":"command+shift+k","position":"0.34,0.70","width":320}},{"template":"ticker-strip","start":9.6,"end":12,"seed":"slop-tick","name":"跑马灯条","params":{"position":"0.06,0.90,0.88","height":34,"text":"SIGNAL LOCKED · AGENT ONLINE · TOKENS BURNED · COUNTRY OF GENIUSES"}},{"template":"ticker-strip","start":0.45,"end":2.75,"params":{"text":"01   Ladies, gentlemen, agents.","position":"0.06,0.78,0.88","height":34,"size":17,"speed":1,"color":"#f2ece0","accent":"#ff5a24"},"seed":"cap-01","name":"字幕换装 01 · 跑马灯条","opacity":1,"blend":"source-over","enabled":true,"group":"caption-reskin"},{"template":"word-grid","start":2.45,"end":4.75,"params":{"text":"This is not an AI billboard.","cols":4,"position":"0.5,0.54","cellW":300,"cellH":84,"fontSize":34,"beatsPerStep":1,"color":"#f2ece0","accent":"#ff5a24"},"seed":"cap-02","name":"字幕换装 02 · 词块宫格","opacity":1,"blend":"source-over","enabled":true,"group":"caption-reskin"},{"template":"callout-pin","start":4.45,"end":6.75,"params":{"index":"3","text":"Prepare to walk.","point":"0.62,0.44","dir":"tl","len":190,"size":26,"plate":"#0a0a0c","color":"#f2ece0","accent":"#ff5a24","inDur":0.35,"outDur":0.25},"seed":"cap-03","name":"字幕换装 03 · 索引标注","opacity":1,"blend":"source-over","enabled":true,"group":"caption-reskin"},{"template":"note-bubble","start":6.45,"end":8.75,"params":{"text":"Stop hiring humans.","width":520,"size":22,"color":"#f2ece0","accent":"#ff5a24","position":"0.56,0.30"},"seed":"cap-04","name":"字幕换装 04 · 注释气泡","opacity":1,"blend":"source-over","enabled":true,"group":"caption-reskin"},{"template":"look-card","start":8.45,"end":10.75,"params":{"title":"LINE","startIndex":5,"items":"You have 18 months to escape.","width":520,"size":22,"stagger":1,"hold":true,"accent":"#ff5a24","position":"0.07,0.58"},"seed":"cap-05","name":"字幕换装 05 · 编号卡片","opacity":1,"blend":"source-over","enabled":true,"group":"caption-reskin"},{"template":"shipping-label","start":10.45,"end":12,"params":{"product":"Lock in.","sku":"LINE-06","care":"","width":340,"rotate":3,"accent":"#ff5a24","position":"0.62,0.30"},"seed":"cap-06","name":"字幕换装 06 · 吊牌","opacity":1,"blend":"source-over","enabled":true,"group":"caption-reskin"}],"fx":[{"type":"grain","amount":0.12},{"type":"scanlines","amount":0.14,"step":3},{"type":"chromatic","amount":3,"animated":true,"jitter":1.5},{"type":"vignette","amount":0.5},{"type":"flash","fillColor":"#ffffff","hits":"beats","duration":0.06,"amount":0.18}]}},{"file":"demo-scene.json","name":"快速演示（HUD + 卡点大字 · 6 秒）","data":{"name":"demo","width":1920,"height":1080,"fps":24,"duration":6,"bg":null,"transparent":true,"beat":{"bpm":120,"offset":0,"duration":6,"source":"bpm"},"captions":[{"start":0.4,"end":2.2,"text":"This is not an AI billboard."},{"start":2.4,"end":4.2,"text":"You have 18 months to escape."},{"start":4.4,"end":5.8,"text":"Lock in."}],"layers":[{"template":"hud-frame","start":0,"end":6,"opacity":1,"seed":"demo-hud","name":"HUD 全屏框","params":{"labelLeft":"SIGNAL","labelRight":"REC"}},{"template":"kinetic-type","start":0.2,"end":3.6,"seed":"demo-kt","name":"卡点大字","params":{"text":"LOCK IN\nESCAPE VELOCITY\nPERMANENT UNDERCLASS","beatsPerStep":2,"size":150,"position":"0.5,0.46"}},{"template":"word-grid","start":3.4,"end":6,"seed":"demo-grid","name":"词块宫格","params":{"text":"ESCAPE VELOCITY PERMANENT UNDERCLASS 18 MONTHS LOCK IN FEEL THE ENGINE WE ARE SO BACK","cols":5,"position":"0.5,0.44","cellW":260,"cellH":74}},{"template":"stat-counter","start":0.6,"end":4.6,"seed":"demo-stat","name":"数字滚动计数","params":{"value":25,"suffix":"%","label":"PROBABILITY","position":"0.76,0.24","size":120}},{"template":"dial-gauge","start":3.4,"end":6,"seed":"demo-dial","name":"圆盘仪表","params":{"value":0.72,"position":"0.83,0.74","radius":66,"label":"HUMANITY"}},{"template":"subtitle-kinetic","start":0,"end":6,"seed":"demo-subs","name":"卡点字幕","params":{"style":"bar","position":"0.5,0.87","size":40}}],"fx":[{"type":"grain","amount":0.1},{"type":"scanlines","amount":0.12,"step":3},{"type":"chromatic","amount":2.5,"animated":true,"jitter":1.2},{"type":"vignette","amount":0.45}]}},{"file":"design-demo.json","name":"设计排版（杂志标题 / 名字条 / 片尾名单 · 12 秒）","data":{"name":"design-demo","width":1920,"height":1080,"fps":24,"duration":12,"bg":null,"transparent":true,"beat":{"bpm":100,"offset":0,"duration":12,"source":"manual"},"captions":[],"layers":[{"template":"editorial-title","start":0.3,"end":3.6,"opacity":1,"seed":"design-editorial","name":"杂志标题","params":{"title":"夜里的河","kicker":"CHAPTER ONE","note":"2026 · 纪录片 · 4K","index":"01 / 06","position":"0.5,0.50","align":"center","size":132,"rule":true,"plate":"","inDur":0.55,"outDur":0.4}},{"template":"name-bar","start":4,"end":7.2,"opacity":1,"seed":"design-namebar","name":"名字条","params":{"name":"张野","role":"摄影指导 · DIRECTOR OF PHOTOGRAPHY","pos":"bl","margin":72,"width":0.42,"size":40}},{"template":"credits-roll","start":7.6,"end":12,"opacity":1,"seed":"design-credits","name":"片尾名单","params":{"title":"CREW","lines":"导演|张野\n摄影|李默\n剪辑|王川\n调色|陈小雨\n音乐|——\n特别感谢|所有熬夜的人","speed":46,"size":30,"width":0.56,"align":"split"}}],"fx":[]}},{"file":"rock-2min.json","name":"摇滚 2 分钟（大标题 / 胶带段落标 / 副歌砸字 · 120 秒）","data":{"name":"rock-2min","width":1920,"height":1080,"fps":30,"duration":120,"bg":null,"transparent":true,"beat":{"bpm":127.87,"offset":0.2728,"duration":120,"source":"auto"},"captions":[],"layers":[{"template":"rock-title","start":0.35,"end":6.5,"opacity":1,"seed":"rock-open","name":"摇滚大标题","params":{"text":"NIGHT DRIVE","sub":"AUTO CUT · 128 BPM","tag":"SIDE A","size":170,"maxWidth":0.8}},{"template":"tape-label","start":25.834,"end":28.574,"opacity":1,"seed":"tape-1","name":"胶带标签 · CHORUS 1","params":{"label":"CHORUS 1","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"rock-title","start":25.924,"end":29.974,"opacity":1,"seed":"rock-1","name":"摇滚大标题 · CHORUS 1","params":{"text":"TURN IT UP","sub":"CHORUS 1","tag":"CHORUS","size":176,"maxWidth":0.78}},{"template":"tape-label","start":38.959,"end":41.699,"opacity":1,"seed":"tape-2","name":"胶带标签 · BUILD 1","params":{"label":"BUILD 1","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"tape-label","start":57.239,"end":59.979,"opacity":1,"seed":"tape-3","name":"胶带标签 · CHORUS 2","params":{"label":"CHORUS 2","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"rock-title","start":57.329,"end":61.379,"opacity":1,"seed":"rock-3","name":"摇滚大标题 · CHORUS 2","params":{"text":"LOUDER","sub":"CHORUS 2","tag":"CHORUS","size":176,"maxWidth":0.78}},{"template":"tape-label","start":71.775,"end":74.515,"opacity":1,"seed":"tape-4","name":"胶带标签 · VERSE 2","params":{"label":"VERSE 2","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"tape-label","start":81.614,"end":84.354,"opacity":1,"seed":"tape-5","name":"胶带标签 · CHORUS 3","params":{"label":"CHORUS 3","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"rock-title","start":81.704,"end":85.754,"opacity":1,"seed":"rock-5","name":"摇滚大标题 · CHORUS 3","params":{"text":"NO SURRENDER","sub":"CHORUS 3","tag":"CHORUS","size":176,"maxWidth":0.78}},{"template":"tape-label","start":96.614,"end":99.354,"opacity":1,"seed":"tape-6","name":"胶带标签 · BUILD 2","params":{"label":"BUILD 2","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"tape-label","start":112.555,"end":115.295,"opacity":1,"seed":"tape-7","name":"胶带标签 · VERSE 3","params":{"label":"VERSE 3","note":"128 BPM","size":44,"position":"0.5,0.22","angle":-5}},{"template":"rock-title","start":114.8,"end":119.6,"opacity":1,"seed":"rock-end","name":"摇滚大标题 · 收尾","params":{"text":"THAT'S ALL","sub":"THANKS FOR WATCHING","tag":"SIDE B","size":132,"maxWidth":0.7}}],"fx":[{"type":"grain","amount":0.1},{"type":"vignette","amount":0.42},{"type":"chromatic","amount":2.2,"animated":true,"jitter":0.8},{"type":"flash","fillColor":"#ffffff","hits":"beats","every":2,"duration":0.05,"amount":0.1}]}},{"file":"focus-demo.json","name":"聚焦标注（聚焦框 / 索引标注 / 索引清单 / 放大镜 · 12 秒）","data":{"name":"focus-demo","width":1920,"height":1080,"fps":30,"duration":12,"bg":null,"transparent":true,"beat":{"bpm":120,"offset":0,"duration":12,"source":"manual"},"captions":[],"layers":[{"template":"focus-box","start":0.2,"end":3.4,"opacity":1,"seed":"focus-1","name":"聚焦框","params":{"region":"0.28,0.30,0.42,0.38","label":"DETAIL","index":"01","dim":0.5}},{"template":"callout-pin","start":3.7,"end":6.3,"opacity":1,"seed":"focus-2","name":"索引标注 ①","params":{"index":"1","text":"光源位置","point":"0.42,0.58","dir":"tr","len":200}},{"template":"callout-pin","start":4.1,"end":6.3,"opacity":1,"seed":"focus-3","name":"索引标注 ②","params":{"index":"2","text":"主体轮廓","point":"0.62,0.38","dir":"bl","len":210}},{"template":"index-list","start":6.6,"end":9.6,"opacity":1,"seed":"focus-4","name":"索引清单","params":{"position":"0.06,0.30","step":0.85}},{"template":"magnifier","start":9.8,"end":12,"opacity":1,"seed":"focus-5","name":"放大镜","params":{"center":"0.52,0.46","radius":230,"zoom":2.4,"label":"×2.4"}}],"fx":[]}},{"file":"data-demo.json","name":"数据标注（柱状图 / 折线图 / 手绘圈注 / 地图定位 / 分屏对比 / 章节进度 · 16 秒）","data":{"name":"data-demo","width":1920,"height":1080,"fps":30,"duration":16,"bg":null,"transparent":true,"beat":{"bpm":120,"offset":0,"duration":16,"source":"manual"},"captions":[],"layers":[{"template":"bar-chart","start":0.2,"end":3.6,"opacity":1,"seed":"dm-1","name":"柱状图","params":{"position":"0.5,0.5"}},{"template":"line-chart","start":4,"end":7.4,"opacity":1,"seed":"dm-2","name":"折线图","params":{"position":"0.5,0.5"}},{"template":"hand-mark","start":7.8,"end":10.2,"opacity":1,"seed":"dm-3","name":"手绘圈注","params":{"mode":"circle","region":"0.36,0.38,0.28,0.24"}},{"template":"locator","start":7.8,"end":10.2,"opacity":1,"seed":"dm-4","name":"地图定位","params":{"region":"0.36,0.38,0.28,0.24","cardPos":"br"}},{"template":"split-compare","start":10.6,"end":13.4,"opacity":1,"seed":"dm-5","name":"分屏对比","params":{"auto":true,"sweep":2.2}},{"template":"chapter-bar","start":13.8,"end":16,"opacity":1,"seed":"dm-6","name":"章节进度","params":{"chapters":"0|开场\n5|走访\n9|发现\n13|收尾"}}],"fx":[]}},{"file":"chaos-demo.json","name":"秩序 / 混沌（五屏序列：网格 → 断裂 → 爆散 → 墨 · 20 秒）","data":{"name":"chaos-demo","width":1920,"height":1080,"fps":30,"duration":20,"bg":null,"transparent":true,"beat":{"bpm":96,"offset":0,"duration":20,"source":"manual"},"captions":[],"layers":[{"template":"series-index","start":0,"end":4,"opacity":1,"seed":"cs-1","name":"01 · 秩序","params":{"index":"01","note":"THE GRID\nIS REAL.","from":"ORDER","to":"CHAOS","page":"/01","title":"THE GRID\nIS REAL","titlePos":"0.075,0.66","titleSize":88,"inDur":0.7}},{"template":"grid-field","start":0,"end":4,"opacity":1,"seed":"cg-1","name":"网格 · 干净","params":{"chaos":0.06,"mode":"grid","cols":18,"rows":11,"blocks":6}},{"template":"series-index","start":4,"end":8,"opacity":1,"seed":"cs-2","name":"02 · 扭曲","params":{"index":"02","note":"CONTROL\nIS AN ILLUSION.","from":"ORDER","to":"CHAOS","page":"/02","title":"","inDur":0.7}},{"template":"grid-field","start":4,"end":8,"opacity":1,"seed":"cg-2","name":"网格 · 扭曲","params":{"chaos":0.42,"mode":"warp","cols":18,"rows":11,"blocks":10}},{"template":"series-index","start":8,"end":12,"opacity":1,"seed":"cs-3","name":"03 · 断裂","params":{"index":"03","note":"THE LINES\nSTART TO BREAK.","from":"ORDER","to":"CHAOS","page":"/03","title":"THE GRID\nIS LYING","titlePos":"0.075,0.60","titleSize":92,"inDur":0.7}},{"template":"grid-field","start":8,"end":12,"opacity":1,"seed":"cg-3","name":"网格 · 断裂","params":{"chaos":0.68,"mode":"break","cols":18,"rows":11,"blocks":22}},{"template":"ink-scatter","start":8.4,"end":12,"opacity":0.55,"seed":"ci-3","name":"碎块","params":{"mode":"blocks","count":14,"inkBlobs":0,"lines":4,"drift":0.2}},{"template":"series-index","start":12,"end":16,"opacity":1,"seed":"cs-4","name":"04 · 爆散","params":{"index":"04","note":"STRUCTURE\nSURRENDERS.","from":"ORDER","to":"CHAOS","page":"/04","title":"","inDur":0.7}},{"template":"grid-field","start":12,"end":16,"opacity":1,"seed":"cg-4","name":"网格 · 爆散","params":{"chaos":0.95,"mode":"burst","cols":18,"rows":11,"blocks":40,"blockScale":1.3}},{"template":"ink-scatter","start":12.6,"end":16,"opacity":0.8,"seed":"ci-4","name":"墨点","params":{"mode":"blocks","count":22,"inkBlobs":0,"lines":10,"drift":0.35}},{"template":"series-index","start":16.2,"end":20,"opacity":1,"seed":"cs-5","name":"05 · 混沌即创造","params":{"index":"05","note":"BEAUTY LIVES\nBEYOND CONTROL.","page":"/05","paper":true,"frame":false,"from":"CHAOS.","to":"That's where creation happens.","arrow":false,"title":"","inDur":0.9}},{"template":"ink-scatter","start":16,"end":20,"opacity":1,"seed":"ci-5","name":"05 · 墨（压在纸面上）","params":{"mode":"ink","count":18,"inkBlobs":6,"size":1.15,"drift":0.4,"accentCount":1}}],"fx":[{"type":"grain","amount":0.06},{"type":"vignette","amount":0.12}]}},{"file":"instrument-demo.json","name":"仪器面板（雷达扫描 / 波形频谱 / 胶片条 / 幽灵水印 · 5 秒）","data":{"name":"instrument-demo","width":1920,"height":1080,"fps":24,"duration":5,"bg":null,"transparent":true,"beat":{"bpm":120,"offset":0,"duration":5,"source":"bpm"},"captions":[],"layers":[{"template":"film-strip","start":0,"end":5,"seed":"demo-film","name":"胶片条","params":{"edge":"both"}},{"template":"radar-sweep","start":0,"end":5,"seed":"demo-radar","name":"雷达扫描","params":{"position":"0.755,0.44","radius":230,"labelText":"PROXIMITY"}},{"template":"waveform-panel","start":0,"end":5,"seed":"demo-wave","name":"波形 / 频谱","params":{"position":"0.27,0.79","span":760,"bars":48}},{"template":"ghost-mark","start":0.25,"end":5,"seed":"demo-ghost","name":"幽灵水印","params":{"text":"FIELD UNIT 07","position":"0.5,0.5","size":150,"opacity":0.34,"rotate":-6,"color":"white"}}],"fx":[]}}];window.__MOTIONKIT_BUNDLED__=true;</script>
 <script>
 // ===== engine/core.js =====
 const __mod0 = (() => {
@@ -1249,7 +1250,7 @@ Layer._id = 1;
  * 图层变换 —— 预览里直接拖动 / 缩放的落点。
  *
  * 为什么不写进模板参数：模板的定位参数五花八门（有的叫 position 是 "x,y"，
- * 有的带宽度 "x,y,w"，全屏 HUD 和转场类压根没有），逐个去改 23 个模板既脆又乱。
+ * 有的带宽度 "x,y,w"，全屏 HUD 和转场类压根没有），逐个去改 50 个模板既脆又乱。
  * 统一挂在图层上，任何模板都能被同一套手柄推着走，而且无头渲染 / 导出走的是
  * 同一个引擎，界面里看到什么就是导出什么。
  *
@@ -7892,8 +7893,530 @@ __default = [typeStack, dotMatrix, lineSweep, chaosMeter];
 return { typeStack, chaosMeter, lineSweep, dotMatrix, default: __default };
 })();
 
-// ===== templates/index.js =====
+// ===== templates/spectrum.js =====
 const __mod20 = (() => {
+let __default = undefined;
+// ============================================================================
+// 仪器面板类模板：雷达扫描、波形/频谱、胶片条
+// 这批都是"把画面当仪器表面"的叠加层：细线、读数、克制的运动。
+// ============================================================================
+
+const { text, label, measure, hudPanel, roundRect, crosshair, hbar, microRow, scanlines, cornerTicks, gridLines, ui, palette, FONTS } = __mod1;
+const { TAU, clamp, lerp, easeOutCubic, timecode } = __mod0;
+const { envelope, color, trng, fakeCode, chars, P } = __mod7;
+
+/** "x,y" 或 "x,y,w" 形式的归一化位置参数 */
+function posOf(env, raw, defX = 0.5, defY = 0.5) {
+  const parts = String(raw || '').split(',').map((s) => Number(String(s).trim()));
+  const x = Number.isFinite(parts[0]) ? parts[0] : defX;
+  const y = Number.isFinite(parts[1]) ? parts[1] : defY;
+  const w = Number.isFinite(parts[2]) ? parts[2] : null;
+  return { x, y, w };
+}
+
+/** 拿真实音频波形；没有音频时退回确定性伪波形，保证缩略图和纯叠加层也画得出东西 */
+function waveSource(env, n, tag) {
+  let pk = null;
+  try {
+    const st = globalThis.MotionKit && globalThis.MotionKit.state;
+    pk = st && st.media ? st.media.peaks : null;
+  } catch (_) { /* 无头渲染 / 单文件版可能没有这一层 */ }
+  const rng = trng(env, tag);
+  const out = new Float32Array(n);
+  const phase = rng.next() * TAU;
+  if (pk && pk.length) {
+    // 把整条波形按播放头位置铺开：柱子后面的时间会往左跑
+    const t0 = clamp(env.t / Math.max(0.001, env.scene.duration), 0, 1);
+    const span = 1 / 3;                       // 窗口 = 全曲的 1/3
+    for (let i = 0; i < n; i++) {
+      const u = clamp(t0 + (i / n - 0.5) * span, 0, 1);
+      out[i] = clamp(pk[Math.min(pk.length - 1, Math.floor(u * pk.length))] || 0, 0, 1);
+    }
+    return out;
+  }
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1);
+    const v = Math.abs(Math.sin(u * 9.1 + phase)) * 0.55
+      + Math.abs(Math.sin(u * 23.7 + phase * 1.7)) * 0.3
+      + rng.next() * 0.15;
+    out[i] = clamp(v, 0.04, 1);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+const radarSweep = {
+  id: 'radar-sweep',
+  name: '雷达扫描',
+  category: 'overlay',
+  hint: '圆形雷达盘 + 扫描线 + 余晖残影，目标点会随扫描角点亮；左下角带方位读数。',
+  params: [
+    { key: 'position', label: '圆心 x,y', type: 'string', default: '0.5,0.5' },
+    { key: 'radius', label: '半径', type: 'number', default: 300, min: 40, max: 1000, step: 5 },
+    { key: 'rpm', label: '转速（圈/分）', type: 'number', default: 18, min: 1, max: 120, step: 1 },
+    { key: 'trail', label: '余晖', type: 'number', default: 0.75, min: 0, max: 1, step: 0.05 },
+    { key: 'rings', label: '同心圈', type: 'number', default: 3, min: 0, max: 8, step: 1 },
+    { key: 'spokes', label: '十字刻度', type: 'bool', default: true },
+    { key: 'blips', label: '目标点', type: 'number', default: 5, min: 0, max: 20, step: 1 },
+    { key: 'sweepColor', label: '扫描色', type: 'color', default: '#39ff88' },
+    { key: 'gridColor', label: '盘面色', type: 'color', default: 'white' },
+    { key: 'labelText', label: '左上标签', type: 'string', default: 'PROXIMITY' },
+    P.accent('orange'),
+    P.speed(1),
+  ],
+
+  draw(ctx, env) {
+    const { params: p, t } = env;
+    const a = envelope(env.progress, { inFrac: 0.07, outFrac: 0.07 });
+    if (a <= 0.001) return;
+    const acc = color(p.accent, palette.orange);
+    const sw = color(p.sweepColor, ui.good);
+    const grid = color(p.gridColor, ui.paper);
+    const rng = trng(env, 'radar');
+    const pts = posOf(env, p.position);
+    const cx = env.width * pts.x;
+    const cy = env.height * pts.y;
+    const r = Math.max(20, p.radius);
+    const ang = (t * p.speed * p.rpm / 60) * TAU;
+    const alphaOf = (target) => {
+      let d = (ang - target) % TAU;
+      if (d < 0) d += TAU;
+      return Math.pow(1 - d / TAU, 1 + p.trail * 5);
+    };
+
+    ctx.save();
+    ctx.globalAlpha *= a;
+
+    // 盘面
+    ctx.strokeStyle = grid;
+    ctx.globalAlpha *= 0.5;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
+    for (let i = 1; i <= p.rings; i++) {
+      ctx.beginPath(); ctx.arc(cx, cy, (r * i) / (p.rings + 1), 0, TAU); ctx.stroke();
+    }
+    if (p.spokes) {
+      ctx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const A = (i / 4) * TAU;
+        ctx.moveTo(cx + Math.cos(A) * r * 0.06, cy + Math.sin(A) * r * 0.06);
+        ctx.lineTo(cx + Math.cos(A) * r, cy + Math.sin(A) * r);
+      }
+      ctx.stroke();
+      // 每 30° 一根短刻度
+      for (let i = 0; i < 12; i++) {
+        const A = (i / 12) * TAU;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(A) * r * 0.93, cy + Math.sin(A) * r * 0.93);
+        ctx.lineTo(cx + Math.cos(A) * r, cy + Math.sin(A) * r);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha /= 0.5;
+
+    // 扫描余晖：一段扇形渐变
+    const tail = 0.9 + p.trail * 1.5;          // 弧度
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, sw);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, ang - tail, ang);
+    ctx.closePath();
+    ctx.clip();
+    ctx.globalAlpha *= 0.18 + p.trail * 0.3;
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    ctx.restore();
+
+    // 扫描线本体
+    ctx.strokeStyle = sw;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r);
+    ctx.stroke();
+
+    // 目标点
+    const n = Math.round(p.blips);
+    for (let i = 0; i < n; i++) {
+      const target = rng.next() * TAU;
+      const rr = r * (0.25 + rng.next() * 0.7);
+      const glow = alphaOf(target);
+      if (glow <= 0.03) continue;
+      const bx = cx + Math.cos(target) * rr;
+      const by = cy + Math.sin(target) * rr;
+      ctx.globalAlpha *= 1;
+      ctx.fillStyle = glow > 0.7 ? acc : sw;
+      ctx.beginPath(); ctx.arc(bx, by, 3 + glow * 3, 0, TAU); ctx.fill();
+      ctx.globalAlpha *= glow;
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(bx, by, 7 + (1 - glow) * 16, 0, TAU); ctx.stroke();
+      ctx.globalAlpha /= glow;
+    }
+
+    // 圆心 + 十字
+    crosshair(ctx, cx, cy, r * 0.16, { color: grid, alpha: 0.6 });
+    ctx.fillStyle = sw;
+    ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, TAU); ctx.fill();
+
+    // 读数：方位角 + 标签
+    const deg = ((ang / TAU) * 360 + 360) % 360;
+    label(ctx, p.labelText || 'PROXIMITY', cx - r, cy - r - 26, { color: ui.dim });
+    label(ctx, `${deg.toFixed(1).padStart(5, '0')}°`, cx + r, cy - r - 26, { color: sw, align: 'right' });
+    label(ctx, `${fakeCode(rng, 2)}-${fakeCode(rng, 3)}`, cx - r, cy + r + 10, { color: 'rgba(255,255,255,0.4)' });
+    label(ctx, `GATE ${String(Math.round(p.rpm)).padStart(3, '0')}`, cx + r, cy + r + 10, { color: ui.faint, align: 'right' });
+
+    ctx.restore();
+  },
+};
+
+// ---------------------------------------------------------------------------
+const waveformPanel = {
+  id: 'waveform-panel',
+  name: '波形 / 频谱',
+  category: 'overlay',
+  hint: '一条跟着音频起伏的波形条（柱状 / 折线 / 面积）。有音频就用真波形，没有就是稳定的伪波形。',
+  params: [
+    { key: 'position', label: '位置 x,y', type: 'string', default: '0.5,0.78' },
+    { key: 'span', label: '宽度', type: 'number', default: 900, min: 120, max: 1900, step: 10 },
+    { key: 'height', label: '高度', type: 'number', default: 140, min: 30, max: 600, step: 5 },
+    { key: 'bars', label: '柱数', type: 'number', default: 56, min: 8, max: 200, step: 1 },
+    { key: 'mode', label: '样式', type: 'select', default: 'bars', options: ['bars', 'line', 'area'] },
+    { key: 'mirror', label: '上下对称', type: 'bool', default: true },
+    { key: 'panel', label: '画面板底', type: 'bool', default: true },
+    { key: 'title', label: '标题', type: 'string', default: 'AUDIO SPECTRUM' },
+    { key: 'readout', label: '显示读数', type: 'bool', default: true },
+    { key: 'barColor', label: '波形色', type: 'color', default: '#39ff88' },
+    P.accent('orange'),
+    P.speed(1),
+  ],
+
+  draw(ctx, env) {
+    const { params: p, t } = env;
+    const a = envelope(env.progress, { inFrac: 0.08, outFrac: 0.08 });
+    if (a <= 0.001) return;
+    const acc = color(p.accent, palette.orange);
+    const wave = color(p.barColor, ui.good);
+    const pts = posOf(env, p.position, 0.5, 0.78);
+    const W = Math.max(60, p.span);
+    const H = Math.max(20, p.height);
+    const x0 = clamp(env.width * pts.x - W / 2, 0, Math.max(0, env.width - W));
+    const y0 = clamp(env.height * pts.y - H / 2, 0, Math.max(0, env.height - H));
+    const n = Math.max(8, Math.round(p.bars));
+    const data = waveSource(env, n, 'wave');
+    // 播放头扫过时整体轻微呼吸，避免"死图"
+    const breathe = 0.9 + 0.1 * Math.sin(t * p.speed * 2.1);
+
+    ctx.save();
+    ctx.globalAlpha *= a;
+
+    if (p.panel) {
+      hudPanel(ctx, x0, y0, W, H, { stroke: 'rgba(255,255,255,0.35)', fill: 'rgba(0,0,0,0.34)', title: p.title || null });
+    }
+
+    const padX = p.panel ? 14 : 0;
+    const padTop = p.panel ? 14 : 0;
+    const padBot = p.panel ? (p.readout ? 24 : 12) : 0;
+    const iw = W - padX * 2;
+    const ih = H - padTop - padBot;
+    const midY = y0 + padTop + ih / 2;
+    const step = iw / n;
+
+    // 中线
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0 + padX, midY + 0.5);
+    ctx.lineTo(x0 + padX + iw, midY + 0.5);
+    ctx.stroke();
+
+    const barW = Math.max(1, step * 0.62);
+    if (p.mode === 'bars') {
+      for (let i = 0; i < n; i++) {
+        const v = clamp(data[i] * breathe, 0, 1);
+        const h = Math.max(1, v * (p.mirror ? ih / 2 : ih));
+        const bx = x0 + padX + i * step + (step - barW) / 2;
+        // 最右一小段用强调色，像"当前电平"
+        const hot = i > n - 6;
+        ctx.fillStyle = hot ? acc : wave;
+        if (p.mirror) ctx.fillRect(bx, midY - h, barW, h * 2);
+        else ctx.fillRect(bx, y0 + padTop + ih - h, barW, h);
+      }
+    } else {
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const v = clamp(data[i] * breathe, 0, 1);
+        const px = x0 + padX + i * step + step / 2;
+        const py = p.mirror ? midY - v * (ih / 2) : y0 + padTop + ih - v * ih;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      if (p.mode === 'area') {
+        const lastX = x0 + padX + (n - 1) * step + step / 2;
+        ctx.lineTo(lastX, y0 + padTop + ih);
+        ctx.lineTo(x0 + padX + step / 2, y0 + padTop + ih);
+        ctx.closePath();
+        ctx.globalAlpha *= 0.85;
+        ctx.fillStyle = wave;
+        ctx.globalAlpha *= 0.28;
+        ctx.fill();
+        ctx.globalAlpha /= 0.28;
+        ctx.globalAlpha /= 0.85;
+      }
+      ctx.strokeStyle = wave;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
+
+    if (p.readout) {
+      const peak = data.reduce((m, v) => Math.max(m, v), 0) * breathe;
+      microRow(ctx, [
+        ['PEAK', (peak * 100).toFixed(0) + '%'],
+        ['RMS', (peak * 70).toFixed(0) + '%'],
+        ['BIN', String(n)],
+      ], x0 + padX, y0 + H - 18, { size: 11, keyColor: ui.faint, valueColor: ui.paper });
+      label(ctx, timecode(t, env.fps), x0 + W - padX, y0 + H - 18, { size: 11, color: acc, align: 'right' });
+    }
+
+    ctx.restore();
+  },
+};
+
+// ---------------------------------------------------------------------------
+const filmStrip = {
+  id: 'film-strip',
+  name: '胶片条',
+  category: 'overlay',
+  hint: '上下（或左右）一条带齿孔的半透黑条 + 帧号跳动；给画面加"在过片"的实拍质感。',
+  params: [
+    { key: 'edge', label: '位置', type: 'select', default: 'both', options: ['top', 'bottom', 'both', 'left', 'right'] },
+    { key: 'band', label: '条宽', type: 'number', default: 46, min: 12, max: 200, step: 2 },
+    { key: 'speed', label: '滚动速度', type: 'number', default: 60, min: 0, max: 400, step: 5 },
+    { key: 'counter', label: '帧号读数', type: 'bool', default: true },
+    { key: 'flicker', label: '闪烁', type: 'number', default: 0.12, min: 0, max: 0.6, step: 0.02 },
+    { key: 'bandColor', label: '条色', type: 'color', default: 'black' },
+    { key: 'holeColor', label: '齿孔色', type: 'color', default: 'white' },
+    P.accent('orange'),
+  ],
+
+  draw(ctx, env) {
+    const { params: p, width: w, height: h, t } = env;
+    const a = envelope(env.progress, { inFrac: 0.05, outFrac: 0.05 });
+    if (a <= 0.001) return;
+    const acc = color(p.accent, palette.orange);
+    const hole = color(p.holeColor, ui.paper);
+    const rng = trng(env, 'film');
+    const bw = Math.max(12, p.band);
+    const phase = t * p.speed;
+    const edges = p.edge === 'both' ? ['top', 'bottom'] : [p.edge];
+
+    ctx.save();
+    ctx.globalAlpha *= a;
+    // 过片闪烁：整条亮度轻微跳
+    const fl = 1 - p.flicker * rng.next();
+
+    for (const e of edges) {
+      const horizontal = e === 'top' || e === 'bottom';
+      const bx = e === 'left' ? 0 : e === 'right' ? w - bw : 0;
+      const by = e === 'top' ? 0 : e === 'bottom' ? h - bw : 0;
+      const bwide = horizontal ? w : bw;
+      const bhigh = horizontal ? bw : h;
+
+      ctx.fillStyle = color(p.bandColor, '#000000');
+      ctx.globalAlpha *= (0.72 + 0.28 * fl);
+      ctx.fillRect(bx, by, bwide, bhigh);
+      ctx.globalAlpha /= (0.72 + 0.28 * fl);
+
+      // 齿孔：沿长边排
+      if (horizontal) {
+        ctx.fillStyle = hole;
+        ctx.globalAlpha *= 0.85;
+        const gap = 26, hw = 13, hh = 8;
+        const shift = ((phase % gap) + gap) % gap;
+        const hy = by + bhigh / 2 - hh / 2;
+        for (let px = -shift; px < w; px += gap) {
+          roundRect(ctx, px, hy, hw, hh, 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha /= 0.85;
+      } else {
+        ctx.fillStyle = hole;
+        ctx.globalAlpha *= 0.85;
+        const gap = 26, hw = 8, hh = 13;
+        const shift = ((phase % gap) + gap) % gap;
+        const hx = bx + bw / 2 - hw / 2;
+        for (let py = -shift; py < h; py += gap) {
+          roundRect(ctx, hx, py, hw, hh, 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha /= 0.85;
+      }
+
+      // 边缘细线，让条和画面分得开
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      if (e === 'top') { ctx.moveTo(0, bhigh + 0.5); ctx.lineTo(w, bhigh + 0.5); }
+      else if (e === 'bottom') { ctx.moveTo(0, h - bhigh + 0.5); ctx.lineTo(w, h - bhigh + 0.5); }
+      else if (e === 'left') { ctx.moveTo(bw + 0.5, 0); ctx.lineTo(bw + 0.5, h); }
+      else { ctx.moveTo(w - bw + 0.5, 0); ctx.lineTo(w - bw + 0.5, h); }
+      ctx.stroke();
+    }
+
+    // 帧号读数
+    if (p.counter) {
+      const frame = Math.max(0, Math.round(t * env.fps));
+      const roll = String(frame % 100000).padStart(5, '0');
+      const onTop = p.edge !== 'bottom';
+      const cy = onTop ? 14 : h - bw - 20;
+      ctx.save();
+      ctx.globalAlpha *= 0.9;
+      label(ctx, 'KODA 5219', bw + 18, cy, { size: 12, color: 'rgba(255,255,255,0.7)' });
+      label(ctx, `FRAME ${roll}`, w - bw - 18, cy, { size: 12, color: acc, align: 'right' });
+      if (p.edge === 'both') {
+        label(ctx, `${fakeCode(rng, 4)}-${fakeCode(rng, 4)}`, bw + 18, h - 30, { size: 12, color: 'rgba(255,255,255,0.5)' });
+        label(ctx, '24 FPS', w - bw - 18, h - 30, { size: 12, color: 'rgba(255,255,255,0.5)', align: 'right' });
+      }
+      ctx.restore();
+    }
+
+    ctx.restore();
+  },
+};
+
+__default = [radarSweep, waveformPanel, filmStrip];
+
+return { radarSweep, waveformPanel, filmStrip, default: __default };
+})();
+
+// ===== templates/typography2.js =====
+const __mod21 = (() => {
+let __default = undefined;
+// ============================================================================
+// 排版类模板（补充）：幽灵水印框
+// 和 type-stack 那种"砸下来的压扁大字"是两个路子：
+// 这个是低不透明度的描边水印 + 四角括号 + 一枚方向箭头，压在实拍上像档案素材。
+// ============================================================================
+
+const { text, label, measure, cornerTicks, ui, palette, FONTS } = __mod1;
+const { TAU, clamp, easeOutCubic } = __mod0;
+const { envelope, color, trng, fakeCode, P } = __mod7;
+
+const ghostMark = {
+  id: 'ghost-mark',
+  name: '幽灵水印',
+  category: 'typography',
+  hint: '半透明描边大字水印 + 四角括号 + 方向箭头；默认墨黑（压在浅色素材上），深色素材把颜色改成白色。',
+  params: [
+    { key: 'text', label: '文字', type: 'string', default: 'ARCHIVE' },
+    { key: 'position', label: '位置 x,y', type: 'string', default: '0.5,0.5' },
+    { key: 'size', label: '字号', type: 'number', default: 190, min: 24, max: 700, step: 2 },
+    { key: 'opacity', label: '不透明度', type: 'number', default: 0.3, min: 0.03, max: 1, step: 0.02 },
+    { key: 'rotate', label: '倾斜角度', type: 'number', default: -8, min: -45, max: 45, step: 1 },
+    { key: 'tracking', label: '字距', type: 'number', default: 0.06, min: -0.05, max: 0.6, step: 0.01 },
+    { key: 'frame', label: '四角括号', type: 'bool', default: true },
+    { key: 'arrow', label: '方向箭头', type: 'bool', default: true },
+    { key: 'plate', label: '角标底色', type: 'bool', default: true },
+    { key: 'caption', label: '右下小字', type: 'string', default: 'SOURCE MATERIAL · NOT FOR BROADCAST' },
+    { key: 'hold', label: '常驻（不进退场）', type: 'bool', default: false },
+    { key: 'color', label: '颜色', type: 'color', default: 'ink' },
+    P.accent('orange'),
+  ],
+
+  draw(ctx, env) {
+    const { width: w, height: h, params: p, t } = env;
+    const a = p.hold ? 1 : envelope(env.progress, { inFrac: 0.1, outFrac: 0.12 });
+    if (a <= 0.001) return;
+    const ink = color(p.color, ui.paper);
+    const acc = color(p.accent, palette.orange);
+    const rng = trng(env, 'ghost');
+    const parts = String(p.position || '').split(',').map((s) => Number(String(s).trim()));
+    const cx = w * (Number.isFinite(parts[0]) ? parts[0] : 0.5);
+    const cy = h * (Number.isFinite(parts[1]) ? parts[1] : 0.5);
+    const size = p.size;
+    const alpha = clamp(p.opacity, 0, 1) * a;
+    // 入场时描边先"划"出来，再落到目标透明度
+    const reveal = easeOutCubic(clamp(env.local / 0.7, 0, 1));
+    const str = String(p.text || '').toUpperCase();
+
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.translate(cx, cy);
+    ctx.rotate((p.rotate * Math.PI) / 180);
+
+    const tw = measure(ctx, str, { font: FONTS.condensed, size, weight: 700, tracking: size * p.tracking });
+    const th = size;
+
+    // 描边大字：只描边不填充，才有水印那味
+    ctx.save();
+    ctx.beginPath();
+    // 从左往右擦出：用一个矩形裁剪当"划入"
+    ctx.rect(-tw / 2 - size * 0.1, -th, (tw + size * 0.2) * reveal, th * 2);
+    ctx.clip();
+    text(ctx, str, 0, 0, {
+      font: FONTS.condensed, size, weight: 700, align: 'center', baseline: 'middle',
+      tracking: size * p.tracking, color: 'rgba(255,255,255,0.001)',
+      stroke: ink, strokeWidth: Math.max(1.5, size * 0.012),
+    });
+    ctx.restore();
+
+    // 四角括号贴着文字外框
+    if (p.frame) {
+      const pad = size * 0.34;
+      const fw = tw + pad * 2;
+      const fh = th + pad * 1.3;
+      cornerTicks(ctx, -fw / 2, -fh / 2, fw, fh, {
+        len: Math.min(46, size * 0.22), color: ink, width: Math.max(1, size * 0.008), alpha: 0.85,
+      });
+    }
+
+    // 方向箭头（左上角外沿，朝左下指的"这一段从这里来"那种记号）
+    if (p.arrow) {
+      const ax = -tw / 2 - size * 0.62;
+      const ay = 0;
+      const len = size * 0.3;
+      ctx.save();
+      ctx.strokeStyle = acc;
+      ctx.lineWidth = Math.max(2, size * 0.012);
+      ctx.beginPath();
+      ctx.moveTo(ax, ay - len); ctx.lineTo(ax, ay + len); ctx.lineTo(ax + len * 0.62, ay + len * 0.3);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(ax, ay - len, Math.max(2, size * 0.018), 0, TAU);
+      ctx.fillStyle = acc;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 角标：左上 KEY、右下 caption
+    if (p.plate) {
+      const key = `${fakeCode(rng, 3)}-${String(Math.round(t * 10) % 1000).padStart(3, '0')}`;
+      const ky = -th / 2 - size * 0.9;
+      ctx.fillStyle = 'rgba(0,0,0,0.62)';
+      ctx.fillRect(-tw / 2 - size * 0.1, ky - 4, measure(ctx, key, { font: FONTS.mono, size: Math.max(11, size * 0.075), tracking: 1.4 }) + 16, Math.max(18, size * 0.13));
+      label(ctx, key, -tw / 2, ky, { size: Math.max(11, size * 0.075), color: acc });
+    }
+    if (p.caption) {
+      const cs = Math.max(11, size * 0.075);
+      label(ctx, String(p.caption).toUpperCase(), tw / 2, th / 2 + size * 0.72, {
+        size: cs, color: 'rgba(255,255,255,0.66)', align: 'right',
+      });
+    }
+
+    ctx.restore();
+  },
+};
+
+__default = [ghostMark];
+
+return { ghostMark, default: __default };
+})();
+
+// ===== templates/index.js =====
+const __mod22 = (() => {
 let __default = undefined;
 // ============================================================================
 // 模板注册中心
@@ -7913,10 +8436,12 @@ const data = __mod16.default;
 const mark = __mod17.default;
 const chaos = __mod18.default;
 const grid2 = __mod19.default;
+const spectrum = __mod20.default;
+const typography2 = __mod21.default;
 
 // 顺序 = 模板库里的分组顺序：叠加层 → 动态排版 → 设计排版 → 面板卡片 → 转场
 // 顺序 = 模板库里的分组顺序
-const ALL = [...hud, ...type, ...design, ...chaos, ...grid2, ...data, ...focus, ...mark, ...rock, ...panels, ...transitions, ...hits];
+const ALL = [...hud, ...spectrum, ...type, ...typography2, ...design, ...chaos, ...grid2, ...data, ...focus, ...mark, ...rock, ...panels, ...transitions, ...hits];
 
 let registered = false;
 function registerAll(force = false) {
@@ -7957,7 +8482,7 @@ return { listTemplates, registry, ALL, registerAll, CATEGORIES, byCategory };
 })();
 
 // ===== studio/agent-panel.js =====
-const __mod21 = (() => {
+const __mod23 = (() => {
 let __default = undefined;
 // ============================================================================
 // AI 助手面板
@@ -8033,6 +8558,7 @@ async function refreshStatus() {
     bits.push(status.ffmpeg ? 'ffmpeg ✓' : 'ffmpeg ✗');
     bits.push(status.llm.configured ? ('LLM ' + status.llm.model + ' ✓') : 'LLM 未配置（用本地规则文案）');
     bits.push(status.asrProviders.length ? ('字幕 ' + status.asrProviders.join('/') + ' ✓') : '字幕不可用');
+    bits.push(status.videoDownload ? '下载视频 ✓' : '下载视频 ✗（pip install -U yt-dlp）');
     env.textContent = bits.join(' · ');
     env.className = 'badge ' + (status.ok ? 'ok' : 'bad');
     renderStyles(status.styles || []);
@@ -8295,7 +8821,7 @@ return { initAgentPanel };
 })();
 
 // ===== studio/sync-panel.js =====
-const __mod22 = (() => {
+const __mod24 = (() => {
 let __default = undefined;
 // ============================================================================
 // 同步面板 —— 不敲命令，点按钮就完成：提交、上传到 GitHub、拉取更新、打包给另一台电脑。
@@ -8510,7 +9036,7 @@ return { initSyncPanel };
 })();
 
 // ===== studio/studio.js =====
-const __mod23 = (() => {
+const __mod25 = (() => {
 let __default = undefined;
 // ============================================================================
 // MotionKit 工作室
@@ -8526,9 +9052,9 @@ const { analyzeAudioFile, analyzeBuffer, envAt, onsets } = __mod3;
 const { parseSubtitles, toSRT, splitForKinetic, estimateWordTimings } = __mod4;
 const { makeZip, createZipWriter, downloadBlob, canvasToPngBytes } = __mod5;
 const { muxMp4 } = __mod6;
-const { registerAll, listTemplates, CATEGORIES, byCategory } = __mod20;
-const { initAgentPanel } = __mod21;
-const { initSyncPanel } = __mod22;
+const { registerAll, listTemplates, CATEGORIES, byCategory } = __mod22;
+const { initAgentPanel } = __mod23;
+const { initSyncPanel } = __mod24;
 
 registerAll();
 
@@ -13194,7 +13720,7 @@ function setDownloadBusy(busy, text = '') {
 }
 
 function openDownloadDialog() {
-  setDownloadState('支持 yt-dlp 能识别的网站和直链；下载文件保存在项目的 downloads/ 目录。');
+  setDownloadState('支持常见视频网站和直接视频链接；下载文件保存在项目的 downloads/ 目录。\n下不动的话多半是没装 yt-dlp：pip install -U yt-dlp。');
   $('downloadFoot').textContent = '';
   downloadDlg.showModal();
   setTimeout(() => $('downloadUrl').focus(), 30);
@@ -13542,7 +14068,7 @@ window.addEventListener('resize', () => { blit(); drawTimeline(); });
 // ---------------------------------------------------------------- 预览直接操控
 // 在预览里点选图层、拖动挪位置、拉角缩放、转手柄旋转、双击改文字。
 // 位置/缩放/旋转记在 layer.transform 上（见 engine/core.js 的 normalizeTransform），
-// 不写进模板参数 —— 这样 23 个模板（含没有 position 参数的全屏 HUD、字幕层、
+// 不写进模板参数 —— 这样 50 个模板（含没有 position 参数的全屏 HUD、字幕层、
 // 转场层）都能被同一套手柄操控，而且导出、无头渲染用的是同一个引擎，所见即所得。
 const editLayerEl = $('editLayer');
 let elSel = null, elTagName = null, elRotH = null, elText = null, elTextKey = null, elTextArea = null, elToast = null;
@@ -14265,7 +14791,7 @@ setInterval(historyTick, 350);
 // ---------------------------------------------------------------- 初始化
 // 本地服务是不是旧版本？（旧版本没有新加的接口，会莫名其妙 404）
 {
-  const NEED = 8;   // 和 tools/serve.mjs 的 APP_VERSION 保持一致
+  const NEED = 9;   // 和 tools/serve.mjs 的 APP_VERSION 保持一致
   fetch('/api/ping', { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : null))
     .then((j) => {

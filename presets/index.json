@@ -8,4 +8,5 @@
   ,{ "file": "focus-demo.json", "name": "聚焦标注（聚焦框 / 索引标注 / 索引清单 / 放大镜 · 12 秒）" }
   ,{ "file": "data-demo.json", "name": "数据标注（柱状图 / 折线图 / 手绘圈注 / 地图定位 / 分屏对比 / 章节进度 · 16 秒）" }
   ,{ "file": "chaos-demo.json", "name": "秩序 / 混沌（五屏序列：网格 → 断裂 → 爆散 → 墨 · 20 秒）" }
+  ,{ "file": "instrument-demo.json", "name": "仪器面板（雷达扫描 / 波形频谱 / 胶片条 / 幽灵水印 · 5 秒）" }
 ]

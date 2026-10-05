@@ -29,5 +29,8 @@ desktop.ini
 node_modules/
 __pycache__/
 
+# DSH 排查文件权限时留下的报告，别进仓库
+.acl-report/
+
 # 注意：dist/studio.html 是打包产物，但它是"双击即用"的交付物，故意保留
 参考/

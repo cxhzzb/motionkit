@@ -72,6 +72,7 @@ async function refreshStatus() {
     bits.push(status.ffmpeg ? 'ffmpeg ✓' : 'ffmpeg ✗');
     bits.push(status.llm.configured ? ('LLM ' + status.llm.model + ' ✓') : 'LLM 未配置（用本地规则文案）');
     bits.push(status.asrProviders.length ? ('字幕 ' + status.asrProviders.join('/') + ' ✓') : '字幕不可用');
+    bits.push(status.videoDownload ? '下载视频 ✓' : '下载视频 ✗（pip install -U yt-dlp）');
     env.textContent = bits.join(' · ');
     env.className = 'badge ' + (status.ok ? 'ok' : 'bad');
     renderStyles(status.styles || []);

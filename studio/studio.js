@@ -4683,7 +4683,7 @@ function setDownloadBusy(busy, text = '') {
 }
 
 function openDownloadDialog() {
-  setDownloadState('支持 yt-dlp 能识别的网站和直链；下载文件保存在项目的 downloads/ 目录。');
+  setDownloadState('支持常见视频网站和直接视频链接；下载文件保存在项目的 downloads/ 目录。\n下不动的话多半是没装 yt-dlp：pip install -U yt-dlp。');
   $('downloadFoot').textContent = '';
   downloadDlg.showModal();
   setTimeout(() => $('downloadUrl').focus(), 30);
@@ -5031,7 +5031,7 @@ window.addEventListener('resize', () => { blit(); drawTimeline(); });
 // ---------------------------------------------------------------- 预览直接操控
 // 在预览里点选图层、拖动挪位置、拉角缩放、转手柄旋转、双击改文字。
 // 位置/缩放/旋转记在 layer.transform 上（见 engine/core.js 的 normalizeTransform），
-// 不写进模板参数 —— 这样 23 个模板（含没有 position 参数的全屏 HUD、字幕层、
+// 不写进模板参数 —— 这样 50 个模板（含没有 position 参数的全屏 HUD、字幕层、
 // 转场层）都能被同一套手柄操控，而且导出、无头渲染用的是同一个引擎，所见即所得。
 const editLayerEl = $('editLayer');
 let elSel = null, elTagName = null, elRotH = null, elText = null, elTextKey = null, elTextArea = null, elToast = null;
@@ -5754,7 +5754,7 @@ setInterval(historyTick, 350);
 // ---------------------------------------------------------------- 初始化
 // 本地服务是不是旧版本？（旧版本没有新加的接口，会莫名其妙 404）
 {
-  const NEED = 8;   // 和 tools/serve.mjs 的 APP_VERSION 保持一致
+  const NEED = 9;   // 和 tools/serve.mjs 的 APP_VERSION 保持一致
   fetch('/api/ping', { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : null))
     .then((j) => {

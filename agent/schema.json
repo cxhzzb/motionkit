@@ -1,6 +1,6 @@
 {
   "generatedBy": "tools/schema.mjs",
-  "count": 46,
+  "count": 50,
   "categories": {
     "overlay": "叠加层 / HUD",
     "typography": "动态排版",
@@ -427,6 +427,276 @@
         }
       ]
     },
+    "radar-sweep": {
+      "id": "radar-sweep",
+      "name": "雷达扫描",
+      "category": "overlay",
+      "categoryLabel": "叠加层 / HUD",
+      "desc": "",
+      "params": [
+        {
+          "key": "position",
+          "label": "圆心 x,y",
+          "type": "string",
+          "default": "0.5,0.5"
+        },
+        {
+          "key": "radius",
+          "label": "半径",
+          "type": "number",
+          "default": 300,
+          "min": 40,
+          "max": 1000,
+          "step": 5
+        },
+        {
+          "key": "rpm",
+          "label": "转速（圈/分）",
+          "type": "number",
+          "default": 18,
+          "min": 1,
+          "max": 120,
+          "step": 1
+        },
+        {
+          "key": "trail",
+          "label": "余晖",
+          "type": "number",
+          "default": 0.75,
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        {
+          "key": "rings",
+          "label": "同心圈",
+          "type": "number",
+          "default": 3,
+          "min": 0,
+          "max": 8,
+          "step": 1
+        },
+        {
+          "key": "spokes",
+          "label": "十字刻度",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "blips",
+          "label": "目标点",
+          "type": "number",
+          "default": 5,
+          "min": 0,
+          "max": 20,
+          "step": 1
+        },
+        {
+          "key": "sweepColor",
+          "label": "扫描色",
+          "type": "color",
+          "default": "#39ff88"
+        },
+        {
+          "key": "gridColor",
+          "label": "盘面色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "labelText",
+          "label": "左上标签",
+          "type": "string",
+          "default": "PROXIMITY"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "speed",
+          "label": "速度",
+          "type": "number",
+          "default": 1,
+          "min": 0.1,
+          "max": 4,
+          "step": 0.05
+        }
+      ]
+    },
+    "waveform-panel": {
+      "id": "waveform-panel",
+      "name": "波形 / 频谱",
+      "category": "overlay",
+      "categoryLabel": "叠加层 / HUD",
+      "desc": "",
+      "params": [
+        {
+          "key": "position",
+          "label": "位置 x,y",
+          "type": "string",
+          "default": "0.5,0.78"
+        },
+        {
+          "key": "span",
+          "label": "宽度",
+          "type": "number",
+          "default": 900,
+          "min": 120,
+          "max": 1900,
+          "step": 10
+        },
+        {
+          "key": "height",
+          "label": "高度",
+          "type": "number",
+          "default": 140,
+          "min": 30,
+          "max": 600,
+          "step": 5
+        },
+        {
+          "key": "bars",
+          "label": "柱数",
+          "type": "number",
+          "default": 56,
+          "min": 8,
+          "max": 200,
+          "step": 1
+        },
+        {
+          "key": "mode",
+          "label": "样式",
+          "type": "select",
+          "default": "bars",
+          "options": [
+            "bars",
+            "line",
+            "area"
+          ]
+        },
+        {
+          "key": "mirror",
+          "label": "上下对称",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "panel",
+          "label": "画面板底",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "title",
+          "label": "标题",
+          "type": "string",
+          "default": "AUDIO SPECTRUM"
+        },
+        {
+          "key": "readout",
+          "label": "显示读数",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "barColor",
+          "label": "波形色",
+          "type": "color",
+          "default": "#39ff88"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        },
+        {
+          "key": "speed",
+          "label": "速度",
+          "type": "number",
+          "default": 1,
+          "min": 0.1,
+          "max": 4,
+          "step": 0.05
+        }
+      ]
+    },
+    "film-strip": {
+      "id": "film-strip",
+      "name": "胶片条",
+      "category": "overlay",
+      "categoryLabel": "叠加层 / HUD",
+      "desc": "",
+      "params": [
+        {
+          "key": "edge",
+          "label": "位置",
+          "type": "select",
+          "default": "both",
+          "options": [
+            "top",
+            "bottom",
+            "both",
+            "left",
+            "right"
+          ]
+        },
+        {
+          "key": "band",
+          "label": "条宽",
+          "type": "number",
+          "default": 46,
+          "min": 12,
+          "max": 200,
+          "step": 2
+        },
+        {
+          "key": "speed",
+          "label": "滚动速度",
+          "type": "number",
+          "default": 60,
+          "min": 0,
+          "max": 400,
+          "step": 5
+        },
+        {
+          "key": "counter",
+          "label": "帧号读数",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "flicker",
+          "label": "闪烁",
+          "type": "number",
+          "default": 0.12,
+          "min": 0,
+          "max": 0.6,
+          "step": 0.02
+        },
+        {
+          "key": "bandColor",
+          "label": "条色",
+          "type": "color",
+          "default": "black"
+        },
+        {
+          "key": "holeColor",
+          "label": "齿孔色",
+          "type": "color",
+          "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
     "kinetic-type": {
       "id": "kinetic-type",
       "name": "卡点大字",
@@ -842,6 +1112,105 @@
           "label": "颜色",
           "type": "color",
           "default": "white"
+        },
+        {
+          "key": "accent",
+          "label": "强调色",
+          "type": "color",
+          "default": "orange"
+        }
+      ]
+    },
+    "ghost-mark": {
+      "id": "ghost-mark",
+      "name": "幽灵水印",
+      "category": "typography",
+      "categoryLabel": "动态排版",
+      "desc": "",
+      "params": [
+        {
+          "key": "text",
+          "label": "文字",
+          "type": "string",
+          "default": "ARCHIVE"
+        },
+        {
+          "key": "position",
+          "label": "位置 x,y",
+          "type": "string",
+          "default": "0.5,0.5"
+        },
+        {
+          "key": "size",
+          "label": "字号",
+          "type": "number",
+          "default": 190,
+          "min": 24,
+          "max": 700,
+          "step": 2
+        },
+        {
+          "key": "opacity",
+          "label": "不透明度",
+          "type": "number",
+          "default": 0.3,
+          "min": 0.03,
+          "max": 1,
+          "step": 0.02
+        },
+        {
+          "key": "rotate",
+          "label": "倾斜角度",
+          "type": "number",
+          "default": -8,
+          "min": -45,
+          "max": 45,
+          "step": 1
+        },
+        {
+          "key": "tracking",
+          "label": "字距",
+          "type": "number",
+          "default": 0.06,
+          "min": -0.05,
+          "max": 0.6,
+          "step": 0.01
+        },
+        {
+          "key": "frame",
+          "label": "四角括号",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "arrow",
+          "label": "方向箭头",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "plate",
+          "label": "角标底色",
+          "type": "bool",
+          "default": true
+        },
+        {
+          "key": "caption",
+          "label": "右下小字",
+          "type": "string",
+          "default": "SOURCE MATERIAL · NOT FOR BROADCAST"
+        },
+        {
+          "key": "hold",
+          "label": "常驻（不进退场）",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "key": "color",
+          "label": "颜色",
+          "type": "color",
+          "default": "ink"
         },
         {
           "key": "accent",

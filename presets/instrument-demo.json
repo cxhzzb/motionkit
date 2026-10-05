@@ -1,0 +1,46 @@
+{
+  "name": "instrument-demo",
+  "width": 1920,
+  "height": 1080,
+  "fps": 24,
+  "duration": 5,
+  "bg": null,
+  "transparent": true,
+  "beat": { "bpm": 120, "offset": 0, "duration": 5, "source": "bpm" },
+  "captions": [],
+  "layers": [
+    {
+      "template": "film-strip",
+      "start": 0,
+      "end": 5,
+      "seed": "demo-film",
+      "name": "胶片条",
+      "params": { "edge": "both" }
+    },
+    {
+      "template": "radar-sweep",
+      "start": 0,
+      "end": 5,
+      "seed": "demo-radar",
+      "name": "雷达扫描",
+      "params": { "position": "0.755,0.44", "radius": 230, "labelText": "PROXIMITY" }
+    },
+    {
+      "template": "waveform-panel",
+      "start": 0,
+      "end": 5,
+      "seed": "demo-wave",
+      "name": "波形 / 频谱",
+      "params": { "position": "0.27,0.79", "span": 760, "bars": 48 }
+    },
+    {
+      "template": "ghost-mark",
+      "start": 0.25,
+      "end": 5,
+      "seed": "demo-ghost",
+      "name": "幽灵水印",
+      "params": { "text": "FIELD UNIT 07", "position": "0.5,0.5", "size": 150, "opacity": 0.34, "rotate": -6, "color": "white" }
+    }
+  ],
+  "fx": []
+}

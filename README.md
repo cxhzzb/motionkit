@@ -163,7 +163,7 @@ node tools/serve.mjs --open # 起服务并自动开浏览器（bat 里用的就�
 拖到哪儿就摆在哪儿（落点会写进模板自己的 `位置` 参数）。全屏 HUD、转场这类
 本来就没有位置参数的模板，按它们自己的默认布局来。
 
-模板多到 39 个之后，这一栏还做了两件事方便找：
+模板多到 50 个之后，这一栏还做了两件事方便找：
 
 - **每个模板都有缩略图**：是拿引擎**真渲一遍**（默认参数、入场结束那一刻）再缩小的，
   不是截图也不是示意图，所以"看到的什么样、拖进去就什么样"。转场类模板底下会垫一张
@@ -177,7 +177,7 @@ node tools/serve.mjs --open # 起服务并自动开浏览器（bat 里用的就�
 **直接在预览里改**：不用去右边翻参数。在预览上点一下图层就选中（选择框和手柄出来），
 拖动挪位置、拉四个角缩放、转上面那个圆手柄旋转、**双击直接改文字**（浮窗里边打边看）。
 位置 / 缩放 / 旋转记在图层自己的变换上，不去动模板的 `position` 参数，
-所以 46 个模板——包括根本没有位置参数的全屏 HUD、字幕层、转场层——都能这么调；
+所以 50 个模板——包括根本没有位置参数的全屏 HUD、字幕层、转场层——都能这么调；
 而且导出和无头渲染走的是同一个引擎，界面里摆成什么样，导出来就是什么样。
 
 **图层索引**（左栏第二个页签，快捷键 `I`）：图层一多，光看时间轴上的色条不知道谁是谁。
@@ -391,6 +391,23 @@ python tools/caption-styles-demo.py --scene presets/slopcore.json \
 | 精确改数值 | 右栏「剪辑」页：起点 / 时长 / 入点 / 音量 |
 | 改工程时长 | 片段排到哪儿时长就长到哪儿（手动改过时长就不跟了） |
 
+#### 下载网络视频需要 yt-dlp（顶栏 `下载视频`）
+
+顶栏 `下载视频` 走的是 [yt-dlp](https://github.com/yt-dlp/yt-dlp)：
+粘贴视频页面或直链 → 下到项目的 `downloads/` → 自动载入时间轴。
+
+两种装法它都认，**装了哪个都行**：
+
+- 命令行版（`yt-dlp` 在 PATH 上）：`winget install yt-dlp`
+- Python 模块版：`pip install -U yt-dlp`
+
+工作室启动后会自己探一次：`✨ AI 助手` 面板顶上那行会写 `下载视频 ✓` 或 `下载视频 ✗`，
+没装的话点下载会直接告诉你装哪一条，**装完不用重启**（下一次点会自动认出新的）。
+下载失败留下的半成品（`.part`）会被自动清掉，`downloads/` 不会越堆越大。
+
+> 只有开发模式（`启动工作室.bat` / `npm run studio`）能用：要调本机 yt-dlp。
+> 单文件版 `dist/studio.html` 是纯前端，没有这个按钮。
+
 #### 素材结束了、工程还在走？（导出多出一段黑场）
 
 这是真踩过的坑：素材只到 2:40，导出却是 6:00 —— 因为**工程时长只跟着素材长、不跟着素材缩**，
@@ -491,7 +508,7 @@ python tools/caption-styles-demo.py --scene presets/slopcore.json \
 
 ---
 
-## 模板总览（46 个）
+## 模板总览（50 个）
 
 ### 叠加层 / HUD
 
@@ -502,6 +519,14 @@ python tools/caption-styles-demo.py --scene presets/slopcore.json \
 | `dial-gauge` | 圆盘仪表 | 带刻度和百分比的圆盘 |
 | `ticker-strip` | 跑马灯条 | 独立可摆放的滚动信息条，右侧带实时帧号 |
 | `param-ticks` | 参数刻度簇 | 一组小滑杆 + 读数，角落里的"工程感" |
+| `radar-sweep` | 雷达扫描 | 圆形雷达盘 + 扫描线 + 余晖残影，目标点随扫描角点亮；带方位角读数 |
+| `waveform-panel` | 波形 / 频谱 | 跟着音频起伏的波形条（柱状 / 折线 / 面积）。有音频用真波形，没有就是稳定伪波形 |
+| `film-strip` | 胶片条 | 上下一条带齿孔的半透黑条 + 滚动的帧号读数，给画面加"在过片"的实拍质感 |
+
+![仪器面板四款压在实拍上的样子](docs/preview-instruments.png)
+
+> 上面这张是 `presets/instrument-demo.json`（载入预设 → 仪器面板）：雷达扫描、波形 / 频谱、
+> 胶片条、幽灵水印四层同时压在一张实拍底图上。波形那条有音频就走真实波形，没音频就是稳定的伪波形。
 
 ### 动态排版
 
@@ -511,6 +536,7 @@ python tools/caption-styles-demo.py --scene presets/slopcore.json \
 | `word-grid` | 词块宫格 | `ESCAPE / VELOCITY / PERMANENT / UNDERCLASS` 逐格点亮 |
 | `title-mark` | 标题定格 | 带引线和小注解的标题（`ZERO-DAY.` / `STARGATE:`） |
 | `subtitle-kinetic` | 卡点字幕 | 读取字幕轨，四种样式 |
+| `ghost-mark` | 幽灵水印 | 描边大字水印 + 四角括号 + 方向箭头；默认墨黑压浅色素材，深色素材把颜色改成白色 |
 
 ### 设计排版〔新增〕
 
@@ -858,6 +884,7 @@ export default [myEffect];
 动效JS插件/
 ├─ dist/studio.html        ← 打包好的单文件版，双击就用
 ├─ studio/                 工作室界面（index.html / studio.css / studio.js）
+├─ downloads/              顶栏「下载视频」下回来的素材（不进仓库）
 ├─ engine/
 │   ├─ core.js             时间轴 / 节拍图 / 图层 / 素材片段(Clip) / 场景 / 缓动 / 确定性随机 / 渲染调度
 │   ├─ draw.js             绘图原语（HUD 框、等宽标签、跑马灯、条码、仪表、网点……）
@@ -866,8 +893,8 @@ export default [myEffect];
 │   ├─ srt.js              字幕解析 / 导出 / 切短句 / 词级时间估算
 │   ├─ zip.js              ZIP 写入器（含流式版本，边渲染边落盘）
 │   └─ mp4.js              MP4 封装器（H.264 视频轨 + 可选 AAC 音轨，帧精确；导出 MP4 用）
-├─ templates/              46 个模板（hud / type / design / chaos / data / focus / mark / rock / panels / transitions / hits）
-├─ presets/                slopcore / slopcore-3min / demo-scene / design-demo / rock-2min / focus-demo / data-demo / chaos-demo + index.json
+├─ templates/              50 个模板（hud / spectrum / type / typography2 / design / chaos / grid2 / data / focus / mark / rock / panels / transitions / hits）
+├─ presets/                slopcore / slopcore-3min / demo-scene / design-demo / rock-2min / focus-demo / data-demo / chaos-demo / instrument-demo + index.json
 ├─ agent/                  AI 助手：分析 → 转写 → 文案 → 排布 → 成片
 │   ├─ autopilot.py        总入口（CLI 也是本地服务调的那支）
 │   ├─ analyze.py          拍点 / 镜头切点 / 亮度 / 运动量 / 人声段
@@ -875,7 +902,7 @@ export default [myEffect];
 │   ├─ llm.py              文案与定调（DeepSeek / OpenAI / 本地 Ollama 都行）
 │   ├─ director.py         导演：把分析 + 选择 + 文案排成图层栈（含占位避让）
 │   ├─ styles.json         6 套配色风格预设
-│   ├─ schema.json         从 46 个模板导出的参数表，用来校验生成结果
+│   ├─ schema.json         从 50 个模板导出的参数表，用来校验生成结果
 │   └─ _mock_api.py        离线自检用的假接口
 ├─ tools/
 │   ├─ serve.mjs           零依赖静态服务器
@@ -891,6 +918,12 @@ export default [myEffect];
 │   ├─ ui-zoom-test.js     「缩放/横向滚动 + 转场」的自检（缩放改映射、转场那一帧真的变亮）
 │   ├─ ui-adv-test.js      「变速/多轨/调色/交叉淡化」的自检（取色验证画中画与滤镜真的生效）
 │   ├─ ui-tail-test.js     「素材结束后别多导出黑场」的自检（时长会缩、弹窗提醒、一键收紧）
+│   ├─ ui-media-test.js    「拖文件进画面」的自检（视频/图片/音频走得通、素材表对得上）
+│   ├─ ui-fill-test.js     「一键铺满」的自检（要连着后端跑，验证铺出来的图层数与卡点）
+│   ├─ ui-sync-test.js     「⇅ 同步」面板的自检（状态读得到、按钮状态对）
+│   ├─ ui-download-test.js 「下载网络视频」的自检（弹窗 + 后端回传；给 ?downloadTestUrl= 可端到端）
+│   ├─ ui-auto-caption-test.js 「自动字幕」的自检（打桩后端 NDJSON，验进度和落进字幕轨）
+│   ├─ ui-instrument-test.js 「仪器面板四款」的自检（载入预设 + 逐个渲染看真的画出了像素）
 │   ├─ bundle.mjs          单文件打包
 │   ├─ schema.mjs          导出模板参数表给 agent 用
 │   ├─ make-long-preset.py 按秒数生成 slopcore 长预设（180 秒 / 300 秒随便改）
@@ -976,7 +1009,7 @@ AI 助手要调 python、ffmpeg 和无头浏览器，只有带后端的开发模
 
 **它会不会写出引擎不认的工程？**
 
-不会。生成之后会拿 `agent/schema.json`（从 46 个模板导出的参数表）逐字段校验：
+不会。生成之后会拿 `agent/schema.json`（从 50 个模板导出的参数表）逐字段校验：
 不认识的键丢掉、越界数字钳回范围、非法选项退回默认，越界的情况会记在 `report.md` 里。
 
 **为什么导出的 PNG 这么大？**

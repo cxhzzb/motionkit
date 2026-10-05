@@ -19,7 +19,7 @@ const OPEN_BROWSER = ARGV.includes('--open');
 const PORT = Number(ARGV.find((a) => /^\d+$/.test(a)) || 5178);
 const PORT_MAX = PORT + 12;
 // 加了新接口就把这个数字 +1：启动器发现端口上跑的是旧版本，会把它换掉再起新的
-const APP_VERSION = Number(process.env.MK_APP_VERSION || 8);
+const APP_VERSION = Number(process.env.MK_APP_VERSION || 9);
 const DOWNLOAD_DIR = path.join(ROOT, 'downloads');
 
 const MIME = {
@@ -92,6 +92,7 @@ async function agentStatus(res) {
   const py = await probePython();
   const ff = await probeModule('imageio_ffmpeg');
   const fw = py.ok ? await probeModule('faster_whisper') : false;
+  const ytDlp = await probeYtDlp();   // 顶栏「下载视频」靠它；探不到就在界面上说清楚
   let styles = {};
   try {
     styles = JSON.parse(fs.readFileSync(path.join(ROOT, 'agent/styles.json'), 'utf8')).styles || {};
@@ -104,6 +105,7 @@ async function agentStatus(res) {
     python: py.v || null,
     ffmpeg: ff,
     fasterWhisper: fw,
+    videoDownload: ytDlp.cmd ? (ytDlp.how || true) : false,
     asrProviders: asr,
     asrModel: cfg.asr.model || null,
     llm: { configured: !!cfg.llm.apiKey, model: cfg.llm.model || null, baseUrl: cfg.llm.baseUrl || null },
@@ -251,14 +253,24 @@ function fillRun(req, res) {
 
 function run(cmd, args, opts = {}) {
   return new Promise((resolve) => {
+    // timeout：探测用的短命令不能被"卡住的进程"拖死（比如 yt-dlp 在等网络）
+    const { timeout = 0, ...rest } = opts;
     let p;
-    try { p = spawn(cmd, args, { cwd: ROOT, env: process.env, ...opts }); }
+    try { p = spawn(cmd, args, { cwd: ROOT, env: process.env, ...rest }); }
     catch (e) { resolve({ code: -1, out: '', err: e.message }); return; }
     let out = '', err = '';
+    let timer = null;
+    const done = (r) => { if (timer) clearTimeout(timer); resolve(r); };
     p.stdout.on('data', (d) => { out += d.toString('utf8'); });
     p.stderr.on('data', (d) => { err += d.toString('utf8'); });
-    p.on('error', (e) => { resolve({ code: -1, out, err: err + e.message }); });
-    p.on('close', (code) => resolve({ code, out, err }));
+    p.on('error', (e) => done({ code: -1, out, err: err + e.message }));
+    p.on('close', (code) => done({ code, out, err }));
+    if (timeout > 0) {
+      timer = setTimeout(() => {
+        try { p.kill('SIGTERM'); } catch (_) {}
+        done({ code: -1, out, err: err + `\n（超时 ${timeout}ms 没回应）` });
+      }, timeout);
+    }
   });
 }
 
@@ -333,6 +345,23 @@ function pickDownloadedFile(dir) {
   return files[0] || null;
 }
 
+// yt-dlp 有两种装法：命令行 yt-dlp 在 PATH 上，或者只装了 python 模块。
+// 只试一种的话，另一种装法的机器上"下载视频"按钮会直接报"找不到 yt-dlp"。
+// 探到哪个用哪个；探不到就报清楚怎么装（别只说一句 spawn ENOENT）。
+let ytDlpProbe = null;
+
+const YTDLP_HINT = '没找到 yt-dlp：本机既没有 yt-dlp 命令，也没有 yt_dlp 这个 python 模块。'
+  + '装一个就行：pip install -U yt-dlp（或者 pipx install yt-dlp）。装完回来点「下载视频」即可，不用重启。';
+
+async function probeYtDlp() {
+  if (ytDlpProbe) return ytDlpProbe;
+  const cli = await run('yt-dlp', ['--version'], { timeout: 8000 });
+  if (cli.code === 0) return (ytDlpProbe = { cmd: 'yt-dlp', pre: [], how: 'yt-dlp 命令' });
+  const mod = await run('python', ['-m', 'yt_dlp', '--version'], { timeout: 12000 });
+  if (mod.code === 0) return (ytDlpProbe = { cmd: 'python', pre: ['-m', 'yt_dlp'], how: 'python -m yt_dlp' });
+  return (ytDlpProbe = { cmd: null, hint: YTDLP_HINT });
+}
+
 async function downloadVideoApi(req, res) {
   const body = await readBody(req);
   const raw = String(body.url || '').trim();
@@ -350,11 +379,15 @@ async function downloadVideoApi(req, res) {
     return;
   }
 
+  const yt = await probeYtDlp();
+  if (!yt.cmd) { json(res, { ok: false, error: yt.hint }, 500); return; }
+
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const outDir = path.join(DOWNLOAD_DIR, `${stamp}-${Math.random().toString(36).slice(2, 7)}`);
   fs.mkdirSync(outDir, { recursive: true });
 
   const args = [
+    ...yt.pre,
     '--no-playlist',
     '--no-warnings',
     '--newline',
@@ -367,7 +400,7 @@ async function downloadVideoApi(req, res) {
     raw,
   ];
 
-  const child = spawn('yt-dlp', args, { cwd: ROOT, env: process.env });
+  const child = spawn(yt.cmd, args, { cwd: ROOT, env: process.env });
   let stdout = '';
   let stderr = '';
   let finished = false;
@@ -382,8 +415,10 @@ async function downloadVideoApi(req, res) {
   child.stdout.on('data', (d) => { stdout = (stdout + d.toString('utf8')).slice(-12000); });
   child.stderr.on('data', (d) => { stderr = (stderr + d.toString('utf8')).slice(-12000); });
   child.on('error', (e) => {
+    // 探过之后才坏的（比如被卸载 / PATH 变了）：让下次重新探一遍，别一直用坏的那个
     finished = true;
-    json(res, { ok: false, error: '找不到 yt-dlp：' + e.message }, 500);
+    ytDlpProbe = null;
+    json(res, { ok: false, error: '启动 yt-dlp 失败（' + yt.how + '）：' + e.message }, 500);
   });
   child.on('close', (code) => {
     if (finished && code !== 0) return;
@@ -391,6 +426,11 @@ async function downloadVideoApi(req, res) {
     const picked = pickDownloadedFile(outDir);
     if (code !== 0 || !picked) {
       const detail = (stderr || stdout).trim().split('\n').slice(-8).join('\n');
+      // 下载失败会留下 .part / .ytdl 半成品，不清理的话 downloads/ 会越堆越大
+      for (const name of (() => { try { return fs.readdirSync(outDir); } catch (_) { return []; } })()) {
+        if (!/\.(part|ytdl)$/i.test(name)) continue;
+        try { fs.rmSync(path.join(outDir, name), { force: true, maxRetries: 3 }); } catch (_) {}
+      }
       json(res, { ok: false, error: detail || '下载失败，可能是网址不支持或需要登录' }, 400);
       return;
     }
