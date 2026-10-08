@@ -2,6 +2,7 @@
   "name": "motionjs-editor-kit",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "JS 动效模板引擎 + 剪辑用卡点/字幕/转场/特效插件",
   "scripts": {
