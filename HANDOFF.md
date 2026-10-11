@@ -1,8 +1,8 @@
 # 交接说明（HANDOFF）
 
-> 写于 **2026-10-06 02:57**，给「下一个接手这个项目的人 / 另一个 AI 会话」看的。
-> 这份文件说明：**现在代码是什么状态、这一轮改了什么、下一步该干什么、有哪些坑**。
-> 读完这份 + `README.md` 就够开工了；引擎/工作室的详细架构见第 6 节。
+> 更新于 **2026-10-12**，给「下一个接手这个项目的人 / 另一个 AI 会话」看的。
+> 这份文件说明：**现在代码是什么状态、最近这一轮改了什么、下一步该干什么、有哪些坑**。
+> 读完这份 + `README.md` 就够开工了；引擎/工作室的详细架构见第 5 节。
 
 ---
 
@@ -10,207 +10,220 @@
 
 | 项 | 值 |
 | --- | --- |
-| 分支 | `main`，与 `origin/main` **完全同步**（`git@github.com:cxhzzb/motionkit.git`） |
-| HEAD | `b8c939a` 增加自动字幕、网络视频下载与素材删除清理（2026-10-04） |
-| 未推送的提交 | 无 |
-| 工作区 | **有一批未提交的改动**（见第 3 节），已改 14 个文件 / 新增 5 个文件 |
+| 分支 | `main`，与 `origin/main` 同步（`git@github.com:cxhzzb/motionkit.git`） |
+| 上一轮 HEAD | `4512817` 加 MIT 许可证（2026-10-09） |
+| 本轮改动 | **未提交**，见下面第 3 节 |
 
-**这批改动没有提交，也没有推送。** 接手第一件事就是先决定它怎么处理（见第 5 节）。
-
-新增文件：
-
-```
-templates/spectrum.js           雷达扫描 / 波形频谱 / 胶片条
-templates/typography2.js        幽灵水印
-presets/instrument-demo.json    四款新模板的演示工程（已进 presets/index.json）
-tools/ui-instrument-test.js     这批新模板的自检
-docs/preview-instruments.png    README 里用的预览图
-```
+**⚠️ 仓库路径变了**：项目现在在 `F:\KIMi kit\动效JS插件`，
+以前是 `F:\KIMI小工具\动效JS插件`（那个目录现在是**空的**）。
+DSH 会话的工作区如果还指向旧路径，会看到"什么都没有" —— 不是项目没了，是路径变了。
 
 ---
 
-## 2. 这一轮干了什么
+## 2. 这一轮干了什么：把 README 点名没做的四项补了两项半
 
-### 2.1 修了一个环境问题（不然什么都跑不了）
+README 以前自己列了一张缺口清单：**关键帧动画 / 蒙版裁剪 / 画中画圆角描边 / 音频降噪**。
+这一轮把前三项做完了（第三项是蒙版的自然延伸），音频降噪还没动。
 
-DSH 授权写入工作区时被 Windows 文件权限挡住（根目录缺 `WRITE_OWNER`），
-`git` / `node` 一律报 `SetNamedSecurityInfoW failed (Win32 5)`。
-已用 DSH 自带脚本修好：给当前用户补一条完全控制权限。**这是机器级的改动，不在仓库里。**
+### 2.1 关键帧动画（新能力，最大的一块）
 
-- 报告与备份：`.acl-report/`（已加进 `.gitignore`，不进仓库）
-- 单文件沙箱报 `Win32 5` 时，不用再排查代码 —— 是文件权限，不是项目问题
+以前图层的位移 / 缩放 / 旋转 / 不透明度是**每层一个常数**。现在按时间动起来。
 
-### 2.2 修「下载视频」按钮（原来在这台机器上是坏的）
+**新文件 `engine/keyframes.js`** —— 关键帧的数据模型与求值，独立于 core.js：
 
-**病因**：`tools/serve.mjs` 的 `downloadVideoApi` 直接 `spawn('yt-dlp', …)`，
-但这台机器上 `yt-dlp` 不在 PATH，只装了 Python 模块（`yt_dlp 2026.07.04`）。
-点按钮只会得到 `找不到 yt-dlp: spawn ENOENT`。
-
-**改法**（都在 `tools/serve.mjs`）：
-
-1. 新增 `probeYtDlp()`：先试 `yt-dlp --version`，不行退回 `python -m yt_dlp --version`；
-   探到哪个用哪个，结果缓存；spawn 出错时把缓存清掉（下次重新探 → **装完不用重启**）
-2. `run()` 新增 `timeout` 选项（探测不能被卡住的进程拖死）
-3. 失败时清理 `.part` / `.ytdl` 半成品，`downloads/` 不再越堆越大
-4. `/api/agent/status` 新增 `videoDownload` 字段；`studio/agent-panel.js` 环境行显示
-   `下载视频 ✓ / ✗（pip install -U yt-dlp）`
-5. 弹窗文案不再对用户说"yt-dlp"这个内部名词
-6. **版本号 8 → 9**：`tools/serve.mjs` 的 `APP_VERSION` 与 `studio/studio.js` 的 `NEED` **必须一起改**，
-   否则页面会误报"本地服务是旧版本"
-
-**验证证据**（当时起在 5199 端口单独测，没动用户的 5178）：
-
-```bash
-# 探测到的是哪种装法
-curl -s http://127.0.0.1:5199/api/agent/status   # → "videoDownload":"python -m yt_dlp"
-
-# 真实下载 + 走完整 UI 流程（弹窗 → 后端回传 → 载入时间轴）
-node tools/shot.mjs \
-  --url "http://127.0.0.1:5199/studio/index.html?downloadTestUrl=https%3A%2F%2Ffilesamples.com%2Fsamples%2Fvideo%2Fmp4%2Fsample_640x360.mp4" \
-  --js-file tools/ui-download-test.js --out .out/ui-download-fixed.png
-# → checks.all = true，videoLoaded = true，页面无报错
+```js
+layer.keys = {
+  x: [ {t:0, v:-0.3, e:'outBack'}, {t:1.2, v:0}, {t:2.5, v:0.3} ],
+  opacity: [ {t:0, v:0}, {t:0.4, v:1, hold:true} ],
+}
 ```
 
-### 2.3 新增 4 个模板（46 → 50 个）
+- `{t, v}` 第 t 秒的值是 v；从这一帧到下一帧用 `e` 指定的曲线
+- `{t, hold:true}` **定值帧**：值沿用到下一个关键帧（跳变，不插值）
+- `{t, e}` 只有缓动的**标记帧**：不产生新值，只改"从这里往后"的缓动
+- `t` 是**相对图层起点**的秒数 —— 图层整体挪时间，动画跟着走
 
-用户选了三条线（HUD/数据、排版/大字、材质/转场）+「你提方案我来挑」，
-所以做了一批「可评审的样本」，四款都带 `position` 参数 → **都能拖到画面里落位**：
+**新文件 `engine/easing.js`** —— 把 17 条缓动曲线从 core.js 搬出来独立成文件。
+**为什么必须搬**：关键帧模块要求值，core.js 又要 import 关键帧模块，曲线留在 core.js 就是循环依赖。
+core.js 开头把 `clamp / lerp / EASINGS / ease …` **原样再导出一次**，所以
+`import { clamp } from '../engine/core.js'` 这种老写法全都还能用，模板一个都没改。
 
-| id | 名称 | category | 文件 | 说明 |
-| --- | --- | --- | --- | --- |
-| `radar-sweep` | 雷达扫描 | `overlay` | spectrum.js | 同心圈 + 十字刻度 + 扫描线 + 余晖残影，目标点随扫描角点亮，带方位角读数 |
-| `waveform-panel` | 波形 / 频谱 | `overlay` | spectrum.js | 柱状 / 折线 / 面积三种；**有音频用真波形，没有就退回稳定伪波形**（缩略图也有东西） |
-| `film-strip` | 胶片条 | `overlay` | spectrum.js | 上下带齿孔的半透黑条 + 滚动帧号 |
-| `ghost-mark` | 幽灵水印 | `typography` | typography2.js | 描边大字 + 四角括号 + 方向箭头 |
+**表达式**（值可以直接写字符串，不落成一堆关键帧）：
+`@beat`（拍序号）、`@beatPhase`（离拍点秒差）、`@beatProg`、`@t`、`@local`、`@progress`、
+`@osc` / `@sin` / `@cos`。求值上下文由 `renderFrame` 构造并传进去。
 
-**踩到并修掉的坑**：`ghost-mark` 原本默认白色，而工作室画布是浅灰的 —— 拖进去像没画出来。
-已改成默认墨黑（深色素材让用户切白）。**新模板定默认色时，按"浅色画布上也看得见"来定。**
+**API**：`Layer.keys` / `Layer.transformAt(t)` / `Layer.opacityAt(t)` / `Layer.animated`，
+core.js 里一并 re-export 了 `setKey / removeKey / moveKey / setKeyEasing / keyIndexAt /
+keyTimes / trackRange / animatedProps / keysOnBeats / normalizeKeys / normalizeTrack`。
 
-配套：
+**界面（studio.js）**：
 
-- `templates/index.js` 注册（`spectrum` 排在 hud 之后，`typography2` 排在 type 之后）
-- **`node tools/schema.mjs` 重生成 `agent/schema.json`**（现在是 50 个；Python 侧依赖它）
-- **`node tools/bundle.mjs` 重新打包 `dist/studio.html`**（现在 26 个模块 / 670.7 KB）
-- 新预设 `presets/instrument-demo.json`，已登记进 `presets/index.json`
-- 新自检 `tools/ui-instrument-test.js`（按**非透明像素数**验证每个模板真的画出了东西，
-  因为模板 `draw()` 抛错时引擎只 `console.error` 不中断 —— 静默画个空是看不出问题的）
-- README / docs/命令速查 同步
+- 右栏「图层」页新增第三块 **关键帧动画**：自动打帧开关、通道下拉、
+  7 颗 ◆（加/删当前时刻的帧，已有关键帧=青色实心、此刻有=亮蓝底）、
+  当前帧的缓动下拉、定值帧开关、删这一帧、全部动画通道一览、清掉整层动画、每拍打一帧
+- **自动打帧**：开了之后在预览里拖 / 缩放 / 旋转 / 改不透明度，就在当前时间自动落帧。
+  已经在动的通道**不需要重复开**（`shouldKey()`：有动画 or 自动打帧）
+- 所有写变换的入口统一走 `setTransformValue()`，打帧时**同时更新静态值**
+  —— 这样关掉动画之后画面停在最后摆的位置，不会突然弹回去
+- 时间轴上（选中/主选的层）画出**关键帧菱形**，可**拖动改时间**（吸附卡点）、
+  **Shift 点=删帧**，命中区存在 `keyDotMap`
+- 拖拽 / 选择框 / 命中测试全部改成走 `layerTrAt(L)`（= `L.transformAt(state.t)`），
+  否则动起来的图层会"画在这、选择框在那"
 
-顺手修的文档漂移：`templates/index.js`、`tools/schema.mjs`、`engine/core.js`、`studio/studio.js`、
-`agent/README.md` 里"**23 个模板**"的旧注释，以及 README 里一直没跟上的"模板多到 **39** 个"。
+### 2.2 蒙版 / 裁剪（含画中画圆角描边）
 
----
+**`engine/core.js` 新增**：`MASK_SHAPES`、`normalizeMask`、`maskPath`、`maskNeedsAlpha`、
+`applyMaskAlpha`、`featherRing`。`Layer.mask` 落盘。
 
-## 3. 未提交的改动清单
-
-```
- M .gitignore                      # 加 .acl-report/
- M README.md                       # 50 个模板、新模板表格、仪器面板预览图、新自检、下载视频需要 yt-dlp
- M agent/README.md                 # 23 → 50
- M agent/schema.json               # 重生成（50 个模板）
- M dist/studio.html                # 重新打包
- M docs/命令速查.md                 # 下载视频 / 自动字幕 / 仪器面板 三段自检命令
- M engine/core.js                  # 23 → 50（注释）
- M presets/index.json              # 登记 instrument-demo
- M studio/agent-panel.js           # 环境行加"下载视频 ✓/✗"
- M studio/index.html               # 下载弹窗文案
- M studio/studio.js                # NEED 9、弹窗文案、注释 23 → 50
- M templates/index.js              # 注册两个新文件
- M tools/schema.mjs                # 23 → 50
- M tools/serve.mjs                 # yt-dlp 探测/回退/清理 + APP_VERSION 9
-?? docs/preview-instruments.png
-?? presets/instrument-demo.json
-?? templates/spectrum.js
-?? templates/typography2.js
-?? tools/ui-instrument-test.js
+```js
+layer.mask = {
+  shape: 'rect'|'round'|'ellipse'|'poly',
+  x, y, w, h,            // 归一化画布坐标（0..1）
+  radius,                // 圆角（占框短边比例）
+  feather,               // 边缘羽化
+  invert,                // 反选 = 挖洞
+  points: [[x,y], …],    // poly 用
+  stroke: { width, color },   // 画中画的边框
+}
 ```
 
+**渲染改了两条路，而且只能走一条**（这里踩了个大坑，见第 4 节）：
+
+- 硬边矩形 / 椭圆 / 圆角矩形 → 直接在总画布上 `clip()`
+- 有羽化 / 反选 / 多边形 / 描边 → 先画到离屏（`deps.scratch`），
+  按蒙版削 alpha，再整体贴回总画布
+
+**界面**：右栏「图层」页第四块 **蒙版 / 裁剪**（形状下拉 + 左/上/宽/高 + 圆角 + 羽化 +
+反选 + 描边粗细/颜色 + 铺满画面 / 居中 50% / 去掉蒙版）。
+
+### 2.3 修掉的既有 bug（顺手，但值得单独说）
+
+1. **`MotionKit.setScene()` 不重新渲染** —— 换完工程 canvas 里还是旧画面。
+   外部脚本（自检 / 自动化）刚 setScene 就读像素会读到上一份工程。已补 `renderAt + blit`。
+2. **`MotionKit` 没导出注册模板的入口** —— 自检没法注册自己的测试模板。
+   已加 `MotionKit.registerTemplate`。**注意 `MK.templates()` 每次返回新数组，往它 push 没用。**
+3. **覆盖整幅的多边形蒙版会被当成"没蒙版"丢掉** —— `normalizeMask` 用
+   `x=0,y=0,w>=1,h>=1` 判断"整幅=没裁"，但一个覆盖整幅的**三角形**同样满足这个条件，
+   它是真在裁的。已加 `polyCoversWholeFrame()` 逐边采样区分。
+
+### 2.4 自检
+
+- `tools/keyframe-test.mjs` — **引擎级，59 项，不用浏览器**：
+  求值 / 缓动 / 定值帧 / 同刻去重 / 表达式 / 编辑 API / 卡点铺帧 /
+  `Layer.transformAt` 以图层起点为 0 / 蒙版归一化与退化 / 缓动表完整性
+- `tools/ui-keyframe-test.js` — **界面级，53 项**（跑 `tools/shot.mjs`）：
+  真实指针事件拖动 + 自动打帧、◆ 按钮、时间轴菱形、
+  蒙版逐形状的**像素覆盖率**（硬边正好 1/4、椭圆 ≈ π/4、反选 ≈ 3/4、三角形 ≈ 1/2）、
+  羽化出半透明过渡带、描边出白边且粗细可控、老工程（无 keys/mask）兼容
+
 ---
 
-## 4. 环境事实（这台机器）
+## 3. 本轮改动清单（未提交）
 
-| 项 | 值 |
-| --- | --- |
-| Node | v24.19.0 |
-| Python | 3.14.7（`ctranslate2 4.8.2` / `onnxruntime 1.28.0` 都能 import，whisper 栈可用） |
-| Chrome | `C:/Program Files/Google/Chrome/Application/chrome.exe` |
-| yt-dlp | **不在 PATH**；只有 Python 模块 `yt_dlp 2026.07.04` → 走 `python -m yt_dlp` 回退 |
-| ffmpeg | 有（`imageio_ffmpeg`） |
-| **开发服务** | **5178 端口上那个还是旧版 v8**（用户开着的工作室窗口）。源码已是 v9，刷新会提示"本地服务是旧版本"；**Ctrl+C 关掉再双击 `启动工作室.bat`** 即可（启动器会自己换掉旧的） |
+```
+ M README.md                        # 新增「关键帧动画」「蒙版 / 裁剪」两节 + 预览图
+ M dist/studio.html                 # 重新打包（730.2 KB / 28 个模块）
+ M docs/命令速查.md                  # 关键帧 / 蒙版自检命令
+ M engine/core.js                   # keys + mask + renderFrame 两条路 + setScene 修复
+ M presets/index.json               # 登记 keyframe-demo
+ M studio/studio.css                # 关键帧面板样式（.kf-*）
+ M studio/studio.js                 # 关键帧 / 蒙版 UI、自动打帧、时间轴菱形、layerTrAt
+?? engine/easing.js                 # 缓动曲线（从 core.js 搬出来，避免循环依赖）
+?? engine/keyframes.js              # 关键帧模型 + 求值 + 编辑
+?? presets/keyframe-demo.json       # 关键帧 / 蒙版演示工程
+?? tools/keyframe-test.mjs          # 引擎级自检
+?? tools/ui-keyframe-test.js        # 界面级自检
+?? docs/preview-keyframes.png       # README 预览图
+```
 
----
-
-## 5. 下一步（按优先级）
-
-1. **先处理未提交的改动**：用户还没决定提交。仓库里的是**代码**，
-   `projects/` 整块被忽略（体积/版权/隐私），所以提交是安全的。
-   项目自己的入口是工作室顶栏 **⇅ 同步**（提交并上传 / 拉取），也可以直接
-   `git add -A && git commit -m "…"`。**提交前记得 `npm run bundle`**，
-   因为 `dist/studio.html` 是故意留在仓库里的交付物（改了 `studio/` 源码就必须重打包，
-   不然两台机器会来回覆盖它）。
-2. **让用户评审这 4 个模板**：它们是"提一批、你来挑"的样本。
-   大概率会发生的事：改配色 / 改参数默认值 / 删掉不喜欢的。用户挑完可能要**再补一批**。
-   如果要补，方向已经在对话里定过：HUD/数据面板、排版/大字、材质/转场。
-3. 用户明确说过「加新动效模板」是当前主线。**已存在但没做的大功能**（README 第 483 行自己列的）：
-   关键帧动画、蒙版/裁剪、画中画圆角描边、降噪这类音频处理。
+**提交前记得 `npm run bundle`**（`dist/studio.html` 是故意留在仓库里的交付物）。
+`agent/schema.json` 这轮**不用重新生成** —— 模板参数没动（只加了图层级的 keys/mask）。
 
 ---
 
-## 6. 项目约定与坑（省得重新踩）
+## 4. 这一轮踩到的坑（省得重新踩）
 
-### 加一个模板（最短路径，不用动引擎）
+### 4.1 蒙版静默失效：同一层被画了两遍
 
-1. 写 `templates/xxx.js`：`export const myTpl = { id, name, category, hint, params[], draw(ctx, env) }`
-   - `id` **必填**（`registerTemplate` 会校验），`name` / `category` / `params` / `draw` 也是必需的
-   - `params` 的 `type` 只能是 `number | bool | color | select | multiline | string`
-   - **想要"拖到画面里落位"，必须有 `position` 参数**（格式 `"x,y"` 或 `"x,y,w"`）——
-     `placeParamsAt()` 只认这个键；`focus-box` 那种用 `region` 的就不落位（拖进去只是加层）
-   - 底色类参数名要包含 `plate|fill|bg|paper|backdrop`，右栏才会出现那个**透明**勾选框
-2. `templates/index.js` import + 塞进 `ALL`
-3. 新分类才要动 `templates/index.js` 的 `CATEGORIES` + `studio.js` 的 `CAT_LABEL`/`CAT_COLOR`（三处）
-4. `node tools/schema.mjs` → `node tools/bundle.mjs`
-5. 自检：`node tools/render.mjs --template <id> --duration 3 --out .out/x`
-   （**注意**：透明 PNG 叠在白底上是看不出来的 —— 白色元素一定要加 `--bg '#141414'` 再看，
-   否则会误判成"没画出来"）
+`renderFrame` 原来是"总画布上无条件画一遍 + 需要时再在离屏上画一遍"。
+于是需要蒙版时，**总画布上已经留了一份没被裁过的像素**，离屏那份再怎么削 alpha 也削不掉它
+—— 结果只有硬边裁剪那条路看着是对的，**羽化 / 反选 / 多边形 / 描边全部静默失效**
+（静默 = 画面看着"没效果"，不报错）。
 
-### 会咬人的地方
+改成 `if (useScratch) {…离屏…} else {…直接裁剪…}`，两条路互斥。
+
+### 4.2 `roundRect()` 会夹半径，负 inset 会被吃掉
+
+羽化原来用"一条 createLinearGradient 描边"实现：`maskPath(…, -inset)` 想从外轮廓往内收。
+但 canvas 的 `roundRect` 会把半径**夹到 min(w,h)/2**，负 inset 直接把矩形退化了，
+描边画到形状外面、再被 `destination-in` 裁掉 —— 又是静默失效。
+而且描边只有**一个渐变轴**，跟轴垂直的那两条边永远是硬边。
+
+现在用 `featherRing()`：从边缘往内铺 5 层由内到外逐渐变淡的描边，
+每层都 `clip()` 在形状里（羽化不会长到蒙版外面），并把 alpha 乘进 `destination-out`。
+
+### 4.3 `MotionKit.templates()` 返回的是新数组
+
+`listTemplates()` 里是 `[...registry.values()]`，往它上面 `push` **不会**注册模板，
+`getTemplate()` 也找不到 → 图层静默不画（`layerBaseBox` 返回 null、`opaqueStats` 全是 0）。
+要注册就用新加的 `MK.registerTemplate(def)`。
+
+### 4.4 自检里的两个经典误判
+
+- **别用"非透明像素重心"判断图层在动**：图层平移出画幅之后会被裁掉一块，
+  重心就不再等于中心了（末端两帧 `maxX` 都钉在画幅边上）。
+  要看边缘 / 可见面积，别看重心。
+- **别连续调两次 `setMask` 再读一次统计**：`opaqueStats` / `renderAt` 自己会重新渲染，
+  中间那次 `setMask` 会把上一次的结果覆盖掉。一次 `setX` 配一次测量。
+
+### 4.5 老坑（仍然有效）
 
 - **版本号两处**：`tools/serve.mjs:APP_VERSION` ↔ `studio/studio.js:NEED`，加接口必须同时 +1
-- **`dist/studio.html` 必须重新打包**才算改完（它是 `file://` 双击即用的交付物）
+- **`dist/studio.html` 必须重新打包**才算改完
 - **模板 id / 参数名被硬编码在多处**：`studio.js` 的 `TEXT_SLOT` / `CAPTION_LOOKS` / `BEAT_FX`，
-  **以及 Python 侧 `agent/director.py` / `agent/fill.py` 各有一份复制的样子池** ——
-  改 id 或参数名要 **JS + Python 一起改**，否则 AI 生成会静默失效（`coerce_params` 只丢键不报错）
-- **`agent/schema.json` 是生成物**：改模板参数忘了重生成，Python 侧会静默丢键
-- **渲染带副作用**：`renderAt()` 每帧会调 `syncTransitionLayers()` 增删改 `state.scene.layers`，
-  所以"渲染一帧顺便存快照"的逻辑（撤销 / 自动保存轮询）可能捕捉到中间态
+  以及 Python 侧 `agent/director.py` / `agent/fill.py` 各有一份复制的样子池 —— JS + Python 要一起改
+- **`agent/schema.json` 是生成物**：改模板参数忘了 `node tools/schema.mjs`，Python 侧会静默丢键
+- **正则打包器**：`tools/bundle.mjs` 只认 `import … from '…'`，不支持裸 `import 'x'` /
+  `export * from` / 动态 `import()`
+- **渲染带副作用**：`renderAt()` 每帧会调 `syncTransitionLayers()` 增删改 `state.scene.layers`
 - **`layer.id` 不落盘**（`clip.id` 落盘），重新载入工程后图层 id 全变
-- **正则打包器**：`tools/bundle.mjs` 只认 `import … from '…'`，
-  **不支持**裸 `import 'x'`、`export * from`、动态 `import()`
-- **`filesamples.com` / `blender.org` 这类站点**：后者会回 Cloudflare 403（yt-dlp 需要 impersonation），
-  测下载用前者那种直链更稳
+- **`file://` 下的单文件版在这台机器上测不了**（路径里有中文，无头 Chrome 初始化超时）——
+  这是**既有问题**，不是新引入的；验证单文件版请走 http 起的服务
 
-### 自检怎么写
+---
 
-`tools/ui-*.test.js` 是被 `tools/shot.mjs` 灌进页面执行的一段脚本（**不是模块**，
-所以可以有顶层 `return`，但 `node --check` 会报错，这是正常的）：
+## 5. 架构速查
 
-```bash
-node tools/shot.mjs --url "studio/index.html?preset=instrument-demo.json" \
-  --js-file tools/ui-instrument-test.js --out .out/ui-instrument.png
-```
+| 文件 | 干什么 |
+| --- | --- |
+| `engine/core.js` | 数学 / 节拍图 / Layer·Clip·Scene / `renderFrame` 帧调度 / 蒙版几何 |
+| `engine/easing.js` | 17 条缓动曲线 + `EASINGS` + `EASING_LABELS`（UI 下拉直接用） |
+| `engine/keyframes.js` | 关键帧模型 / 归一化 / 求值 / 编辑 / 卡点铺帧 / 表达式 |
+| `engine/draw.js`·`fx.js`·`audio.js`·`srt.js`·`mp4.js`·`zip.js` | 绘图原语 / 后期特效栈 / 音频分析 / 字幕 / MP4 封装 / zip |
+| `studio/studio.js` | 工作室全部逻辑（预览 / 参数 / 时间轴 / 导出 / 关键帧 / 蒙版） |
+| `templates/*.js` | 50 个动效模板 |
+| `tools/serve.mjs` | 开发服务器 + AI 后端中转 |
+| `tools/render.mjs`·`shot.mjs` | 无头渲染 / 截图与自检驱动 |
 
-脚本里用 `window.MotionKit` 那套 API，结果挂 `window.__mkReport`（或直接 return），
-`shot.mjs` 会打印 `脚本结果: {...}`。**注意：`shot.mjs` 不会断言 `checks.all`**，
-只有页面抛未捕获异常/console.error 才 `exit 2` —— 所以要看输出里的 `"all": false`。
+**渲染一帧的路径**：`renderAt(t)` → `renderFrame(ctx, scene, t, deps)` →
+每层取 `layer.transformAt(t)` / `layer.opacityAt(t)` / `layer.mask` → 两条路二选一 → 最后跑 `fxRunner`。
 
-`window.MotionKit.state` 是**可写的属性**（`setScene` 会替换它），
-所以自检里 `MK.state.scene.template = id` 这种玩法不生效，**要每次都 `MK.setScene({...})`**。
+---
+
+## 6. 下一步（按优先级）
+
+1. **音频降噪**（四项里唯一没做的）：README 现在写的是"降噪这类音频处理还没做"。
+   方向：片段级低通 / 高通 / 门限参数 + 导出时在 Python 侧用 ffmpeg 滤镜实现（`afftdn` / `highpass` / `lowpass`），
+   要跟 `engine/mp4.js` 的混音链路对齐。
+2. **蒙版再强一点**：多蒙版叠加 / 布尔运算 / 蒙版路径打关键帧（现在的蒙版是静态的）。
+3. **调色关键帧**：现在 `clip.grade` 是常量。
+4. **给关键帧加曲线编辑器**：现在是"选一条预设曲线"，没有贝塞尔手柄。
 
 ---
 
 ## 7. 这次会话没做的事（明确记一下）
 
-- **没有提交、没有推送**任何东西（第 5 节第 1 条）
-- **没有做**关键帧 / 蒙版 / 圆角描边 / 降噪
-- **没有验证过**用户真实的 YouTube 链接（只验证了机制：探测 + 回退 + 真实 MP4 下载 + UI 载入）
-- **没有跑** whisper 转写（环境只验证到 `ctranslate2` / `onnxruntime` 能 import）
+- **音频降噪没做**（第 6 节第 1 条）
+- **没有提交、没有推送**（第 3 节那批改动还在工作区）
+- **没有在真实成片上验证**关键帧 / 蒙版 —— 只跑了演示预设和自检
+  （真实素材 + 长工程下的性能没测：羽化蒙版每帧多一次离屏，层多的时候要留意帧率）

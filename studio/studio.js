@@ -7,6 +7,9 @@
 import {
   Scene, Layer, Caption, Clip, BeatMap, renderFrame, makeCanvas, timecode,
   clamp, lerp, Rng, registerTemplate,
+  setKey, removeKey, keyIndexAt, keyCount, keyTimes, isAnimated,
+  animatedProps, KEY_PROPS, KEY_PROP_LABELS, EASING_LABELS,
+  normalizeMask, MASK_SHAPES, MASK_SHAPE_LABELS, maskNeedsAlpha, maskPath,
 } from '../engine/core.js';
 import * as Draw from '../engine/draw.js';
 import * as FX from '../engine/fx.js';
@@ -47,6 +50,8 @@ const state = {
     tlScroll: 0,           // 时间轴图层区的上下滚动量（层数多的时候用）
     tlPack: true,          // 并轨：时间上不重叠的图层共用一行（省地方）
     tlFind: '',            // 图层索引里的搜索词，时间轴也跟着高亮
+    autoKey: false,        // 自动打帧：开了之后拖动画层 / 改不透明度都会在当前时间落一个关键帧
+    kfProp: 'x',           // 「关键帧」页里正在编辑的通道
 };
 state.scene.addFx({ type: 'chromatic', amount: 0, enabled: false });
 
@@ -60,17 +65,32 @@ const tl = $('timeline');
 const tlCtx = tl.getContext('2d');
 let previewCtx = preview.getContext('2d');
 
+// 蒙版走"离屏 alpha"那条路时用的临时画布（羽化 / 反选 / 多边形 / 描边才需要）。
+// 做懒加载：没有这类蒙版就一直是 null，不白占一块和工程等大的 canvas。
+let maskScratch = null;
+function ensureMaskScratch(w, h) {
+  if (!maskScratch) maskScratch = makeCanvas(w, h, 1);
+  if (maskScratch.canvas.width !== w || maskScratch.canvas.height !== h) {
+    maskScratch.canvas.width = w; maskScratch.canvas.height = h;
+    maskScratch.ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  return maskScratch;
+}
+
 // ---------------------------------------------------------------- 渲染
 function renderAt(t) {
   const s = state.scene;
   syncTransitionLayers();     // 转场层永远跟着片段走（片段怎么改的都会被这里兜住）
+  refreshAnimatedFlag();
   if (off.canvas.width !== s.width || off.canvas.height !== s.height) {
     off.canvas.width = s.width; off.canvas.height = s.height;
   }
   off.ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const needsMaskScratch = s.layers.some((L) => L.mask && maskNeedsAlpha(L.mask));
   renderFrame(off.ctx, s, t, {
     before: (ctx, sc, tt) => drawMedia(ctx, sc, tt),
     fxRunner: (ctx, sc, tt) => runFx(ctx, sc, tt, sc.fx, {}),
+    scratch: needsMaskScratch ? (w, h) => ensureMaskScratch(w, h) : null,
     silent: false,
   });
   return off.canvas;
@@ -278,6 +298,27 @@ function setTime(t) {
   state.t = v;
   syncMediaTo(v, false);
   if (!state.playing) { renderAt(v); blit(); updateTransport(); drawTimeline(); }
+  // 有关键帧的层被选中时，右栏「关键帧」那块显示的是"此刻那一帧"，
+  // 所以拖播放头也得跟着刷新 —— 但只在真有必要时重画右栏（它会重建 DOM，频繁重建会掉手感）
+  followPlayheadInPanel();
+}
+
+/**
+ * 播放头动了之后，如果右栏正显示着"关键帧"那一块，重画一次。
+ * 用一个廉价的"有没有动画图层"标记挡住绝大多数情况，避免每帧都重建右栏。
+ */
+let animatedLayerCount = 0;
+function refreshAnimatedFlag() {
+  let n = 0;
+  for (const L of state.scene.layers) if (L.keys) n++;
+  animatedLayerCount = n;
+}
+function followPlayheadInPanel() {
+  if (!animatedLayerCount) return;
+  if (rightTab !== 'layer' || state.selection == null) return;
+  const L = selectedLayer();
+  if (!L || !L.keys) return;
+  renderRight();
 }
 
 /**
@@ -372,6 +413,7 @@ function applyAudio() {
 let scrubbing = false;
 let drag = null;
 let dragClip = null;        // 正在拖的素材片段（挪位置 / 拉边裁剪）
+let dragKey = null;         // 正在拖的关键帧菱形 { L, prop, t0, origT }
 
 function tlGeom() {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -432,6 +474,7 @@ function applyUiScale(k, save) {
 let rowMap = new Map();
 let clipRowMap = new Map();      // clipId -> { band, x, w, y, h }（时间轴上的命中区）
 let transMarkMap = new Map();    // clipId -> { x, w, y, h }（两个片段中间那个转场小方块）
+let keyDotMap = new Map();       // layerId -> [{ prop, t, x, y, r }]（图层条上的关键帧菱形，可拖）
 
 /** 相邻两段中间的小方块：点一下就能加 / 换 / 去掉转场（剪映那个位置） */
 function drawTransitionMarks(list, y, h, sx) {
@@ -658,6 +701,7 @@ function drawTimeline() {
   const audY = MEDIA_TOP + VID_H + 3;
   clipRowMap = new Map();
   transMarkMap = new Map();
+  keyDotMap = new Map();
   drawClipTrack('video', vidY, VID_H, x0, x1, sx);
   drawClipTrack('audio', audY, AUD_H, x0, x1, sx);
 
@@ -754,6 +798,42 @@ function drawTimeline() {
       tlCtx.strokeStyle = '#00e5ff'; tlCtx.lineWidth = 1.5;
       roundRectPath(tlCtx, bx + 0.75, y + 0.75, Math.max(2, bw - 1.5), ROW_H - 1.5, 3);
       tlCtx.stroke();
+    }
+
+    // ---- 关键帧菱形 ----
+    // 只画"选中/主选"的层：全都画的话时间轴会变成一片星星，反而看不出重点。
+    if ((isMain || isSel) && L.keys) {
+      const dots = [];
+      tlCtx.save();
+      tlCtx.beginPath();
+      tlCtx.rect(bx - 2, y, bw + 4, ROW_H);
+      tlCtx.clip();
+      for (const [prop, track] of Object.entries(L.keys)) {
+        if (!Array.isArray(track)) continue;
+        const isCur = prop === state.kfProp && isMain;
+        const dim = state.kfProp && !isCur && isMain;      // 主选时非当前通道淡一点
+        for (const k of track) {
+          if (k.v === undefined) continue;
+          const kx = sx(L.start + k.t);
+          if (kx < bx - 8 || kx > bx + bw + 8) continue;
+          const cy = y + ROW_H / 2;
+          const r = isCur ? 5 : 3.5;
+          tlCtx.globalAlpha = dim ? 0.35 : 1;
+          tlCtx.beginPath();
+          tlCtx.moveTo(kx, cy - r); tlCtx.lineTo(kx + r, cy);
+          tlCtx.lineTo(kx, cy + r); tlCtx.lineTo(kx - r, cy);
+          tlCtx.closePath();
+          tlCtx.fillStyle = k.hold ? '#ffd166' : (isCur ? '#ffffff' : '#0e0f12');
+          tlCtx.fill();
+          tlCtx.lineWidth = 1.5;
+          tlCtx.strokeStyle = k.hold ? '#ffd166' : '#00e5ff';
+          tlCtx.stroke();
+          dots.push({ L, prop, t: k.t, x: kx, y: cy, r: r + 3 });
+        }
+      }
+      tlCtx.globalAlpha = 1;
+      tlCtx.restore();
+      if (dots.length) keyDotMap.set(L.id, dots);
     }
   });
   // 正在拉的框选
@@ -1284,6 +1364,28 @@ tl.addEventListener('pointerdown', (e) => {
     drawTimeline();
     return;
   }
+  // 关键帧菱形优先于图层条本身：它很小，压不准就会误拖整条杆子
+  for (const [id, dots] of keyDotMap) {
+    const d = dots.find((k) => Math.hypot(mx - k.x, y - k.y) <= k.r + 2);
+    if (!d) continue;
+    const L = state.scene.layers.find((x) => x.id === id);
+    if (!L) continue;
+    if (e.shiftKey) {                       // Shift 点菱形 = 直接删掉这一帧
+      removeKey(L.keys[d.prop], d.t);
+      if (L.keys[d.prop] && !L.keys[d.prop].length) delete L.keys[d.prop];
+      if (L.keys && !Object.keys(L.keys).length) L.keys = null;
+      markIndexDirty(); renderAt(state.t); blit(); drawTimeline(); renderRight();
+      toast('删掉了一个关键帧');
+      return;
+    }
+    // 选中这一层 + 把通道切过去，右栏就直接显示这一帧
+    state.kfProp = d.prop;
+    if (state.selection !== id) selectLayer(id); else renderRight();
+    dragKey = { L, prop: d.prop, origT: d.t, t0: tlTimeAtRaw(e.clientX), moved: false };
+    try { tl.setPointerCapture(e.pointerId); } catch (_) {}
+    drawTimeline();
+    return;
+  }
   // 命中图层？
   for (const [id, g] of rowMap) {
     if (y >= g.y && y <= g.y + ROW_H && e.clientX - r.left >= g.x - 2 && e.clientX - r.left <= g.x + g.w + 2) {
@@ -1316,6 +1418,30 @@ tl.addEventListener('pointermove', (e) => {
     return;
   }
   if (dragClip) { applyClipDrag(e); return; }
+  if (dragKey) {
+    const { L, prop, origT, t0 } = dragKey;
+    const dt = tlTimeAtRaw(e.clientX) - t0;
+    if (Math.abs(dt) > 1e-4) dragKey.moved = true;
+    const fps = Math.max(1, state.scene.fps || 24);
+    let nt = Math.round((origT + dt) * fps) / fps;
+    nt = clamp(nt, 0, Math.max(0, L.duration));
+    // 吸附卡点（跟拖图层条一个习惯）
+    if ($('chkSnap').checked && state.scene.beat) {
+      const abs = L.start + nt;
+      const snapped = state.scene.beat.snap(abs, 4, 0.08);
+      if (Math.abs(snapped - abs) < 0.08) nt = clamp(Math.round((snapped - L.start) * fps) / fps, 0, L.duration);
+    }
+    const track = L.keys[prop];
+    const i = keyIndexAt(track, origT);
+    if (i >= 0 && Math.abs(nt - origT) > 1e-9) {
+      track[i].t = nt;
+      track.sort((a, b) => a.t - b.t);
+      dragKey.origT = nt;
+      dragKey.lastT = nt;
+      markIndexDirty(); drawTimeline(); renderAt(state.t); blit();
+    }
+    return;
+  }
   if (scrubbing) { setTime(tlTimeAt(e.clientX)); return; }
   if (!drag) return;
   const L = state.scene.layers.find((x) => x.id === drag.id);
@@ -1364,6 +1490,13 @@ const endDrag = () => {
     drawTimeline();
   }
   drag = null; scrubbing = false;
+  if (dragKey) {
+    const moved = dragKey.moved;
+    const lastT = dragKey.lastT;
+    dragKey = null;
+    renderRight(); drawTimeline();
+    if (moved && lastT !== undefined) toast('关键帧挪到了图层内 ' + lastT.toFixed(3) + 's');
+  }
 };
 tl.addEventListener('pointerup', endDrag);
 tl.addEventListener('pointercancel', endDrag);
@@ -1782,7 +1915,7 @@ function rightPanelLayer(body, L) {
     }));
     g0.appendChild(numField('开始(秒)', L.start, 0, state.scene.duration, 0.01, (v) => { L.start = Math.min(v, L.end - 0.04); drawTimeline(); }));
     g0.appendChild(numField('结束(秒)', L.end, 0, state.scene.duration, 0.01, (v) => { L.end = Math.max(v, L.start + 0.04); drawTimeline(); }));
-    g0.appendChild(numField('不透明度', L.opacity, 0, 1, 0.01, (v) => { L.opacity = v; }));
+    g0.appendChild(numField('不透明度', L.opacityAt(state.t), 0, 1, 0.01, (v) => { setLayerOpacity(L, v); }));
     g0.appendChild(checkField('启用', L.enabled, (v) => { L.enabled = v; drawTimeline(); }));
     const actions = document.createElement('div');
     actions.className = 'btn-row';
@@ -1824,7 +1957,297 @@ function rightPanelLayer(body, L) {
       }));
     }
     body.appendChild(g1);
+
+    rightPanelKeyframes(body, L);
+    rightPanelMask(body, L);
   }
+}
+
+/**
+ * 「图层」页里的第三块：关键帧动画。
+ *
+ * 交互只保留一条主线 —— **把播放头挪到某个时间，摆好位置，它就记下了**：
+ *   打开「自动打帧」之后，在预览里拖动 / 缩放 / 旋转，或者调不透明度，
+ *   都会在当前时间自动落一个关键帧。已经在动的通道会继续打帧（不需要重复开关）。
+ * 这排 ◆ 按钮是"手动补一帧 / 删一帧"，通道下拉决定下面那行改的是哪条轨道。
+ */
+function rightPanelKeyframes(body, L) {
+  const g = group('关键帧动画');
+
+  const note = document.createElement('div');
+  note.className = 'fx-note';
+  note.style.whiteSpace = 'pre-line';
+  g.appendChild(note);
+
+  // ---- 自动打帧开关 ----
+  const head = document.createElement('div');
+  head.className = 'btn-row';
+  const autoBtn = btn('', () => {
+    state.autoKey = !state.autoKey;
+    renderRight();
+    toast(state.autoKey
+      ? '自动打帧已开：拖动 / 缩放 / 旋转 / 改不透明度都会在当前时间落帧'
+      : '自动打帧已关：已有关键帧的通道仍会继续打帧');
+  });
+  head.appendChild(autoBtn);
+  const meta = document.createElement('span');
+  meta.className = 'fx-note';
+  meta.style.cssText = 'flex:1 1 auto;display:flex;align-items:center;min-width:0';
+  head.appendChild(meta);
+  g.appendChild(head);
+
+  // ---- 通道选择 ----
+  const CH = KEY_PROPS.map((p) => ({ value: p, label: KEY_PROP_LABELS[p] }));
+  if (!KEY_PROPS.includes(state.kfProp)) state.kfProp = 'x';
+  const sel = document.createElement('select');
+  for (const c of CH) {
+    const o = document.createElement('option');
+    o.value = c.value;
+    const n = keyCount(L.keys, c.value);
+    o.textContent = c.label + (n ? `（${n} 帧）` : '');
+    if (c.value === state.kfProp) o.selected = true;
+    sel.appendChild(o);
+  }
+  sel.addEventListener('change', () => {
+    state.kfProp = sel.value;
+    renderAt(state.t); blit();
+    drawTimeline();
+    renderRight();
+  });
+  g.appendChild(field('正在编辑的通道', () => sel));
+
+  const prop = state.kfProp;
+  const localT = layerSnapTime(L);
+
+  // ---- 这一排 ◆：手动加 / 删当前时刻的关键帧 ----
+  {
+    const wrap = document.createElement('div');
+    wrap.className = 'kf-dots';
+    const count = document.createElement('span');
+    count.className = 'kf-dots-label';
+    count.textContent = '此刻：';
+    wrap.appendChild(count);
+    for (const p of KEY_PROPS) {
+      const on = keyCount(L.keys, p) > 0;
+      const at = !!L.keys && Array.isArray(L.keys[p]) && keyIndexAt(L.keys[p], layerSnapTime(L)) >= 0;
+      const d = document.createElement('button');
+      d.className = 'kf-dot' + (on ? ' has' : '') + (at ? ' at' : '') + (p === prop ? ' cur' : '');
+      d.title = KEY_PROP_LABELS[p] + (at ? '：此刻有关键帧，点一下删掉' : '：点一下在播放头处打一个关键帧')
+        + (on ? `（共 ${keyCount(L.keys, p)} 帧）` : '');
+      d.textContent = '◆';
+      d.addEventListener('click', () => {
+        if (p !== state.kfProp) state.kfProp = p;
+        toggleKeyAtPlayhead(L, p);
+        renderRight();
+      });
+      wrap.appendChild(d);
+    }
+    g.appendChild(field('打帧 / 删帧', () => wrap));
+  }
+
+  // ---- 当前时刻那一帧的精确编辑 ----
+  const track = L.keys && L.keys[prop];
+  const idx = Array.isArray(track) ? keyIndexAt(track, localT) : -1;
+  if (idx >= 0) {
+    const k = track[idx];
+    g.appendChild(field('这一帧的缓动', () => {
+      const s = document.createElement('select');
+      const none = document.createElement('option');
+      none.value = ''; none.textContent = '（默认：缓出）';
+      s.appendChild(none);
+      for (const [val, label] of EASING_LABELS) {
+        const o = document.createElement('option');
+        o.value = val; o.textContent = label;
+        if ((k.e || '') === val) o.selected = true;
+        s.appendChild(o);
+      }
+      s.addEventListener('change', () => {
+        if (s.value) k.e = s.value; else delete k.e;
+        renderAt(state.t); blit(); drawTimeline();
+      });
+      return s;
+    }));
+    const row = document.createElement('div');
+    row.className = 'btn-row';
+    row.appendChild(btn('定值帧（不插值）', () => {
+      k.hold = !k.hold;
+      if (!k.hold) delete k.hold;
+      renderAt(state.t); blit(); renderRight(); drawTimeline();
+      toast(k.hold ? '这一帧改成定值：值保持到下一个关键帧（跳变）' : '这一帧改回插值');
+    }, k.hold ? 'on' : ''));
+    row.appendChild(btn('删掉这一帧', () => {
+      removeKey(track, k.t);
+      if (!track.length) delete L.keys[prop];
+      if (L.keys && !Object.keys(L.keys).length) L.keys = null;
+      markIndexDirty(); renderAt(state.t); blit(); drawTimeline(); renderRight();
+    }, 'danger'));
+    g.appendChild(row);
+    const info = document.createElement('div');
+    info.className = 'fx-note';
+    info.textContent = `这一帧在图层内 ${k.t.toFixed(3)}s（时间轴 ${(L.start + k.t).toFixed(3)}s）`;
+    g.appendChild(info);
+  } else {
+    const info = document.createElement('div');
+    info.className = 'fx-note';
+    info.textContent = `播放头（图层内 ${localT.toFixed(3)}s）这里没有「${KEY_PROP_LABELS[prop]}」的关键帧。`
+      + '点上面那颗 ◆ 就能补一个。';
+    g.appendChild(info);
+  }
+
+  // ---- 全部动画通道一览 ----
+  const anim = animatedProps(L.keys);
+  if (anim.length) {
+    const list = document.createElement('div');
+    list.className = 'kf-list';
+    for (const p of anim) {
+      const tr = L.keys[p];
+      const row = document.createElement('div');
+      row.className = 'kf-row';
+      const nm = document.createElement('b');
+      nm.textContent = KEY_PROP_LABELS[p];
+      const times = document.createElement('span');
+      times.className = 'kf-times';
+      times.textContent = tr.filter((k) => k.v !== undefined).map((k) => k.t.toFixed(2)).join(' · ') + ' 秒';
+      row.appendChild(nm); row.appendChild(times);
+      const x = document.createElement('button');
+      x.className = 'kf-x';
+      x.textContent = '×';
+      x.title = '清掉这条通道的关键帧（保留此刻的画面）';
+      x.addEventListener('click', () => {
+        const now = L.transformAt(state.t);
+        if (now && L.transform) Object.assign(L.transform, now);
+        else if (now) L.transform = { x: 0, y: 0, scale: 1, rot: 0, px: 0.5, py: 0.5, ...now };
+        delete L.keys[p];
+        if (!Object.keys(L.keys).length) L.keys = null;
+        normalizeStaticTransform(L);
+        markIndexDirty(); renderAt(state.t); blit(); drawTimeline(); renderRight();
+      });
+      row.appendChild(x);
+      list.appendChild(row);
+    }
+    g.appendChild(list);
+  }
+
+  const acts = document.createElement('div');
+  acts.className = 'btn-row';
+  acts.appendChild(btn('清掉整层动画', () => {
+    if (!L.keys) { toast('这一层还没有关键帧'); return; }
+    if (!confirm('清掉这一层的全部关键帧？画面会停在当前这一刻的样子，静态值保留。')) return;
+    clearLayerKeys(L);
+    renderAt(state.t); blit(); drawTimeline(); renderRight();
+    toast('动画已清掉，静态值保留');
+  }, 'danger'));
+  acts.appendChild(btn('每拍打一帧', () => {
+    const bm = state.scene.beat;
+    if (!bm || !bm.length) { toast('还没有卡点 —— 先载入一首音乐'); return; }
+    const prop2 = state.kfProp;
+    const base = prop2 === 'opacity' ? L.opacityAt(L.start) : (L.transformAt(L.start)?.[prop2] ?? 0);
+    const amp = prop2 === 'opacity' ? 0.5 : prop2 === 'scale' ? 0.12 : prop2 === 'rot' ? 8 : 0.04;
+    const d = Math.max(0.02, Math.min(0.12, bm.beatDur * 0.35));
+    const times = bm.hitsIn(L.start, L.end, 1);
+    if (!times.length) { toast('这一段里没有拍点'); return; }
+    if (!L.keys) L.keys = {};
+    const tk = L.keys[prop2] || (L.keys[prop2] = []);
+    for (const t of times) {
+      const lt = Math.round((t - L.start) * state.scene.fps) / state.scene.fps;
+      if (lt < 0) continue;
+      setKey(tk, lt, prop2 === 'opacity' ? clamp(base, 0, 1) : base, 'outCubic');
+      setKey(tk, Math.min(L.duration, lt + d), prop2 === 'opacity' ? clamp(base + amp, 0, 1) : base + amp, 'outCubic');
+    }
+    markIndexDirty(); renderAt(state.t); blit(); drawTimeline(); renderRight();
+    toast(`「${KEY_PROP_LABELS[prop2]}」在 ${times.length} 个拍点上各打了一对关键帧（起 + ${d.toFixed(2)}s 的冲量）`);
+  }));
+  g.appendChild(acts);
+
+  // 文案随后填：它是随开关状态变的，放在最后统一设，免得中间 return 漏掉
+  const refresh = () => {
+    autoBtn.textContent = state.autoKey ? '● 自动打帧：开' : '○ 自动打帧：关';
+    autoBtn.classList.toggle('on', state.autoKey);
+    const t2 = layerSnapTime(L);
+    let k2 = 0;
+    for (const p of KEY_PROPS) k2 += keyCount(L.keys, p);
+    note.textContent = L.keys
+      ? `这一层有 ${k2} 个关键帧，分布在 ${animatedProps(L.keys).length} 个通道上。\n`
+        + '把播放头挪到别处再摆一次，就是下一个关键帧；时间轴那条橙色带上的 ◆ 可以直接拖。'
+      : (state.autoKey
+        ? '自动打帧开着：现在在预览里拖动这一层，就会落第一个关键帧。'
+        : '还没有关键帧。打开「自动打帧」再拖动这一层，或者在下面点一颗 ◆ 手动补一帧。');
+    meta.textContent = `播放头 ${state.t.toFixed(2)}s · 图层内 ${t2.toFixed(2)}s`;
+  };
+  refresh();
+  body.appendChild(g);
+}
+
+/**
+ * 「图层」页里的第四块：蒙版 / 裁剪。
+ * 画中画那套（圆角 + 描边）就是这里的「圆角矩形」+ 描边。
+ */
+function rightPanelMask(body, L) {
+  const g = group('蒙版 / 裁剪');
+  const m = L.mask || { shape: 'rect', x: 0.25, y: 0.25, w: 0.5, h: 0.5, radius: 0.12, feather: 0 };
+
+  const setMask = (patch, rerender = true) => {
+    L.mask = normalizeMask({ ...(L.mask || m), ...patch });
+    markIndexDirty();
+    if (rerender) { renderAt(state.t); blit(); }
+  };
+
+  const hint = document.createElement('div');
+  hint.className = 'fx-note';
+  hint.style.whiteSpace = 'pre-line';
+  hint.textContent = L.mask
+    ? '这一层被裁到下面的框里。坐标是归一化的（0..1 = 整个画幅），换分辨率不会走形。'
+    : '还没有蒙版：这一层是整幅画的。选个形状就开始裁 —— 「圆角矩形 + 描边」就是画中画那套。';
+  g.appendChild(hint);
+
+  g.appendChild(field('形状', () => {
+    const s = document.createElement('select');
+    const opts = [['', '（不裁）'], ...MASK_SHAPES.map((v) => [v, MASK_SHAPE_LABELS[v]])];
+    for (const [v, label] of opts) {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = label;
+      if ((L.mask ? L.mask.shape : '') === v) o.selected = true;
+      s.appendChild(o);
+    }
+    s.addEventListener('change', () => {
+      if (!s.value) { L.mask = null; }
+      else {
+        const base = L.mask || { x: 0.2, y: 0.2, w: 0.6, h: 0.6 };
+        L.mask = normalizeMask({ ...base, shape: s.value, radius: s.value === 'round' ? (base.radius || 0.12) : base.radius });
+      }
+      markIndexDirty(); renderAt(state.t); blit(); renderRight(); drawTimeline();
+    });
+    return s;
+  }));
+
+  if (L.mask) {
+    const cur = () => L.mask;
+    g.appendChild(numField('左', cur().x, -0.5, 1, 0.005, (v) => setMask({ x: v })));
+    g.appendChild(numField('上', cur().y, -0.5, 1, 0.005, (v) => setMask({ y: v })));
+    g.appendChild(numField('宽', cur().w, 0.02, 2, 0.005, (v) => setMask({ w: v })));
+    g.appendChild(numField('高', cur().h, 0.02, 2, 0.005, (v) => setMask({ h: v })));
+    if (L.mask.shape === 'round' || L.mask.shape === 'ellipse') {
+      g.appendChild(numField('圆角', L.mask.radius || 0, 0, 0.5, 0.005, (v) => setMask({ radius: v })));
+    }
+    g.appendChild(numField('羽化', L.mask.feather || 0, 0, 0.3, 0.005, (v) => setMask({ feather: v })));
+    g.appendChild(checkField('反选（挖掉框内）', !!L.mask.invert, (v) => {
+      setMask({ invert: v }); renderRight(); drawTimeline();
+    }));
+    g.appendChild(numField('描边粗细', (L.mask.stroke && L.mask.stroke.width) || 0, 0, 0.1, 0.002, (v) => {
+      setMask({ stroke: v > 0 ? { width: v, color: (L.mask.stroke && L.mask.stroke.color) || '#ffffff' } : null });
+    }));
+    if (L.mask.stroke && L.mask.stroke.width > 0) {
+      g.appendChild(colorField('描边颜色', L.mask.stroke.color || '#ffffff',
+        (v) => setMask({ stroke: { width: L.mask.stroke.width, color: v } })));
+    }
+    const row = document.createElement('div');
+    row.className = 'btn-row';
+    row.appendChild(btn('铺满画面', () => { setMask({ x: 0, y: 0, w: 1, h: 1, radius: 0 }); renderRight(); }));
+    row.appendChild(btn('居中 50%', () => { setMask({ x: 0.25, y: 0.25, w: 0.5, h: 0.5 }); renderRight(); }));
+    row.appendChild(btn('去掉蒙版', () => { L.mask = null; markIndexDirty(); renderAt(state.t); blit(); drawTimeline(); renderRight(); }, 'danger'));
+    g.appendChild(row);
+  }
+  body.appendChild(g);
 }
 
 /** 工程页：画面尺寸 / 帧率 / 时长 + 载入的素材信息 */
@@ -4408,9 +4831,18 @@ function transformBox(b, tr) {
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
+/**
+ * 这一层"此刻"的变换 —— 挂了关键帧就取关键帧算出来的值。
+ * 所有和画面上的位置打交道的计算（选择框 / 命中测试 / 缩略图）都必须走这里，
+ * 否则动画图层会出现"画在这、选择框在那"。
+ */
+function layerTrAt(L, t = state.t) {
+  return L.transformAt(t);
+}
+
 /** 图层在画面上的实际包围盒 */
 function layerBoxFor(L) {
-  return transformBox(layerBaseBox(L), L.transform);
+  return transformBox(layerBaseBox(L), layerTrAt(L));
 }
 
 function centerOfBox(b) { return { x: b.x + b.w / 2, y: b.y + b.h / 2 }; }
@@ -4423,9 +4855,9 @@ function rotatePoint(x, y, cx, cy, deg) {
 
 /** 画面上的 4 个角（含旋转），顺序：左上 右上 右下 左下 */
 function boxCornersOnScreen(L) {
-  const m = applyMoveScale(layerBaseBox(L), L.transform);
+  const tr = layerTrAt(L);
+  const m = applyMoveScale(layerBaseBox(L), tr);
   if (!m) return null;
-  const tr = L.transform;
   const p = tr ? { x: tr.px + tr.x, y: tr.py + tr.y } : { x: 0.5, y: 0.5 };
   const pts = [[m.x, m.y], [m.x + m.w, m.y], [m.x + m.w, m.y + m.h], [m.x, m.y + m.h]];
   return pts.map(([x, y]) => (tr && tr.rot ? rotatePoint(x, y, p.x, p.y, tr.rot) : { x, y }));
@@ -4438,7 +4870,7 @@ function boxCornersOnScreen(L) {
 function hitTestLayer(L, nx, ny, padX, padY) {
   const b = layerBaseBox(L);
   if (!b) return false;
-  const tr = L.transform;
+  const tr = layerTrAt(L);
   let x = nx, y = ny;
   if (tr) {
     const sx = tr.px + tr.x, sy = tr.py + tr.y;        // 支点在画面上的位置
@@ -5056,6 +5488,133 @@ function ensureTransform(L) {
   return L.transform;
 }
 
+// ---------------------------------------------------------------- 关键帧编辑
+// 设计要点：
+//   * 关键帧的 t 是"相对图层起点"的秒数（引擎约定），所以这里统一用 L.tKeyAt(state.t)
+//   * 写值只有两个去处：静态的 layer.transform，或者这一通道的关键帧轨道。
+//     选哪个由 shouldKey() 决定 —— 已经有动画的通道继续打帧，没有的看「自动打帧」开关。
+//   * 打帧时同时更新静态值：这样关掉关键帧之后画面还停在最后摆的位置，不会突然弹回去。
+
+/** 当前时间在图层内的相对秒数 */
+function layerLocalTime(L, t = state.t) {
+  return clamp(t - L.start, 0, Math.max(0, L.duration));
+}
+
+/** 打帧时吸附到该图层时间轴的帧格上，避免 0.4233333 这种脏时间 */
+function layerSnapTime(L, t = state.t) {
+  const fps = Math.max(1, state.scene.fps || 24);
+  const local = layerLocalTime(L, t);
+  return Math.round(local * fps) / fps;
+}
+
+/** 这一通道该不该写关键帧 */
+function shouldKey(L, prop) {
+  if (isAnimated(L.keys, prop)) return true;      // 已经有动画 → 继续打帧
+  if (state.autoKey) return true;                 // 开了自动打帧
+  if (prop === 'opacity' && isAnimated(L.keys, 'opacity')) return true;
+  return false;
+}
+
+/** 给某一通道在当前时间打一个关键帧 */
+function keyProp(L, prop, value, opts = {}) {
+  if (!L.keys) L.keys = {};
+  const t = opts.time !== undefined ? opts.time : layerSnapTime(L);
+  if (!L.keys[prop]) L.keys[prop] = [];
+  setKey(L.keys[prop], t, value, opts.easing);
+  if (opts.easing && L.keys[prop].length > 1) {
+    // 缓动是挂在"从这一帧往后"的，UI 上改的通常是刚打下去那个
+    const i = keyIndexAt(L.keys[prop], t);
+    if (i >= 0) L.keys[prop][i].e = opts.easing;
+  }
+  markIndexDirty();
+  return t;
+}
+
+/**
+ * 写一个变换通道的值。这是拖动手柄 / 滚轮缩放 / 参数输入的唯一入口，
+ * 保证"有关键帧就改关键帧、没有就改静态值"这条规则只实现一次。
+ */
+function setTransformValue(L, prop, value) {
+  const tr = ensureTransform(L);
+  if (shouldKey(L, prop)) {
+    keyProp(L, prop, value);
+    tr[prop] = value;              // 静态值跟着走，关掉动画时不会跳回去
+  } else {
+    tr[prop] = value;
+  }
+  const anyKey = !!L.keys && Object.keys(L.keys).length;
+  if (!anyKey && !tr.x && !tr.y && tr.scale === 1 && !tr.rot) L.transform = null;   // 恒等就不落盘
+  invalidateLayerBox(L.id);
+  markIndexDirty();
+  refreshAnimatedFlag();
+  return value;
+}
+
+/** 写不透明度（也一样走关键帧） */
+function setLayerOpacity(L, v) {
+  const val = clamp(v, 0, 1);
+  if (shouldKey(L, 'opacity')) {
+    keyProp(L, 'opacity', val);
+    L.opacity = val;
+  } else {
+    L.opacity = val;
+  }
+  return val;
+}
+
+/** 开关"此刻的关键帧"（右栏那排 ◆ 按钮） */
+function toggleKeyAtPlayhead(L, prop) {
+  if (!L.keys) L.keys = {};
+  const t = layerSnapTime(L);
+  const track = L.keys[prop];
+  if (track && keyIndexAt(track, t) >= 0) {
+    removeKey(track, t);
+    if (!track.length) delete L.keys[prop];
+    if (!Object.keys(L.keys).length) L.keys = null;
+    toast('删掉了「' + KEY_PROP_LABELS[prop] + '」在这一刻的关键帧');
+  } else {
+    const v = prop === 'opacity' ? L.opacity : (ensureTransform(L)[prop] ?? (prop === 'scale' ? 1 : prop === 'px' || prop === 'py' ? 0.5 : 0));
+    keyProp(L, prop, v, { time: t });
+    toast('「' + KEY_PROP_LABELS[prop] + '」打了一个关键帧 @' + t.toFixed(2) + 's（图层内）');
+  }
+  markIndexDirty(); renderAt(state.t); blit(); drawTimeline();
+  return true;
+}
+
+/** 清掉整层的动画（保留静态值 = 当前这一刻的样子） */
+function clearLayerKeys(L) {
+  if (!L.keys) return false;
+  const tr = L.transformAt(state.t);
+  if (tr) L.transform = { x: tr.x, y: tr.y, scale: tr.scale, rot: tr.rot, px: tr.px, py: tr.py };
+  L.opacity = L.opacityAt(state.t);
+  L.keys = null;
+  normalizeStaticTransform(L);
+  markIndexDirty();
+  return true;
+}
+
+/** 恒等变换就清成 null，工程文件干净一点 */
+function normalizeStaticTransform(L) {
+  const tr = L.transform;
+  if (tr && !tr.x && !tr.y && tr.scale === 1 && !tr.rot) {
+    // 支点不是默认值时还是得留着（它影响缩放 / 旋转，只是此刻没缩放没旋转而已）
+    if (tr.px === 0.5 && tr.py === 0.5) L.transform = null;
+  }
+}
+
+/** 时间轴上离 t（图层内秒数）最近的关键帧，容差内才算命中 */
+function nearestKey(L, prop, localT, tol) {
+  const track = L.keys && L.keys[prop];
+  if (!Array.isArray(track)) return -1;
+  let best = -1, bd = Infinity;
+  track.forEach((k, i) => {
+    if (k.v === undefined) return;
+    const d = Math.abs(k.t - localT);
+    if (d < bd) { bd = d; best = i; }
+  });
+  return bd <= tol ? best : -1;
+}
+
 function buildEditOverlay() {
   if (!editLayerEl || elSel) return;
   editLayerEl.innerHTML =
@@ -5113,8 +5672,11 @@ function buildEditOverlay() {
     e.stopPropagation();
     if (b.dataset.act === 'text') openTextEditor(L);
     else if (b.dataset.act === 'reset') {
+      // 复位 = 位置/缩放/旋转回到原点，**关键帧一起清掉**
+      // （只清静态值而留着关键帧的话，下一帧又被关键帧拉回去，看着像没反应）
       L.transform = null;
-      markIndexDirty(); renderAt(state.t); blit();
+      L.keys = Object.keys(L.keys || {}).length ? null : L.keys;
+      markIndexDirty(); renderAt(state.t); blit(); renderRight();
     } else if (b.dataset.act === 'del') {
       deleteSelectedLayers();
     }
@@ -5184,13 +5746,16 @@ function buildEditOverlay() {
     }
     if (!pdrag) return;
     const L = pdrag.L;
+    const mode = pdrag.mode;
     pdrag = null;
     setGuides(null, null);
     // 只是点了一下没拖动：别留一个"全零的变换"在工程里，存档会脏
-    if (L && L.transform && !L.transform.x && !L.transform.y && L.transform.scale === 1 && !L.transform.rot) {
-      L.transform = null;
+    if (L) {
+      normalizeStaticTransform(L);
+      if (state.autoKey && mode) toast('自动打帧：' + KEY_PROP_LABELS[mode === 'move' ? 'x' : mode === 'scale' ? 'scale' : 'rot'] + ' 已在当前时间落帧');
     }
-    renderRight();          // 右栏那句「预览里摆过位置」跟着刷新
+    renderRight();          // 右栏那句「预览里摆过位置」/ 关键帧列表跟着刷新
+    drawTimeline();         // 时间轴上的菱形要重画
     markIndexDirty();
   };
   window.addEventListener('pointermove', (e) => {
@@ -5223,10 +5788,11 @@ function buildEditOverlay() {
     e.preventDefault();
     const b = layerBaseBox(L);
     if (!b) return;
-    const tr = ensureTransform(L);
+    const tr = beginDragTransform(L);
     const c = centerOfBox(applyMoveScale(b, tr));
     tr.px = c.x - tr.x; tr.py = c.y - tr.y;      // 以当前画面中心为支点
     tr.scale = clamp(tr.scale * (e.deltaY < 0 ? 1.06 : 1 / 1.06), 0.05, 8);
+    commitDrag(L, ['scale', 'px', 'py']);
     markIndexDirty(); renderAt(state.t); blit();
   }, { passive: false });
 }
@@ -5314,8 +5880,19 @@ function deleteSelectedLayers() {
   return n;
 }
 
+/**
+ * 拖拽的统一起点：一律从"此刻算出来的变换"出发。
+ * 关键帧图层在拖到一半时如果直接用 L.transform，会从静态值跳一下。
+ */
+function beginDragTransform(L) {
+  const live = L.transformAt(state.t);
+  const base = ensureTransform(L);
+  if (live) Object.assign(base, live);
+  return base;
+}
+
 function startMove(e, L) {
-  const tr = ensureTransform(L);
+  const tr = beginDragTransform(L);
   const p = pointerNorm(e);
   pdrag = {
     mode: 'move', L, tr, p0: p,
@@ -5331,7 +5908,7 @@ function startScale(e, L, corner) {
   if (!base || !corners) return;
   const order = ['nw', 'ne', 'se', 'sw'];
   const opp = { nw: 2, ne: 3, se: 0, sw: 1 }[corner];
-  const tr = ensureTransform(L);
+  const tr = beginDragTransform(L);
   // 把支点挪到"对角"上：这样拖动时对角钉死不动，跟设计软件的手感一致
   tr.px = corners[opp].x - tr.x;
   tr.py = corners[opp].y - tr.y;
@@ -5350,7 +5927,7 @@ function startScale(e, L, corner) {
 function startRotate(e, L) {
   const base = layerBaseBox(L);
   if (!base) return;
-  const tr = ensureTransform(L);
+  const tr = beginDragTransform(L);
   const c = centerOfBox(applyMoveScale(base, tr));      // 以当前画面中心为轴
   tr.px = c.x - tr.x; tr.py = c.y - tr.y;
   const W = Math.max(1, editLayerEl.clientWidth), H = Math.max(1, editLayerEl.clientHeight);
@@ -5361,6 +5938,16 @@ function startRotate(e, L) {
     a0: Math.atan2(p.y * H - cp.y, p.x * W - cp.x), rot0: tr.rot,
   };
   try { editLayerEl.setPointerCapture(e.pointerId); } catch (_) {}
+}
+
+/**
+ * 拖拽过程中把改动落到工程里。
+ * 这是"自动打帧"生效的地方：开了自动打帧（或这一通道本来就有动画）时，
+ * 每一下拖动都会在当前时间留下一个关键帧 —— 于是"摆一下、挪时间、再摆一下"
+ * 就是最自然的打关键帧方式，不用先点一堆按钮。
+ */
+function commitDrag(L, props) {
+  for (const p of props) setTransformValue(L, p, ensureTransform(L)[p]);
 }
 
 function onDragMove(e) {
@@ -5381,11 +5968,13 @@ function onDragMove(e) {
     if (Math.abs(cy - 0.5) < tol) { oy = pdrag.off0.y + (0.5 - pdrag.center0.y); gy = true; }
     tr.x = ox; tr.y = oy;
     setGuides(gx ? 0.5 : null, gy ? 0.5 : null);
+    commitDrag(L, ['x', 'y']);
   } else if (mode === 'scale') {
     const pivotPx = { x: pdrag.pivot.x * W, y: pdrag.pivot.y * H };
     const d = Math.hypot(p.x * W - pivotPx.x, p.y * H - pivotPx.y);
     tr.scale = clamp(pdrag.scale0 * (d / pdrag.d0), 0.05, 8);
     tr.px = pdrag.pivot.x; tr.py = pdrag.pivot.y;
+    commitDrag(L, ['scale', 'px', 'py']);
   } else if (mode === 'rot') {
     const cp = { x: (pdrag.pivot.x + tr.x) * W, y: (pdrag.pivot.y + tr.y) * H };
     const a = Math.atan2(p.y * H - cp.y, p.x * W - cp.x);
@@ -5393,6 +5982,7 @@ function onDragMove(e) {
     if (e.shiftKey) deg = Math.round(deg / 15) * 15;
     tr.rot = deg;
     tr.px = pdrag.pivot.x; tr.py = pdrag.pivot.y;
+    commitDrag(L, ['rot', 'px', 'py']);
   }
   renderAt(state.t); blit();
 }
@@ -5409,7 +5999,8 @@ function setGuides(x, y) {
 function drawEditOverlay() {
   if (!editLayerEl || !elSel) return;
   const L = selectedLayer();
-  const m = L && !editLayerEl.classList.contains('hidden') ? applyMoveScale(layerBaseBox(L), L.transform) : null;
+  const tr = L ? layerTrAt(L) : null;
+  const m = L && !editLayerEl.classList.contains('hidden') ? applyMoveScale(layerBaseBox(L), tr) : null;
   if (!m) { elSel.classList.add('hidden'); setGuides(null, null); return; }
   const W = editLayerEl.clientWidth, H = editLayerEl.clientHeight;
   elSel.classList.remove('hidden');
@@ -5420,7 +6011,6 @@ function drawEditOverlay() {
   // 贴着画面顶边时，名字牌和旋转手柄翻到下面去，别被裁掉够不着
   const tight = m.y * H < 34;
   elSel.classList.toggle('flip-top', tight);
-  const tr = L.transform;
   if (tr && tr.rot) {
     elSel.style.transformOrigin = ((tr.px + tr.x - m.x) * W) + 'px ' + ((tr.py + tr.y - m.y) * H) + 'px';
     elSel.style.transform = 'rotate(' + tr.rot + 'deg)';
@@ -5464,7 +6054,7 @@ function openTextEditor(L) {
   fillTextArea();
 
   // 摆在图层旁边（贴着上边，尽量不挡住它）
-  const m = applyMoveScale(layerBaseBox(L), L.transform);
+  const m = applyMoveScale(layerBaseBox(L), layerTrAt(L));
   const W = editLayerEl.clientWidth, H = editLayerEl.clientHeight;
   const x = m ? m.x * W + m.w * W + 10 : 12;
   const y = m ? m.y * H : 12;
@@ -5811,6 +6401,9 @@ initAgentPanel({
 window.MotionKit = {
   state, off, Scene, Layer, Caption, BeatMap,
   templates: listTemplates, registerAll,
+  // 注册一个自己的模板（自检 / 用外部脚本做实验时用）。
+  // 注意 listTemplates() 每次返回的是**新数组**，往它上面 push 是没用的 —— 要在这里注册。
+  registerTemplate,
   renderAt, setScene(json) {
     state.scene = Scene.fromJSON(json);
     state.selection = null;
@@ -5821,6 +6414,9 @@ window.MotionKit = {
     syncTransitionLayers();
     resize(); drawTimeline(); renderRight(); updateBeatInfo();
     if (state.scene.clips.length) restoreAssets();
+    // 立刻按新工程画一帧：不画的话 off.canvas 里还是上一份工程的内容，
+    // 外部脚本（自检 / 自动化）刚 setScene 就读像素会读到旧画面。
+    renderAt(state.t); blit();
     return state.scene;
   },
   blit,
@@ -5876,6 +6472,105 @@ window.MotionKit = {
       L.transform = tr ? Object.assign({ x: 0, y: 0, scale: 1, rot: 0, px: 0.5, py: 0.5 }, tr) : null;
       markIndexDirty(); renderAt(state.t); blit();
       return L.transform;
+    },
+    // ---- 关键帧 / 蒙版（自检与自动化用）----
+    /** 这一层的关键帧原始数据（null = 没动画） */
+    keys: (i) => {
+      const L = layerArgOf(i);
+      return L && L.keys ? JSON.parse(JSON.stringify(L.keys)) : null;
+    },
+    /** 某一刻实际生效的变换 / 不透明度（关键帧求值的结果） */
+    valueAt(i, t) {
+      const L = layerArgOf(i);
+      if (!L) return null;
+      const tt = t === undefined ? state.t : t;
+      return { transform: L.transformAt(tt), opacity: L.opacityAt(tt) };
+    },
+    keyCount: (i, prop) => {
+      const L = layerArgOf(i);
+      return L ? keyCount(L.keys, prop) : 0;
+    },
+    /** 静态挂关键帧（测试里给定轨道用） */
+    setKeys(i, keys) {
+      const L = layerArgOf(i);
+      if (!L) return null;
+      L.keys = keys ? JSON.parse(JSON.stringify(keys)) : null;
+      markIndexDirty(); renderAt(state.t); blit(); drawTimeline();
+      return L.keys;
+    },
+    keyAtPlayhead: (i, prop) => {
+      const L = layerArgOf(i);
+      if (!L) return false;
+      return !!L.keys && Array.isArray(L.keys[prop]) && keyIndexAt(L.keys[prop], layerSnapTime(L)) >= 0;
+    },
+    toggleKey: (i, prop) => {
+      const L = layerArgOf(i);
+      if (!L) return null;
+      state.kfProp = prop;
+      toggleKeyAtPlayhead(L, prop);
+      renderRight();
+      return { count: keyCount(L.keys, prop), keys: L.keys ? JSON.parse(JSON.stringify(L.keys)) : null };
+    },
+    autoKey: (on) => { if (on !== undefined) state.autoKey = !!on; return state.autoKey; },
+    kfProp: (p) => { if (p) state.kfProp = p; return state.kfProp; },
+    /** 时间轴上关键帧菱形的命中区（自检用来确认真画出来了） */
+    keyDots: () => [...keyDotMap.entries()].flatMap(([id, ds]) => ds.map((d) => ({ id, prop: d.prop, t: d.t, x: d.x, y: d.y, r: d.r }))),
+    setMask(i, mask) {
+      const L = layerArgOf(i);
+      if (!L) return null;
+      L.mask = mask ? normalizeMask(mask) : null;
+      markIndexDirty(); renderAt(state.t); blit(); renderRight(); drawTimeline();
+      return L.mask;
+    },
+    getMask: (i) => { const L = layerArgOf(i); return L ? L.mask : null; },
+    /**
+     * 蒙版"离屏 alpha"那条路用的临时画布（自检用）。
+     * 返回它上面还剩多少不透明 / 半透明像素 —— 羽化、反选这类蒙版到底有没有被削掉，
+     * 看这个比看最终画面准（最终画面还被模板自己画了什么影响）。
+     */
+    maskScratchStats(step) {
+      if (!maskScratch) return null;
+      const w = maskScratch.canvas.width, h = maskScratch.canvas.height;
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const cx2 = c.getContext('2d', { willReadFrequently: true });
+      cx2.drawImage(maskScratch.canvas, 0, 0);
+      const d = cx2.getImageData(0, 0, w, h).data;
+      const n = Math.max(1, Math.round(step || 8));
+      let opaque = 0, partial = 0, total = 0;
+      for (let y = 0; y < h; y += n) for (let x = 0; x < w; x += n) {
+        const i = (y * w + x) * 4;
+        total++;
+        if (d[i + 3] > 8) opaque++;
+        if (d[i + 3] > 8 && d[i + 3] < 247) partial++;
+      }
+      return { w, h, opaque, partial, total };
+    },
+    /** 数一数渲染结果里"有多少像素是被画到的"，用来验证蒙版真的裁掉了 */
+    opaqueStats(step) {
+      const s = state.scene;
+      const n = Math.max(1, Math.round(step || 1));
+      const c = document.createElement('canvas');
+      c.width = s.width; c.height = s.height;
+      const cx = c.getContext('2d', { willReadFrequently: true });
+      cx.drawImage(off.canvas, 0, 0, s.width, s.height);
+      const d = cx.getImageData(0, 0, s.width, s.height).data;
+      let opaque = 0, partial = 0, total = 0;
+      for (let y = 0; y < s.height; y += n) {
+        for (let x = 0; x < s.width; x += n) {
+          const i = (y * s.width + x) * 4;
+          total++;
+          const a = d[i + 3];
+          if (a > 8) opaque++;
+          if (a > 8 && a < 247) partial++;
+        }
+      }
+      return { opaque, partial, total, ratio: total ? opaque / total : 0 };
+    },
+    /** 预览画布相对视口的矩形（自检里换算鼠标坐标用） */
+    editRect: () => {
+      const r = editLayerEl.getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height };
     },
   // 导出：录一段视频（自检里会用，用来确认 MP4 这条线真的能出文件）
   renderVideoBlob: (want, includeMedia, opts) => renderVideoBlob(want, includeMedia, opts),

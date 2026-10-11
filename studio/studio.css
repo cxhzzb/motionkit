@@ -511,6 +511,35 @@ input[type="color"]:disabled { cursor: not-allowed; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto;
 }
 
+/* 关键帧动画（右栏「图层」页第三块） */
+.kf-dots { display: flex; align-items: center; gap: 3px; flex: 1 1 auto; flex-wrap: wrap; }
+.kf-dots-label { font-size: var(--fs-11); color: var(--dim); margin-right: 2px; white-space: nowrap; }
+.kf-dot {
+  width: 24px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 5px;
+  background: #17191e; color: #4b515c; cursor: pointer; font-size: 13px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.kf-dot:hover { border-color: #4a505b; color: #9aa2ae; }
+.kf-dot.has { color: #00e5ff; border-color: #24444d; }
+.kf-dot.at { background: #00323d; border-color: #00e5ff; color: #ffffff; }
+.kf-dot.cur { box-shadow: 0 0 0 1px rgba(0, 229, 255, .45); }
+.kf-list { margin-top: 8px; border-top: 1px solid #1e2126; }
+.kf-row {
+  display: flex; align-items: center; gap: 8px; padding: 5px 0;
+  border-bottom: 1px solid #1e2126; font-size: var(--fs-11);
+}
+.kf-row b { color: var(--ink); flex: 0 0 62px; font-weight: 600; }
+.kf-times {
+  flex: 1 1 auto; min-width: 0; color: var(--dim); font-family: var(--mono);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.kf-x {
+  flex: 0 0 auto; width: 22px; height: 22px; padding: 0; border-radius: 4px;
+  border: 1px solid transparent; background: transparent; color: var(--dim);
+  cursor: pointer; font-size: 14px; line-height: 1;
+}
+.kf-x:hover { border-color: #6b2a1a; background: #2a1210; color: #ff8a6a; }
+
 /* 转场弹窗 */
 .trans-dur { margin-bottom: 10px; }
 .dlg-grid .ex.sel { border-color: var(--accent); background: #25140f; }

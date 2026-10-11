@@ -4,63 +4,30 @@
 // 纯 JS，无依赖，可在浏览器与 Node 中同时运行。
 // ============================================================================
 
-export const TAU = Math.PI * 2;
+import {
+  TAU, clamp, lerp, invLerp, smoothstep, smootherstep, EASINGS, ease,
+} from './easing.js';
+import { normalizeKeys, valueAt, hasKeys } from './keyframes.js';
 
-// ---------------------------------------------------------------- 基础数学
-export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-export const lerp = (a, b, t) => a + (b - a) * t;
-export const invLerp = (a, b, v) => (b === a ? 0 : (v - a) / (b - a));
+// 数学与缓动曲线的实现搬到了 ./easing.js（关键帧模块也要用，放在这里会循环依赖），
+// 这里原样再导出一次，老代码 `import { clamp } from '../engine/core.js'` 全都还能用。
+export {
+  TAU, clamp, lerp, invLerp, smoothstep, smootherstep, EASINGS, ease,
+  easeLinear, easeInQuad, easeOutQuad, easeInOutQuad, easeInCubic, easeOutCubic,
+  easeInOutCubic, easeOutQuart, easeOutQuint, easeInExpo, easeOutExpo, easeInOutExpo,
+  easeOutBack, easeInBack, easeOutElastic, easeOutBounce, EASING_LABELS,
+} from './easing.js';
+export {
+  normalizeKeys, normalizeTrack, hasKeys, isAnimated, evalTrack, valueAt,
+  setKey, removeKey, moveKey, setKeyEasing, clearTrack, keyIndexAt, keyCount,
+  keyTimes, trackRange, animatedProps, keysOnBeats, isExpr, EXPR_NAMES,
+  KEY_PROPS, KEY_PROP_LABELS, KEY_EPS,
+} from './keyframes.js';
+
 export const mapRange = (v, a, b, c, d) => lerp(c, d, clamp(invLerp(a, b, v), 0, 1));
-export const smoothstep = (e0, e1, x) => {
-  const t = clamp((x - e0) / (e1 - e0 || 1e-9), 0, 1);
-  return t * t * (3 - 2 * t);
-};
-export const smootherstep = (e0, e1, x) => {
-  const t = clamp((x - e0) / (e1 - e0 || 1e-9), 0, 1);
-  return t * t * t * (t * (t * 6 - 15) + 10);
-};
 
 // ---------------------------------------------------------------- 缓动曲线
-export const easeLinear = (t) => t;
-export const easeInQuad = (t) => t * t;
-export const easeOutQuad = (t) => 1 - (1 - t) * (1 - t);
-export const easeInOutQuad = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
-export const easeInCubic = (t) => t * t * t;
-export const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
-export const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-export const easeOutQuart = (t) => 1 - Math.pow(1 - t, 4);
-export const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
-export const easeInExpo = (t) => (t <= 0 ? 0 : Math.pow(2, 10 * t - 10));
-export const easeOutExpo = (t) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
-export const easeInOutExpo = (t) =>
-  t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5 ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2;
-export const easeOutBack = (t, s = 1.70158) => 1 + (s + 1) * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2);
-export const easeInBack = (t, s = 1.70158) => (s + 1) * t * t * t - s * t * t;
-export const easeOutElastic = (t, amp = 1, period = 0.3) => {
-  if (t <= 0) return 0;
-  if (t >= 1) return 1;
-  return amp * Math.pow(2, -10 * t) * Math.sin(((t - period / 4) * TAU) / period) + 1;
-};
-export const easeOutBounce = (t) => {
-  const n = 7.5625, d = 2.75;
-  if (t < 1 / d) return n * t * t;
-  if (t < 2 / d) return n * (t -= 1.5 / d) * t + 0.75;
-  if (t < 2.5 / d) return n * (t -= 2.25 / d) * t + 0.9375;
-  return n * (t -= 2.625 / d) * t + 0.984375;
-};
-
-/** 常用曲线表，模板里可以直接按名字取用 */
-export const EASINGS = {
-  linear: easeLinear,
-  inQuad: easeInQuad, outQuad: easeOutQuad, inOutQuad: easeInOutQuad,
-  inCubic: easeInCubic, outCubic: easeOutCubic, inOutCubic: easeInOutCubic,
-  outQuart: easeOutQuart, outQuint: easeOutQuint,
-  inExpo: easeInExpo, outExpo: easeOutExpo, inOutExpo: easeInOutExpo,
-  outBack: easeOutBack, inBack: easeInBack,
-  outElastic: easeOutElastic, outBounce: easeOutBounce,
-  smooth: (t) => smoothstep(0, 1, t),
-};
-export const ease = (name, t) => (EASINGS[name] || easeOutCubic)(clamp(t, 0, 1));
+// 实现见 ./easing.js，本文件在开头已 re-export（模板里照旧用 EASINGS / ease）。
 
 /**
  * 卡点脉冲：在周期内的前 width 比例处产生 1 -> 0 的衰减。
@@ -192,7 +159,7 @@ export class BeatMap {
  * 模板只负责画自己的东西，时间的解释权全部交给引擎。
  */
 export class Layer {
-  constructor({ template, start = 0, end = 1, params = {}, seed = null, opacity = 1, blend = 'source-over', enabled = true, name = '', transform = null, group = '', meta = null } = {}) {
+  constructor({ template, start = 0, end = 1, params = {}, seed = null, opacity = 1, blend = 'source-over', enabled = true, name = '', transform = null, group = '', meta = null, keys = null, mask = null } = {}) {
     this.id = Layer._id++;
     this.template = template;          // 模板 id 字符串
     this.start = start;
@@ -204,13 +171,46 @@ export class Layer {
     this.enabled = enabled;
     this.name = name || template;
     this.transform = normalizeTransform(transform);
+    this.keys = normalizeKeys(keys);   // 关键帧：{ x: [{t,v,e}], scale: [...], … }（t 是相对图层起点）
+    this.mask = normalizeMask(mask);   // 蒙版 / 裁剪（见 normalizeMask）
     this.group = group;                // 来源分组，比如 "beat" = 卡点批量铺出来的
     this.meta = meta;                  // 附加归属（比如"这个转场层挂在哪个片段上"），不用就不落盘
   }
   get duration() { return Math.max(0, this.end - this.start); }
   covers(t) { return this.enabled && t >= this.start && t < this.end; }
+  /** 这一层有没有关键帧动画 */
+  get animated() { return hasKeys(this.keys); }
+  /**
+   * 某一时刻的变换 —— 有关键帧的通道按关键帧走，没有的用静态值。
+   * t 是**绝对时间**（秒），内部转成相对图层起点，所以图层整体挪动时动画跟着走。
+   *
+   * 注意：静态值恒等且没有任何关键帧时返回 null，跟老工程保持一致（不多出一堆字段）。
+   */
+  transformAt(t) {
+    const base = this.transform;
+    if (!hasKeys(this.keys)) return base;
+    const local = t - this.start;
+    const b = base || { x: 0, y: 0, scale: 1, rot: 0, px: 0.5, py: 0.5 };
+    // 注意：挂了关键帧就总是返回对象，哪怕这一刻算出来正好是恒等（比如位移回到 0）。
+    // 返回 null 会让调用方以为"没有变换"，拖动 / 命中测试就对不上了。
+    return {
+      x: valueAt(this.keys, 'x', local, b.x),
+      y: valueAt(this.keys, 'y', local, b.y),
+      scale: valueAt(this.keys, 'scale', local, b.scale),
+      rot: valueAt(this.keys, 'rot', local, b.rot),
+      px: valueAt(this.keys, 'px', local, b.px),
+      py: valueAt(this.keys, 'py', local, b.py),
+    };
+  }
+  /** 某一时刻的不透明度（可挂关键帧） */
+  opacityAt(t) {
+    if (!hasKeys(this.keys)) return this.opacity;
+    return clamp(valueAt(this.keys, 'opacity', t - this.start, this.opacity), 0, 1);
+  }
   toJSON() {
     const o = { template: this.template, start: this.start, end: this.end, params: this.params, seed: this.seed, opacity: this.opacity, blend: this.blend, enabled: this.enabled, name: this.name, transform: this.transform };
+    if (hasKeys(this.keys)) o.keys = this.keys;     // 没动画就不落盘
+    if (this.mask) o.mask = this.mask;
     if (this.group) o.group = this.group;   // 没分组就不落盘，免得工程文件里全是空字段
     if (this.meta) o.meta = this.meta;
     return o;
@@ -246,6 +246,117 @@ export function normalizeTransform(tr) {
   if (!o.x && !o.y && o.scale === 1 && !o.rot) return null;
   return o;
 }
+
+// ---------------------------------------------------------------- 蒙版 / 裁剪
+/** 蒙版形状 */
+export const MASK_SHAPES = ['rect', 'round', 'ellipse', 'poly'];
+export const MASK_SHAPE_LABELS = { rect: '矩形', round: '圆角矩形', ellipse: '椭圆', poly: '多边形' };
+
+/**
+ * 蒙版 —— 挂在图层上的"裁剪框"，把这一层画出来的东西裁成一块。
+ *
+ *   shape   'rect' 直角矩形 | 'round' 圆角矩形 | 'ellipse' 椭圆 | 'poly' 多边形
+ *   x, y    裁剪框左上角，归一化画布坐标（0..1）—— 跟 transform 一个单位，换分辨率不走形
+ *   w, h    裁剪框尺寸，同样是归一化值
+ *   radius  圆角半径（占框短边的比例，0~0.5）—— 'round' 用；画中画圆角就靠它
+ *   feather 边缘羽化（占框短边的比例，0~0.5）：0 = 硬边
+ *   invert  反选：只裁掉框内（做"挖个洞"用）
+ *   points  'poly' 用：[[x,y], …] 归一化画布坐标
+ *   stroke  描边：{ width, color } —— width 是占框宽度的比例，画中画的边框
+ */
+export function normalizeMask(m) {
+  if (!m) return null;
+  const shape = MASK_SHAPES.includes(m.shape) ? m.shape : 'rect';
+  const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
+  const o = {
+    shape,
+    x: num(m.x, 0), y: num(m.y, 0),
+    w: Math.max(1e-4, num(m.w, 1)), h: Math.max(1e-4, num(m.h, 1)),
+  };
+  const radius = clamp(num(m.radius, shape === 'round' ? 0.12 : 0), 0, 0.5);
+  const feather = clamp(num(m.feather, 0), 0, 0.5);
+  if (radius) o.radius = radius;
+  if (feather) o.feather = feather;
+  if (m.invert) o.invert = true;
+  if (Array.isArray(m.points) && m.points.length >= 3) {
+    o.points = m.points
+      .filter((p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])))
+      .map((p) => [Number(p[0]), Number(p[1])]);
+    if (o.points.length < 3) delete o.points;
+  }
+  if (shape === 'poly') {
+    if (!o.points) o.shape = 'rect';        // 多边形缺点就退回矩形，别画出个空的
+    else if (!polyCoversWholeFrame(o.points)) return o;   // 多边形只要不是"正好整幅"就得留下
+  }
+  if (m.stroke && Number(m.stroke.width) > 0) {
+    o.stroke = { width: Math.max(0, num(m.stroke.width, 0)), color: m.stroke.color || '#ffffff' };
+  }
+  // 整幅裁剪 = 什么都没裁，而且没羽化 / 描边 / 反选 / 圆角 → 不落盘。
+  // 注意多边形要单独判断：一个覆盖整幅的三角形，w/h 也是 1，但它**确实在裁**。
+  if (!o.invert && !o.radius && !o.feather && !o.stroke && o.x === 0 && o.y === 0 && o.w >= 1 && o.h >= 1) return null;
+  return o;
+}
+
+/**
+ * 这组点是不是正好沿着画幅四边走一圈（也就是"其实什么都没裁"）。
+ * 逐条边取中点采样，只要有一条边的中点落在画幅内部，就说明它真的裁掉了东西。
+ */
+function polyCoversWholeFrame(points) {
+  const onEdge = (p) => {
+    const [x, y] = p;
+    const nearL = Math.abs(x) < 1e-6, nearR = Math.abs(x - 1) < 1e-6;
+    const nearT = Math.abs(y) < 1e-6, nearB = Math.abs(y - 1) < 1e-6;
+    return ((nearL || nearR) && y >= -1e-6 && y <= 1 + 1e-6)
+      || ((nearT || nearB) && x >= -1e-6 && x <= 1 + 1e-6);
+  };
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    if (!onEdge(a) || !onEdge(mid)) return false;
+  }
+  return true;
+}
+
+/**
+ * 把一个蒙版描述成"画到 ctx 上的路径"（已经换算成像素）。
+ * 抽出来是为了让"裁剪用的 clip()"和"羽化 / 反选用到的离屏 alpha"共用同一份几何。
+ */
+export function maskPath(ctx, mask, width, height, inset = 0) {
+  const x = mask.x * width + inset;
+  const y = mask.y * height + inset;
+  const w = Math.max(1e-3, mask.w * width - inset * 2);
+  const h = Math.max(1e-3, mask.h * height - inset * 2);
+  ctx.beginPath();
+  if (mask.shape === 'ellipse') {
+    ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, TAU);
+    return { x, y, w, h };
+  }
+  if (mask.shape === 'poly' && mask.points) {
+    const pts = mask.points;
+    ctx.moveTo(pts[0][0] * width, pts[0][1] * height);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0] * width, pts[i][1] * height);
+    ctx.closePath();
+    return { x, y, w, h };
+  }
+  const r = Math.max(0, Math.min(mask.radius || 0, 0.5) * Math.min(w, h));
+  if (typeof ctx.roundRect === 'function') ctx.roundRect(x, y, w, h, r);
+  else {
+    // 老浏览器兜底：手动画圆角
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+  return { x, y, w, h };
+}
+
+/** 这个蒙版要不要走"离屏 alpha"那条重路径（羽化 / 反选 / 多边形都得走） */
+export const maskNeedsAlpha = (mask) =>
+  !!mask && (!!mask.feather || !!mask.invert || mask.shape === 'poly' || !!mask.stroke);
 
 /** 一段字幕（供字幕类模板消费） */
 export class Caption {
@@ -425,7 +536,7 @@ export function listTemplates(filter) {
  * @param {CanvasRenderingContext2D} ctx  目标 2D 上下文
  * @param {Scene} scene
  * @param {number} t  时间（秒）
- * @param {object} deps  { fxRunner, onLayer }
+ * @param {object} deps  { fxRunner, onLayer, scratch, silent }
  */
 export function renderFrame(ctx, scene, t, deps = {}) {
   const { width, height } = scene;
@@ -445,6 +556,16 @@ export function renderFrame(ctx, scene, t, deps = {}) {
     const progress = clamp(local / dur, 0, 1);
     const rng = new Rng(layer.seed);
 
+    // 关键帧求值的上下文：@beat / @t / @progress 这些表达式靠它
+    const kctx = {
+      t, local, progress, duration: dur,
+      frame: scene.frameIndex(t), fps: scene.fps,
+      width, height,
+      beatIndex: scene.beat.indexAt(t),
+      beatPhase: scene.beat.phase(t),
+      beatProgress: scene.beat.beatProgress(t),
+    };
+
     const env = {
       scene, layer, template: tpl,
       t, local, duration: dur, progress,
@@ -461,26 +582,74 @@ export function renderFrame(ctx, scene, t, deps = {}) {
       util: deps.util,
     };
 
-    ctx.save();
-    ctx.globalAlpha = layer.opacity;
-    ctx.globalCompositeOperation = layer.blend || 'source-over';
-      // 图层变换：先位移，再绕支点旋转 / 缩放。支点用归一化画布坐标，
-      // 所以同一份工程在任意分辨率下渲染出来的相对位置是一致的。
-      const tr = layer.transform;
-      if (tr) {
-        const px = tr.px * width, py = tr.py * height;
-        ctx.translate(tr.x * width, tr.y * height);
-        ctx.translate(px, py);
-        if (tr.rot) ctx.rotate((tr.rot * Math.PI) / 180);
-        if (tr.scale !== 1) ctx.scale(tr.scale, tr.scale);
-        ctx.translate(-px, -py);
+    const tr = layer.transformAt(t);
+    const alpha = layer.opacityAt(t);
+    const mask = layer.mask;
+
+    // ---- 选中"走哪条路"：
+    //  没有蒙版，或只是硬边矩形/椭圆/圆角矩形 → 直接在总画布上裁剪，省一次离屏
+    //  有羽化 / 反选 / 多边形 / 描边 → 离屏画一遍，用 alpha 合成（慢一点但准）
+    //
+    // 两条路**只能走一条**。以前是"总画布上无条件画一遍 + 需要时再在离屏上画一遍"，
+    // 结果需要蒙版时总画布上已经留了一份没被裁过的像素，蒙版再怎么削也削不掉它 ——
+    // 羽化 / 反选 / 多边形 / 描边全都会静默失效（只剩硬边裁剪那条路看着是对的）。
+    const needsAlpha = maskNeedsAlpha(mask);
+    const scratch = needsAlpha ? ensureScratch(deps, width, height) : null;
+    const useScratch = !!(scratch && scratch.ok);
+
+    // 图层变换：先位移，再绕支点旋转 / 缩放。支点用归一化画布坐标，
+    // 所以同一份工程在任意分辨率下渲染出来的相对位置是一致的。
+    const applyLayerTransform = (c) => {
+      if (!tr) return;
+      const px = tr.px * width, py = tr.py * height;
+      c.translate(tr.x * width, tr.y * height);
+      c.translate(px, py);
+      if (tr.rot) c.rotate((tr.rot * Math.PI) / 180);
+      if (tr.scale !== 1) c.scale(tr.scale, tr.scale);
+      c.translate(-px, -py);
+    };
+
+    if (useScratch) {
+      // 先单独画到离屏，按蒙版削掉 alpha，再整体贴回总画布
+      const sc = scratch.ctx;
+      sc.setTransform(1, 0, 0, 1, 0, 0);
+      sc.clearRect(0, 0, width, height);
+      sc.save();
+      applyLayerTransform(sc);
+      try {
+        tpl.draw(sc, env);
+      } catch (err) {
+        if (!deps.silent) console.error(`[template:${layer.template}]`, err);
       }
-    try {
-      tpl.draw(ctx, env);
-    } catch (err) {
-      if (!deps.silent) console.error(`[template:${layer.template}]`, err);
+      sc.restore();
+      applyMaskAlpha(sc, mask, width, height);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.globalCompositeOperation = layer.blend || 'source-over';
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(scratch.canvas, 0, 0, width, height);
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.globalCompositeOperation = layer.blend || 'source-over';
+      applyLayerTransform(ctx);
+      if (mask) {
+        // 硬边裁剪：直接把模板画进裁剪区
+        ctx.save();
+        maskPath(ctx, mask, width, height);
+        ctx.clip();
+      }
+      try {
+        tpl.draw(ctx, env);
+      } catch (err) {
+        if (!deps.silent) console.error(`[template:${layer.template}]`, err);
+      }
+      if (mask) ctx.restore();
+      ctx.restore();
     }
-    ctx.restore();
+
     deps.onLayer?.(layer, env);
   }
 
@@ -489,6 +658,94 @@ export function renderFrame(ctx, scene, t, deps = {}) {
   if (scene.fx && scene.fx.length && deps.fxRunner) {
     deps.fxRunner(ctx, scene, t);
   }
+}
+
+/** 拿一块和画布等大的离屏（优先用调用方给的，避免每帧新建 canvas） */
+function ensureScratch(deps, width, height) {
+  if (typeof deps.scratch === 'function') {
+    const s = deps.scratch(width, height);
+    return s ? { ...s, ok: true } : { ok: false };
+  }
+  const provided = deps.scratch;
+  if (provided && provided.canvas && provided.ctx) {
+    if (provided.canvas.width !== width || provided.canvas.height !== height) {
+      provided.canvas.width = width; provided.canvas.height = height;
+    }
+    return { ...provided, ok: true };
+  }
+  return { ok: false };
+}
+
+/**
+ * 画一圈"羽化边"：从形状边缘往里，铺 n 层由内到外逐渐变淡的描边。
+ *
+ * 为什么不用一条 createLinearGradient 描边了事：canvas 的描边只有**一个渐变轴**，
+ * 只能让跟轴垂直的那两条边有渐变，另两条边还是硬邦邦的；而且 roundRect 会把半径
+ * 夹到 min(w,h)/2，负 inset 直接被吃掉、描边画到形状外面再被裁掉 —— 羽化会静默失效。
+ * 分层描边四个方向一致，角上也自然。
+ */
+function featherRing(sc, mask, width, height, feather) {
+  const n = 5;
+  for (let i = n; i >= 1; i--) {
+    const inset = (feather * i) / n;
+    sc.save();
+    maskPath(sc, mask, width, height);
+    sc.clip();                                    // 裁在形状里，羽化不会长到蒙版外面
+    maskPath(sc, mask, width, height, inset);      // 一圈比形状小一点的边
+    sc.lineWidth = (feather * 2) / n + 1;
+    sc.strokeStyle = `rgba(255,255,255,${(1 - i / (n + 1)).toFixed(3)})`;
+    sc.stroke();
+    sc.restore();
+  }
+}
+
+/**
+ * 把蒙版的形状削进离屏画布的 alpha 通道。
+ *   - 硬边：destination-in 填一块白
+ *   - 羽化：形状内先填满，再从边缘往内叠几层渐变描边把边削软
+ *   - 反选：整幅白，再用 destination-out 把形状挖掉
+ *   - 描边：最后用 source-over 画边框（画中画那个圈），外半圈在削蒙版时被切掉
+ */
+function applyMaskAlpha(sc, mask, width, height) {
+  const span = Math.min(mask.w * width, mask.h * height);   // 半径 / 羽化都按短边算，换比例不走形
+  const feather = (mask.feather || 0) * span;
+
+  sc.save();
+  sc.setTransform(1, 0, 0, 1, 0, 0);
+
+  if (mask.invert) {
+    // 反选：整幅留白，把形状挖掉。destination-out 会把已经画好的 alpha 减掉
+    sc.globalCompositeOperation = 'source-over';
+    sc.fillStyle = '#fff';
+    sc.fillRect(0, 0, width, height);
+    sc.globalCompositeOperation = 'destination-out';
+    maskPath(sc, mask, width, height);
+    sc.fillStyle = '#fff';
+    sc.fill();
+  } else {
+    // 形状内部先按原样保留下来
+    sc.globalCompositeOperation = 'destination-in';
+    maskPath(sc, mask, width, height);
+    sc.fillStyle = '#fff';
+    sc.fill();
+    // 再把边削软
+    if (feather > 0.5) {
+      sc.globalCompositeOperation = 'destination-out';
+      featherRing(sc, mask, width, height, feather);
+    }
+  }
+
+  // 描边：先于"削蒙版"画，所以外半圈在削的时候被切掉 —— 正好留一条贴在画面内侧的干净边
+  if (mask.stroke && mask.stroke.width > 0) {
+    sc.globalCompositeOperation = 'source-over';
+    const lw = mask.stroke.width * mask.w * width;
+    maskPath(sc, mask, width, height);
+    sc.lineWidth = lw;
+    sc.strokeStyle = mask.stroke.color || '#ffffff';
+    sc.stroke();
+  }
+
+  sc.restore();
 }
 
 /** 取模板参数默认值 */

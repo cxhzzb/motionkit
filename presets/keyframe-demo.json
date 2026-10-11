@@ -1,0 +1,93 @@
+{
+  "name": "关键帧 / 蒙版 演示",
+  "width": 1920,
+  "height": 1080,
+  "fps": 24,
+  "duration": 6,
+  "bg": null,
+  "transparent": true,
+  "beat": { "bpm": 120, "offset": 0, "duration": 6, "source": "bpm" },
+  "layers": [
+    {
+      "template": "hud-frame",
+      "start": 0,
+      "end": 6,
+      "params": { "color": "#00e5ff", "accent": "#ff4b1f", "timecode": true, "rulers": true, "meter": true },
+      "seed": "kf-hud",
+      "opacity": 1,
+      "blend": "source-over",
+      "enabled": true,
+      "name": "底噪 HUD",
+      "keys": {
+        "opacity": [{ "t": 0, "v": 0, "e": "outCubic" }, { "t": 0.8, "v": 0.85, "e": "linear" }, { "t": 5.2, "v": 0.85, "e": "inCubic" }, { "t": 6, "v": 0 }]
+      }
+    },
+    {
+      "template": "stat-counter",
+      "start": 0.6,
+      "end": 5.4,
+      "params": { "value": 2048, "unit": "FPS", "color": "#ffffff" },
+      "seed": "kf-counter",
+      "opacity": 1,
+      "blend": "source-over",
+      "enabled": true,
+      "name": "位移 + 缩放关键帧",
+      "keys": {
+        "x": [{ "t": 0, "v": -0.38, "e": "outCubic" }, { "t": 1.2, "v": -0.3, "e": "outBack" }, { "t": 3.4, "v": 0.3, "e": "inOutCubic" }, { "t": 4.8, "v": 0.38 }],
+        "y": [{ "t": 0, "v": -0.3, "e": "outCubic" }, { "t": 3.4, "v": 0.26 }],
+        "scale": [{ "t": 0, "v": 0.6, "e": "outBack" }, { "t": 1.4, "v": 1.15, "e": "inOutCubic" }, { "t": 3.4, "v": 0.8 }, { "t": 4.8, "v": 1.4 }]
+      }
+    },
+    {
+      "template": "radar-sweep",
+      "start": 0,
+      "end": 6,
+      "params": { "color": "#39ff88", "size": 420 },
+      "seed": "kf-radar",
+      "opacity": 1,
+      "blend": "source-over",
+      "enabled": true,
+      "name": "旋转关键帧",
+      "keys": {
+        "rot": [{ "t": 0, "v": 0, "e": "linear" }, { "t": 6, "v": 180 }]
+      }
+    },
+    {
+      "template": "hud-frame",
+      "start": 0,
+      "end": 6,
+      "params": { "color": "#ffd166", "timecode": false, "tickerTop": false, "tickerBottom": false, "meter": false },
+      "seed": "kf-pip",
+      "opacity": 1,
+      "blend": "source-over",
+      "enabled": true,
+      "name": "画中画（圆角 + 描边 + 羽化）",
+      "mask": {
+        "shape": "round",
+        "x": 0.62,
+        "y": 0.58,
+        "w": 0.32,
+        "h": 0.34,
+        "radius": 0.16,
+        "feather": 0.04,
+        "stroke": { "width": 0.012, "color": "#ffd166" }
+      },
+      "transform": { "x": 0, "y": 0, "scale": 1, "rot": 0, "px": 0.5, "py": 0.5 }
+    },
+    {
+      "template": "ticker-strip",
+      "start": 1.0,
+      "end": 5.2,
+      "params": { "color": "#39ff88" },
+      "seed": "kf-feather",
+      "opacity": 1,
+      "blend": "source-over",
+      "enabled": true,
+      "name": "羽化矩形蒙版（边缘是软的）",
+      "mask": { "shape": "rect", "x": 0.06, "y": 0.14, "w": 0.44, "h": 0.22, "feather": 0.18 }
+    }
+  ],
+  "captions": [],
+  "clips": [],
+  "fx": []
+}
