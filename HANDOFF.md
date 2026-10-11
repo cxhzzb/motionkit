@@ -1,4 +1,4 @@
-# 交接说明（HANDOFF）
+﻿# 交接说明（HANDOFF）
 
 > 更新于 **2026-10-12**，给「下一个接手这个项目的人 / 另一个 AI 会话」看的。
 > 这份文件说明：**现在代码是什么状态、最近这一轮改了什么、下一步该干什么、有哪些坑**。
@@ -145,6 +145,10 @@ layer.mask = {
   高通真的砍掉 80Hz、低通真的收掉 9kHz、门限把安静段压到 0 而**响内容一丝不动**、
   门限曲线阈值以上严格恒等且是奇函数、关掉降噪时输出与输入逐样本相同、
   参数落盘读回、右栏面板齐全、自动分析能认出低频轰鸣
+- `tools/ui-delete-test.js` — **界面级，26 项**：
+  点动效图层之后片段选中必须让位、`Del` 删的到底是谁（两边各验一遍，互相不许误伤）、
+  误删之后 `Ctrl+Z` 能把片段救回来、素材缓存在宽限期内不许被抹掉、
+  过了宽限期才真回收
 
 ---
 
@@ -166,6 +170,17 @@ layer.mask = {
 ?? tools/keyframe-test.mjs          # 引擎级自检（59 项）
 ?? tools/ui-keyframe-test.js        # 界面级自检（53 项）
 ?? docs/preview-keyframes.png       # README 预览图
+```
+
+**第三批**：修"想删动效却把视频/音频删了"
+
+```
+ M README.md                        # 新增「Del 到底会删掉什么」一节
+ M HANDOFF.md                       # 这一份（含 4.6 节那三个坑）
+ M dist/studio.html                 # 重新打包（761.8 KB / 28 个模块）
+ M docs/命令速查.md                  # 删除归属的自检命令
+ M studio/studio.js                 # 两种选中互斥、删除前封存历史点、素材 5 分钟宽限期
+?? tools/ui-delete-test.js          # 回归自检（26 项）
 ```
 
 **第二批**：音频降噪
@@ -240,7 +255,38 @@ layer.mask = {
 判断门限对不对，只要问一句："**阈值以上的内容有没有被动过？**"
 自检就是这么验的：拿 0.5 / 0.3 两种幅度的正弦过一遍门限，要求 RMS 变化 < 3%。
 
-### 4.6 老坑（仍然有效）
+### 4.6 "想删一个动效，结果把视频/音频整条删掉了"（用户实际报的 bug）
+
+两个各自独立的原因叠在一起，都会造成同一现象：
+
+1. **图层选中和片段选中是两套互不相干的状态**：`state.selection`（图层）和
+   `state.clipSel`（素材片段）谁都不清谁。而 Delete 键的判断是
+   `if (selectedClip()) deleteSelectedClip(); else deleteSelectedLayers();` ——
+   只要有片段选中就**优先删片段**。载入视频/音乐会自动选中新片段，之后用户点一个
+   动效图层（`selectLayer()` 只设 `state.selection`），`clipSel` 还留着 →
+   按 Delete 删掉的是底下的视频/音频，连素材一起释放。
+   **修法**：两种选中做成互斥，全部收敛到 `selectClip()` / `selectClipOnly()` /
+   `selectLayer()` 三个函数，任何时刻只有一种东西是"选中"的。
+
+2. **历史会把"删除前"那一版吃掉**：`historyTick()` 默认把 800ms 内的改动并成一条。
+   "刚改完就删"时，删除前那一版还没被记录，紧接着的 tick 记录的是删除后的状态，
+   Ctrl+Z 只能回到更早的某一点 —— 片段救不回来。
+   **修法**：删除前 `historyTick(true)` 强开一条并**封存**（`history.sealed`），
+   后续 tick 不再并进它。注意**两个坑**：光 force 开新记录不够（下一次自动 tick
+   还会并进去，所以必须一起封存）；而且 force 时不能因为
+   `json === history.last` 就 early-return（那一刻栈顶往往还是更早的一版，
+   得先把中间版补进去），否则"删之前"这个点根本没落到栈上。
+
+3. **素材缓存被立刻抹掉**：`releaseAssetIfUnused()` 原来判定没人用就立刻
+   `idbDel('asset:'+id)`。撤销只还原工程 JSON，素材二进制是单独存的，
+   所以"误删 → 撤销"会把片段还原回来、素材却没了，画面是空的。
+   **修法**：加 5 分钟宽限期（`pendingAssetPurge`），过了才真回收；
+   同时 `restoreHistory()` 补一次 `restoreAssets()` 从 IndexedDB 回读。
+
+回归自检：`tools/ui-delete-test.js`（26 项）。这个 bug 的价值在于 ——
+它证明了"自检不能只验功能对不对，还得验**破坏性操作打到了谁**"。
+
+### 4.7 老坑（仍然有效）
 
 - **版本号两处**：`tools/serve.mjs:APP_VERSION` ↔ `studio/studio.js:NEED`，加接口必须同时 +1
 - **`dist/studio.html` 必须重新打包**才算改完

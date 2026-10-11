@@ -10973,7 +10973,7 @@ function fmtShort(t) {
  *   · 松手后 800ms 内的小改动并进上一条，免得打字打十个字留下十条历史。
  */
 const HISTORY_MAX = 60;
-const history = { list: [], at: -1, last: '', lastAt: 0 };
+const history = { list: [], at: -1, last: '', lastAt: 0, sealed: new Set() };  // sealed = 被 force 封存、不许再被合并改写的快照下标
 function busyEditing() { return !!(pdrag || dragClip || marquee || tlMarquee || drag || scrubbing); }
 
 function historyReset() {
@@ -10985,19 +10985,43 @@ function historyReset() {
   updateToolButtons();
 }
 
-function historyTick() {
+/**
+ * 记一笔历史。
+ *
+ * `force = true` 时**强制开一条新记录**，不并进上一条。
+ * 这个参数是给"删除"这类破坏性操作用的：历史默认会把 800ms 内的改动并成一条
+ * （连续拖参数不至于记几百笔），但那样一来"刚改完就删"会把**删除前**那一版
+ * 覆盖掉，Ctrl+Z 只能回到更早的某一点 —— 片段救不回来（真踩过）。
+ * 所以删除前先 force 记一笔，保证"删之前"永远有一个可回退的点。
+ */
+function historyTick(force) {
   if (busyEditing()) return;
   let json = '';
   try { json = JSON.stringify(state.scene.toJSON()); } catch (_) { return; }
-  if (json === history.last) return;
+  if (json === history.last && !force) return;
   const now = Date.now();
-  if (now - history.lastAt < 800 && history.at > 0) {
+  const canMerge = !force && now - history.lastAt < 800 && history.at > 0
+    && !history.sealed.has(history.at);        // 封存的那条不许被改写
+  if (canMerge) {
     history.list[history.at] = json;          // 并进上一条
   } else {
     history.list = history.list.slice(0, history.at + 1);
+    // force 且最后一次记录还比当前栈顶新 —— 说明栈顶是更早的一版（还没被 tick 收进来），
+    // 先把"当前状态"以外的那个中间版补进去，再放当前状态。
+    // 这样"改一下 → 马上删"时，撤销是回到改动**之后**、删除之前，而不是一路退到改动之前去。
+    if (force && history.at >= 0 && history.list[history.at] !== json && history.last !== history.list[history.at]) {
+      history.list.push(history.last);
+    }
     history.list.push(json);
     if (history.list.length > HISTORY_MAX) history.list.shift();
     history.at = history.list.length - 1;
+    // 超出上限被 shift 掉时，旧的封存标记整体前移一位
+    if (history.at >= HISTORY_MAX) {
+      const moved = new Set();
+      for (const i of history.sealed) if (i - 1 >= 0) moved.add(i - 1);
+      history.sealed = moved;
+    }
+    if (force) history.sealed.add(history.at); else history.sealed.delete(history.at);
   }
   history.last = json;
   history.lastAt = now;
@@ -11023,8 +11047,14 @@ function restoreHistory(json) {
   state.scene = Scene.fromJSON(JSON.parse(json));
   state.selection = null;
   state.selected = new Set();
-  state.clipSel = state.scene.clips.some((c) => c.id === clipSel) ? clipSel : null;
+  selectClip(state.scene.clips.some((c) => c.id === clipSel) ? clipSel : null);
   syncTransitionLayers();
+  // 撤销可能把"刚被删掉的片段"还原回来。素材的二进制不在工程 JSON 里，
+  // 而是单独存在 IndexedDB，所以这里要按 assetId 把它接回来 ——
+  // 否则片段是回来了、画面却是空的，看着像撤销没生效。
+  if (state.scene.clips.length) {
+    restoreAssets().then((n) => { if (n) { renderAt(state.t); blit(); } });
+  }
   markIndexDirty();
   resize(); drawTimeline(); renderRight(); renderAt(t); blit();
   autosaveNow(true);
@@ -11035,7 +11065,7 @@ function duplicateSelectedClip() {
   if (!c) { toast('先点一个片段'); return null; }
   const copy = new Clip(Object.assign({}, c.toJSON(), { id: null, start: c.end }));
   state.scene.clips.push(copy);
-  state.clipSel = copy.id;
+  selectClip(copy.id);
   clipsFitDuration(); syncTransitionLayers(); markIndexDirty(); drawTimeline(); renderRight(); renderAt(state.t); blit();
   toast('复制了一段');
   return copy;
@@ -11251,26 +11281,59 @@ function splitClipAt(t) {
   });
   c.dur = t - c.start;
   state.scene.clips.push(right);
-  state.clipSel = right.id;
+  selectClip(right.id);
   syncTransitionLayers();
   markIndexDirty(); drawTimeline(); renderAt(state.t); blit(); renderRight();
   toast('在 ' + t.toFixed(2) + 's 切开');
   return right;
 }
 
-/** 释放一份不再被时间轴引用的素材，包括预览元素、URL 和 IndexedDB 缓存。 */
+/**
+ * 素材"没人用了"之后**先留一会儿**，不马上从 IndexedDB 里删。
+ *
+ * 为什么：Ctrl+Z 只还原工程 JSON（`restoreHistory`），素材的二进制是存在 IndexedDB 里
+ * 另外管的。原来这里判定"没片段引用"就立刻 `idbDel`，于是"误删片段 → 撤销"会把片段
+ * 还原回来、但素材已经没了，画面上是空的（等于撤销没救回来）。留个宽限期，
+ * 撤销就能真的恢复；超过宽限期才真正回收。
+ */
+const ASSET_GRACE_MS = 5 * 60 * 1000;
+const pendingAssetPurge = new Map();     // assetId -> 没人引用的起始时间
+
+/** 把过了宽限期的素材真正回收掉（由 autosaveNow 顺带驱动，不额外起定时器） */
+function reapPendingAssets() {
+  if (!pendingAssetPurge.size) return 0;
+  const now = Date.now();
+  let n = 0;
+  for (const [assetId, since] of [...pendingAssetPurge]) {
+    if (state.scene.clips.some((c) => c.assetId === assetId)) { pendingAssetPurge.delete(assetId); continue; }
+    if (now - since < ASSET_GRACE_MS) continue;
+    pendingAssetPurge.delete(assetId);
+    idbDel('asset:' + assetId).catch(() => {});
+    n++;
+  }
+  return n;
+}
+
+/**
+ * 释放一份不再被时间轴引用的素材：先把预览元素和内存里的记录清掉
+ * （画面立刻干净），但 IndexedDB 里的那份**留宽限期**，好让撤销能救回来。
+ * 返回是否清掉了预览里的素材。
+ */
 function releaseAssetIfUnused(assetId) {
-  if (!assetId || state.scene.clips.some((c) => c.assetId === assetId)) return false;
+  if (!assetId || state.scene.clips.some((c) => c.assetId === assetId)) {
+    if (assetId) pendingAssetPurge.delete(assetId);   // 又被引用了，取消待回收
+    return false;
+  }
   const a = assetById(assetId);
   if (!a) return false;
 
+  if (!pendingAssetPurge.has(assetId)) pendingAssetPurge.set(assetId, Date.now());
   state.assets.delete(assetId);
   if (a.el) {
     try { a.el.pause(); } catch (_) {}
     try { a.el.removeAttribute('src'); a.el.load(); } catch (_) {}
   }
   try { URL.revokeObjectURL(a.url); } catch (_) {}
-  idbDel('asset:' + assetId).catch(() => {});
 
   if (state.media.video === a.el) {
     state.media.video = null;
@@ -11278,7 +11341,6 @@ function releaseAssetIfUnused(assetId) {
     state.media.videoFile = null;
     state.media.videoMeta = null;
     state.media.videoDur = 0;
-    idbDel('video').catch(() => {});
   }
   if (state.media.audio === a.el) {
     state.media.audio = null;
@@ -11288,7 +11350,6 @@ function releaseAssetIfUnused(assetId) {
     state.media.audioDur = 0;
     state.media.peaks = null;
     state.analysis = null;
-    idbDel('audio').catch(() => {});
   }
   updateBeatInfo();
   applyAudio();
@@ -11299,12 +11360,18 @@ function deleteSelectedClip() {
   const c = selectedClip();
   if (!c) return 0;
   const assetId = c.assetId;
+  const label = c.name || (c.kind === 'audio' ? '音频' : c.kind === 'image' ? '图片' : '视频');
+  // 先记一笔历史：删除是"后果最不可见"的操作之一，撤销必须能一步回到删之前
+  historyTick(true);
   state.scene.clips = state.scene.clips.filter((x) => x.id !== c.id);
-  state.clipSel = null;
+  selectClip(null);
   const cleared = releaseAssetIfUnused(assetId);
   syncTransitionLayers();
   drawTimeline(); renderAt(state.t); blit(); renderRight();
-  toast(cleared ? '已删掉片段和素材' : '删掉片段');
+  // 文案里点名删了什么：以前只写"删掉片段"，用户分不清删掉的是自己想要的动效还是底下的素材
+  toast(cleared
+    ? `删掉了素材片段「${label}」——底片也撤下来了，5 分钟内 Ctrl+Z 都能救回来`
+    : `删掉了素材片段「${label}」（这份素材还有别的片段在用）`);
   return 1;
 }
 
@@ -11335,9 +11402,7 @@ tl.addEventListener('pointerdown', (e) => {
     if (hit) {
       const [id, g] = hit;
       const c = clipById(id);
-      state.clipSel = id;                 // 选片段
-      state.selection = null;             // 图层那边让位
-      state.selected = new Set();
+      selectClipOnly(id);                 // 选片段（图层那边让位）
       rightTab = 'clip';
       const edgeL = mx - g.x, edgeR = g.x + g.w - mx;
       dragClip = {
@@ -11350,7 +11415,7 @@ tl.addEventListener('pointerdown', (e) => {
       return;
     }
     // 点了媒体轨的空白：取消选中 + 播放头挪过去
-    state.clipSel = null;
+    selectClip(null);
     scrubbing = true;
     setTime(tlTimeAt(e.clientX));
     try { tl.setPointerCapture(e.pointerId); } catch (_) {}
@@ -12630,7 +12695,7 @@ function rightPanelClip(body) {
       tx.title = tx.textContent;
       tx.style.cursor = 'pointer';
       tx.addEventListener('click', () => {
-        state.clipSel = x.id;
+        selectClipOnly(x.id);
         rightTab = 'clip';
         setTime(x.start + x.dur / 2);
         renderRight(); drawTimeline();
@@ -12639,7 +12704,7 @@ function rightPanelClip(body) {
       del.textContent = '×';
       del.className = 'fx-del';
       del.title = '删掉这一段';
-      del.addEventListener('click', () => { state.clipSel = x.id; deleteSelectedClip(); });
+      del.addEventListener('click', () => { selectClip(x.id); deleteSelectedClip(); });
       r.appendChild(tx); r.appendChild(del);
       listBox.appendChild(r);
     });
@@ -13839,6 +13904,35 @@ function addClip(asset, opts = {}) {
   return c;
 }
 
+/**
+ * 选中一个素材片段。
+ *
+ * **必须和图层选中互斥**：`state.clipSel`（片段）和 `state.selection`（图层）
+ * 是两套独立的状态，Delete 键只看"有没有选中片段"就优先删片段。以前这里
+ * 只设 clipSel、不撤图层的选中，反过来 selectLayer 也不撤 clipSel ——
+ * 结果"点了个动效图层、按 Delete"会把视频/音频整条删掉（素材一起释放）。
+ * 所以两边都收敛到这一个函数，保证任何时刻只有一种东西是"选中"的。
+ */
+function selectClip(id) {
+  state.clipSel = id || null;
+}
+
+/**
+ * 选中片段，并且**亲手把图层选中撤掉**。
+ * 两处（时间轴点片段、点片段列表）都要这个语义：让"当前选中的东西"唯一，
+ * 否则 Delete 键该删谁是含糊的。
+ * 反过来 selectLayer() 会调 clearClipSelection()，所以不需要在这里再调它。
+ */
+function selectClipOnly(id) {
+  selectClip(id);
+  if (id != null) { state.selection = null; state.selected = new Set(); }
+}
+
+/** 选中图层时把片段选中撤掉，让 Delete 键只可能删一种东西 */
+function clearClipSelection() {
+  if (state.clipSel) state.clipSel = null;
+}
+
 function clipById(id) { return state.scene.clips.find((c) => c.id === id) || null; }
 function selectedClip() { return clipById(state.clipSel); }
 function sortClips() { state.scene.clips.sort((a, b) => a.start - b.start); }
@@ -14115,7 +14209,7 @@ async function loadVideoFile(file, opts = {}) {
   if (!opts.noClip) {
     // 第 2 段之后接在前一段后面（剪映那种"往后摞"），第一段落在时间轴开头
     const at = opts.start !== undefined ? opts.start : undefined;
-    state.clipSel = addClip(asset, { start: at }).id;
+    selectClipOnly(addClip(asset, { start: at }).id);
   }
   clipsFitDuration();
   if (!opts.keepDuration) applyAutoDuration(!opts.quiet);
@@ -14132,7 +14226,7 @@ async function loadAudioFile(file, opts = {}) {
   state.media.audioDur = asset.duration || state.media.audioDur;
   persistMedia('audio', file);
   if (!opts.noClip) {
-    state.clipSel = addClip(asset, { start: opts.start }).id;
+    selectClipOnly(addClip(asset, { start: opts.start }).id);
   }
   clipsFitDuration();
   a.muted = state.muted;
@@ -15992,6 +16086,8 @@ function selectLayer(id, mode) {
     // 主选 = 刚点的这个（如果被 toggle 掉了，就退回集合里的第一个）
     state.selection = state.selected.has(id) ? id : (selectedLayers()[0] || {}).id ?? null;
   }
+  // 选了图层就把片段选中撤掉：否则 Delete 键会去删视频/音频片段（真踩过）
+  clearClipSelection();
   if (state.selection != null) rightTab = 'layer';   // 选了图层就自动切到「图层」页
   if (elText) closeTextEditor();
   if (state.selection != null) scrollLayerIntoView(state.selection);
@@ -16009,12 +16105,13 @@ function deleteSelectedLayers() {
   if (!ids.size && state.selection != null) ids.add(state.selection);
   if (!ids.size) return 0;
   const n = ids.size;
+  historyTick(true);       // 删图层同样要能一步撤销（force：不被 800ms 合并吃掉）
   state.scene.layers = state.scene.layers.filter((L) => !ids.has(L.id));
   state.selected = new Set();
   state.selection = null;
   markIndexDirty();
   renderRight(); drawTimeline(); renderAt(state.t); blit();
-  toast(n > 1 ? `删掉 ${n} 层` : '删掉 1 层');
+  toast(n > 1 ? `删掉 ${n} 层动效（Ctrl+Z 可撤销）` : '删掉 1 层动效（Ctrl+Z 可撤销）');
   return n;
 }
 
@@ -16357,6 +16454,7 @@ function autosaveSnapshot() {
 /** 存一次。force=true 时不比对内容，直接写（关页面的时候用）。 */
 function autosaveNow(force) {
   if (NO_PERSIST) return false;
+  reapPendingAssets();     // 顺带把过了宽限期、确实没人用的素材从缓存里回收掉
   let json;
   try { json = JSON.stringify(autosaveSnapshot()); } catch (_) { return false; }
   if (!force && json === autosaveLast) return false;
@@ -16661,6 +16759,45 @@ window.MotionKit = {
       return L.mask;
     },
     getMask: (i) => { const L = layerArgOf(i); return L ? L.mask : null; },
+    // ---- 删除 / 选中的自检接口 ----
+    /** 谁会被 Delete 键删掉 */
+    deleteTarget: () => (selectedClip() ? 'clip' : (state.selection != null || state.selected.size ? 'layer' : 'none')),
+    /** 选中一个素材片段（会撤掉图层选中） */
+    selectClip: (id) => { selectClipOnly(id); renderRight(); drawTimeline(); return state.clipSel; },
+    /** 选中状态一览（自检里核对"两种选中互斥"用） */
+    selectionInfo: () => ({
+      layer: state.selection,
+      layers: [...state.selected],
+      clip: state.clipSel,
+      hasClip: !!selectedClip(),
+    }),
+    /** 直接触发删除（跟 Delete 键同一条判断） */
+    pressDelete: () => {
+      if (selectedClip()) return { deleted: 'clip', n: deleteSelectedClip() };
+      return { deleted: 'layer', n: deleteSelectedLayers() };
+    },
+    deleteSelectedClip: () => deleteSelectedClip(),
+    deleteSelectedLayers: () => deleteSelectedLayers(),
+    /** 素材回收的宽限期状态（自检里确认 IndexedDB 那份没被立刻删掉） */
+    purgeState: () => ({
+      pending: [...pendingAssetPurge.keys()],
+      graceMs: ASSET_GRACE_MS,
+      alive: [...state.assets.keys()],
+    }),
+    /** 手动触发回收（跳过等待，让自检能验"过期之后真删"） */
+    reapAssets: (ageMs) => {
+      if (ageMs) for (const k of pendingAssetPurge.keys()) pendingAssetPurge.set(k, Date.now() - ageMs);
+      return reapPendingAssets();
+    },
+    /** 这个 assetId 在 IndexedDB 里还在不在 */
+    assetCached: async (id) => {
+      try { return !!(await idbGet('asset:' + id)); } catch (_) { return false; }
+    },
+    /** 加一个假片段（自检用：不真载入文件，只摆片段表） */
+    addFakeClip: (kind, assetId, dur) => {
+      const c = addClip({ id: assetId, kind, name: 'fake-' + kind, duration: dur || 2, el: null }, {});
+      return c ? c.id : null;
+    },
     /**
      * 把一个 AudioBuffer 过一遍某片段的降噪链，返回渲染结果（自检用）。
      * 有了它就能直接量"降噪前后安静段/低频段小了多少"，不用真播声音。
@@ -16754,6 +16891,22 @@ window.MotionKit = {
   undo: () => historyStep(-1),
   redo: () => historyStep(1),
   historyInfo: () => ({ at: history.at, len: history.list.length }),
+  /** 历史里每条快照的摘要（自检用：确认"删之前"那一版真的在栈上） */
+  historyDump: () => history.list.map((j, i) => {
+    let o = {};
+    try { o = JSON.parse(j); } catch (_) {}
+    return { i, sealed: history.sealed.has(i), clips: (o.clips || []).map((c) => c.id), layers: (o.layers || []).length };
+  }),
+  /** 清掉历史（自检里给某一段操作一个干净的回退基线） */
+  historyClear: () => {
+    history.list = [JSON.stringify(state.scene.toJSON())];
+    history.at = 0;
+    history.last = history.list[0];
+    history.lastAt = Date.now();
+    history.sealed = new Set();
+    updateToolButtons();
+    return history.list.length;
+  },
   clipRows: () => [...clipRowMap.entries()].map(([id, g]) => Object.assign({ id }, g)),
   transMarks: () => [...transMarkMap.entries()].map(([id, g]) => Object.assign({ id }, g)),
   transLayers: () => state.scene.layers.filter((L) => L.group === 'clip-trans')
