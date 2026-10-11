@@ -14,7 +14,7 @@ import {
 import * as Draw from '../engine/draw.js';
 import * as FX from '../engine/fx.js';
 import { runFx } from '../engine/fx.js';
-import { analyzeAudioFile, analyzeBuffer, envAt, onsets } from '../engine/audio.js';
+import { analyzeAudioFile, analyzeBuffer, envAt, onsets, resolveDenoise, analyzeNoise, describeDenoise, buildDenoiseChain, gateCurve, DENOISE_RANGE } from '../engine/audio.js';
 import { parseSubtitles, toSRT, splitForKinetic, estimateWordTimings } from '../engine/srt.js';
 import { makeZip, createZipWriter, downloadBlob, canvasToPngBytes } from '../engine/zip.js';
 import { muxMp4 } from '../engine/mp4.js';
@@ -2564,6 +2564,48 @@ function rightPanelClip(body) {
         : '两段音频叠在一起放，接缝会自动交叉淡化（不用另外设）。';
       gA.appendChild(wn);
       body.appendChild(gA);
+
+      // ---- 降噪 ----
+      const gD = group('降噪');
+      const dn = resolveDenoise(c) || { amount: 0, highpass: 0, lowpass: 0, gate: 0, ratio: 6, gain: 1 };
+      const dnNote = document.createElement('div');
+      dnNote.className = 'fx-note';
+      dnNote.style.whiteSpace = 'pre-line';
+      gD.appendChild(dnNote);
+
+      const setDn = (patch) => {
+        Object.assign(c, patch);
+        syncMediaTo(state.t, false);
+        renderRight();
+      };
+      gD.appendChild(numField('总强度', c.denoise || 0, DENOISE_RANGE.amount.min, DENOISE_RANGE.amount.max, DENOISE_RANGE.amount.step, (v) => {
+        // 总强度就是个总开关 + 缩放：动它之后下面三项按比例跟着变
+        c.denoise = v;
+        if (v > 0 && !c.highpass && !c.lowpass && !c.gate) { c.highpass = 90; c.lowpass = 12000; c.gate = 0.06; c.gateRatio = 6; }
+      }));
+      gD.appendChild(numField('高通(Hz)', c.highpass || 0, DENOISE_RANGE.highpass.min, DENOISE_RANGE.highpass.max, DENOISE_RANGE.highpass.step,
+        (v) => { c.highpass = v; syncMediaTo(state.t, false); }));
+      gD.appendChild(numField('低通(Hz)', c.lowpass || 0, 0, 20000, DENOISE_RANGE.lowpass.step,
+        (v) => { c.lowpass = v; syncMediaTo(state.t, false); }));
+      gD.appendChild(numField('门限', c.gate || 0, 0, 1, DENOISE_RANGE.gate.step,
+        (v) => { c.gate = v; syncMediaTo(state.t, false); }));
+      gD.appendChild(numField('门限力度', c.gateRatio || 6, DENOISE_RANGE.ratio.min, DENOISE_RANGE.ratio.max, DENOISE_RANGE.ratio.step,
+        (v) => { c.gateRatio = v; syncMediaTo(state.t, false); }));
+      gD.appendChild(numField('补偿增益', c.audioGain === undefined ? 1 : c.audioGain, 0, 4, 0.05,
+        (v) => { c.audioGain = v; }));
+      const dnBtns = document.createElement('div');
+      dnBtns.className = 'btn-row';
+      dnBtns.appendChild(btn('听一下这段', () => analyzeClipNoise(c, true)));
+      dnBtns.appendChild(btn('自动分析', () => analyzeClipNoise(c, false)));
+      dnBtns.appendChild(btn('关掉降噪', () => setDn({ denoise: 0, highpass: 0, lowpass: 0, gate: 0, gateRatio: 1, audioGain: 1 }), 'danger'));
+      gD.appendChild(dnBtns);
+      dnNote.textContent = dn.amount > 0 || dn.highpass || dn.lowpass || dn.gate
+        ? '高通砍低频轰鸣（空调 / 手持抖动），低通收高频嘶声，门限把安静处的底噪压下去。\n'
+          + '点「自动分析」会量一下这段的底噪和频谱，直接给一组建议值。\n'
+          + '降噪只在**导出时**生效（预览是原声，方便你对比例）。'
+        : '还没开降噪。底噪明显的话点「自动分析」，它会量出底噪和频谱再填好参数。\n'
+          + '降噪只在导出时生效，预览始终是原声。';
+      body.appendChild(gD);
     }
   }
   body.appendChild(g0);
@@ -4433,6 +4475,20 @@ async function renderMp4Blob(includeMedia, withAudio) {
  * 返回 { sampleRate, channels, samples, description, bitrate }，交给 engine/mp4.js 封装。
  */
 /**
+ * 给一个片段的降噪设置接出一条处理链（几何在 engine/audio.js 的 buildDenoiseChain）。
+ *
+ *   src ─→ [高通] ─→ [低通] ─→ [门限] ─→ gain ─→ 目的地
+ *
+ * 三个节点都是按需插入的：没设对应的参数就不建这个节点（省得白跑一遍滤波）。
+ */
+function buildClipDenoise(ctx, src, c) {
+  const { node, denoise } = buildDenoiseChain(ctx, src, c);
+  const gain = ctx.createGain();
+  node.connect(gain);
+  return { gain, denoise };
+}
+
+/**
  * 把时间轴上所有带声音的片段混成一条 AudioBuffer。
  * 用 OfflineAudioContext 离线渲染，所以不受播放速度影响，导出多快都行。
  */
@@ -4443,6 +4499,7 @@ async function mixClipAudio(limitSec) {
   const total = Math.max(1, Math.ceil(Math.min(limitSec, state.scene.clipsEnd) * SR));
   const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, total, SR);
   let used = 0;
+  let denoised = 0;
   for (const c of list) {
     const a = assetById(c.assetId);
     if (!a) continue;
@@ -4452,9 +4509,11 @@ async function mixClipAudio(limitSec) {
     src.buffer = buf;
     const sp = clamp(c.speed || 1, 0.1, 8);
     src.playbackRate.value = sp;
-    const gain = ctx.createGain();
     // 音量包络：音量 + 淡入淡出 + 和相邻段重叠处的自动交叉淡化
-    const vol = state.muted ? 0 : clamp(c.volume === undefined ? 1 : c.volume, 0, 1);
+    // 降噪链挂在包络**前面**：先滤波再算音量，淡入淡出才不会被滤波器拖尾污染
+    const { gain, denoise } = buildClipDenoise(ctx, src, c);
+    if (denoise) denoised++;
+    const vol = state.muted ? 0 : clamp((c.volume === undefined ? 1 : c.volume) * (denoise ? denoise.gain : 1), 0, 1);
     const w = fadeWindow(c);
     const A = Math.max(0, c.start);
     const B = Math.max(A + 0.01, c.end);
@@ -4465,7 +4524,7 @@ async function mixClipAudio(limitSec) {
       gain.gain.setValueAtTime(vol, Math.max(A, B - w.out));
       gain.gain.linearRampToValueAtTime(tiny, B);
     }
-    src.connect(gain); gain.connect(ctx.destination);
+    gain.connect(ctx.destination);
     const off = Math.min(c.in, Math.max(0, buf.duration - 0.01));
     const dur = Math.min(c.dur * sp, Math.max(0, buf.duration - off));   // start() 的时长按素材算
     if (dur <= 0.01) continue;
@@ -4474,7 +4533,85 @@ async function mixClipAudio(limitSec) {
     showBusy('混合音轨…', 0.6 + 0.15 * (used / list.length));
   }
   if (!used) return null;
+  state.mixDenoiseCount = denoised;
   return ctx.startRendering();
+}
+
+/**
+ * 量一段素材的底噪 / 频谱，给出降噪建议。
+ *   preview = true  → 不写工程，只是把"有降噪"和"没降噪"各放 3 秒给你听一下
+ *   preview = false → 把建议值填进片段（可撤销：填完右栏参数就变了）
+ */
+async function analyzeClipNoise(c, preview) {
+  const a = assetById(c.assetId);
+  if (!a) { toast('这段素材还没解码好'); return null; }
+  const buf = await assetBuffer(a);
+  if (!buf) { toast('这段素材里没有可用的声音'); return null; }
+  showBusy('分析底噪…', 0.5);
+  // 单声道汇总 + 只取这一段的入点附近，免得把别的段落也算进来
+  const SR = buf.sampleRate;
+  const from = Math.max(0, Math.floor((c.in || 0) * SR));
+  const want = Math.floor(Math.min(c.dur * (c.speed || 1), buf.duration - c.in) * SR);
+  const n = Math.max(1, Math.min(want, buf.length - from));
+  const mono = new Float32Array(n);
+  const chs = Math.min(2, buf.numberOfChannels);
+  for (let ch = 0; ch < chs; ch++) {
+    const src = buf.getChannelData(ch);
+    for (let i = 0; i < n; i++) mono[i] += src[from + i] / chs;
+  }
+  const res = analyzeNoise(mono, SR);
+  if (!res) { toast('这段太短了，量不出底噪'); return null; }
+
+  window.__mkNoiseReport = res;
+  if (preview) {
+    toast('试听：先放 3 秒原声，再放 3 秒降噪后的');
+    await previewDenoiseA(c, buf, res.recommendation);
+    return res;
+  }
+  Object.assign(c, {
+    denoise: 1,
+    highpass: res.recommendation.highpass,
+    lowpass: res.recommendation.lowpass,
+    gate: res.recommendation.gate,
+    gateRatio: res.recommendation.gateRatio,
+    audioGain: res.recommendation.audioGain,
+  });
+  markIndexDirty();
+  renderRight();
+  toast('已按这段的底噪填好降噪参数（导出时生效）');
+  return res;
+}
+
+/** 原声 3 秒 → 降噪后 3 秒，连着放一遍给人对比 */
+async function previewDenoiseA(c, buf, rec) {
+  const SR = buf.sampleRate;
+  const secs = Math.min(3, Math.max(0.5, buf.duration - (c.in || 0)));
+  const total = Math.ceil(secs * SR);
+  const live = new (window.AudioContext || window.webkitAudioContext)();
+
+  const play = async (withDenoise) => {
+    const off = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, total, SR);
+    const src = off.createBufferSource();
+    src.buffer = buf;
+    const holder = { volume: 1, fadeIn: 0, fadeOut: 0, dur: secs, start: 0, end: secs, kind: 'audio' };
+    if (withDenoise) {
+      holder.denoise = 1; holder.highpass = rec.highpass; holder.lowpass = rec.lowpass;
+      holder.gate = rec.gate; holder.gateRatio = rec.gateRatio; holder.audioGain = rec.audioGain;
+    }
+    const { gain } = buildClipDenoise(off, src, holder);
+    gain.connect(off.destination);
+    src.start(0, Math.max(0, c.in || 0), secs);
+    const rendered = await off.startRendering();
+    const out = live.createBufferSource();
+    out.buffer = rendered;
+    out.connect(live.destination);
+    out.start();
+    await new Promise((r) => setTimeout(r, (secs + 0.15) * 1000));
+  };
+
+  await play(false);
+  await play(true);
+  try { await live.close(); } catch (_) {}
 }
 
 async function encodeAudioTrack(limitSec) {
@@ -6523,6 +6660,41 @@ window.MotionKit = {
       return L.mask;
     },
     getMask: (i) => { const L = layerArgOf(i); return L ? L.mask : null; },
+    /**
+     * 把一个 AudioBuffer 过一遍某片段的降噪链，返回渲染结果（自检用）。
+     * 有了它就能直接量"降噪前后安静段/低频段小了多少"，不用真播声音。
+     */
+    renderDenoise(buffer, opts) {
+      const SR = buffer.sampleRate;
+      const off = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
+        2, Math.max(1, buffer.length), SR);
+      const src = off.createBufferSource();
+      src.buffer = buffer;
+      buildDenoiseChain(off, src, opts || {}).node.connect(off.destination);
+      src.start(0);
+      return off.startRendering();
+    },
+    /** 门限曲线（自检用：确认阈值以上是恒等映射） */
+    gateCurve: (knee, span) => Array.from(gateCurve(knee, span)),
+    /** 降噪参数解析（关掉时返回 null） */
+    denoiseResolve: (c) => (c ? resolveDenoise(c) : null),
+    /** 分析一段 PCM，给降噪建议 */
+    analyzeNoise: (data, sr) => analyzeNoise(data, sr),
+    describeDenoise: (a) => describeDenoise(a),
+    /** 对某个片段跑一遍自动分析（跟界面上「自动分析」按钮同一条路） */
+    analyzeClip: (i) => {
+      const c = typeof i === 'object' ? i : state.scene.clips.find((x) => x.id === i);
+      return c ? analyzeClipNoise(c, false) : null;
+    },
+    /** 量一个 AudioBuffer 在某段时间的 RMS（自检用） */
+    rmsOf(buffer, from, to) {
+      const ch = buffer.getChannelData(0);
+      const a = Math.max(0, Math.round(from * buffer.sampleRate));
+      const b = Math.min(ch.length, Math.round(to * buffer.sampleRate));
+      let s = 0, n = 0;
+      for (let i = a; i < b; i++) { s += ch[i] * ch[i]; n++; }
+      return n ? Math.sqrt(s / n) : 0;
+    },
     /**
      * 蒙版"离屏 alpha"那条路用的临时画布（自检用）。
      * 返回它上面还剩多少不透明 / 半透明像素 —— 羽化、反选这类蒙版到底有没有被削掉，

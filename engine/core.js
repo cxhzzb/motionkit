@@ -382,6 +382,7 @@ export class Clip {
     id = null, kind = 'video', assetId = null, name = '', start = 0, in: inPoint = 0, dur = 1,
     volume = 1, speed = 1, track = 0, scale = null, x = 0, y = 0, opacity = 1,
     grade = null, fadeIn = 0, fadeOut = 0, trans = null,
+    denoise = 0, highpass = 0, lowpass = 0, gate = 0, gateRatio = 1, audioGain = 1,
   } = {}) {
     this.id = id || `c${Clip._id++}`;
     this.kind = kind;
@@ -400,6 +401,19 @@ export class Clip {
     this.fadeIn = fadeIn;     // 音频淡入 / 淡出（秒）
     this.fadeOut = fadeOut;
     this.trans = trans;     // { template, dur } = 这一段开头和上一段之间有个转场
+    // 降噪（只在导出时生效，预览始终是原声）：
+    //   denoise   总强度 0..1，开着会按比例缩放下面三项
+    //   highpass  高通 Hz，砍低频轰鸣 / 空调声；0 = 关
+    //   lowpass   低通 Hz，收高频嘶声；0 = 关
+    //   gate      门限 0..1（映射到阈值 dBFS），把安静处的底噪压下去
+    //   gateRatio 门限力度（下行扩展比），越大压得越狠
+    //   audioGain 压掉底噪后的补偿增益
+    this.denoise = denoise;
+    this.highpass = highpass;
+    this.lowpass = lowpass;
+    this.gate = gate;
+    this.gateRatio = gateRatio;
+    this.audioGain = audioGain;
   }
   get end() { return this.start + this.dur; }
   covers(t) { return t >= this.start && t < this.end; }
@@ -421,6 +435,12 @@ export class Clip {
     if (this.fadeIn) o.fadeIn = this.fadeIn;
     if (this.fadeOut) o.fadeOut = this.fadeOut;
     if (this.trans) o.trans = this.trans;
+    if (this.denoise) o.denoise = this.denoise;
+    if (this.highpass) o.highpass = this.highpass;
+    if (this.lowpass) o.lowpass = this.lowpass;
+    if (this.gate) o.gate = this.gate;
+    if (this.gateRatio && this.gateRatio !== 1) o.gateRatio = this.gateRatio;
+    if (this.audioGain !== 1) o.audioGain = this.audioGain;
     return o;
   }
   static fromJSON(o) { return new Clip(o || {}); }

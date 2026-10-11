@@ -328,3 +328,295 @@ export function onsets(res, { threshold = 0.42, minGap = 0.12 } = {}) {
   }
   return out;
 }
+
+// ============================================================================
+// 音频降噪
+//
+// 现场收音的噪声就三类，分开治最有效（这也是剪辑软件里那几条常用滤镜）：
+//
+//   低频轰鸣 / 空调声 / 手持抖动  → **高通**，把 80~150Hz 以下的整个砍掉
+//   高频嘶声 / 底噪"沙"          → **低通**，把 6~12kHz 以上的砍掉
+//   整段的稳定底噪（电流声、房间声）→ **门限（下行扩展）**，安静的地方压下去
+//
+// 第 1、2 条 Web Audio 有现成节点（BiquadFilter），第 3 条没有"噪声门"这个节点，
+// 用一个极高压缩比的 DynamicsCompressor 近似：它本来只往下压超过阈值的部分，
+// 但在 ratio 极大时，输入略低于阈值的东西也会被压掉一大截 —— 对"把安静处的底噪
+// 压没"这件事是够用的（参数量级跟专业噪声门不同，所以 UI 上标的是"门限"而不是 dB）。
+// ============================================================================
+
+/** 降噪参数的合法范围；UI 的滑块和这里共用一份，免得两处对不上 */
+export const DENOISE_RANGE = {
+  amount: { min: 0, max: 1, step: 0.02, def: 0 },
+  highpass: { min: 0, max: 400, step: 5, def: 0 },      // Hz，0 = 关
+  lowpass: { min: 0, max: 20000, step: 100, def: 0 },    // Hz，0 = 关
+  gate: { min: 0, max: 1, step: 0.01, def: 0 },          // 门限，0 = 关
+  ratio: { min: 1, max: 20, step: 0.5, def: 1 },         // 门限的力度
+  gain: { min: 0, max: 4, step: 0.05, def: 1 },          // 补偿增益
+};
+
+const dn = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
+const clampRange = (spec, v) => clamp(dn(v, spec.def), spec.min, spec.max);
+
+/**
+ * 把 clip 上的降噪参数理成一份"确定的"设置。
+ * 全部是关闭状态（或者有降噪效果但幅度等于没做）时返回 null —— 调用方据此完全跳过这条链路。
+ */
+export function resolveDenoise(src) {
+  if (!src && src !== 0) return null;
+  const o = {
+    amount: clampRange(DENOISE_RANGE.amount, src.denoise),
+    highpass: clampRange(DENOISE_RANGE.highpass, src.highpass),
+    lowpass: clampRange(DENOISE_RANGE.lowpass, src.lowpass),
+    gate: clampRange(DENOISE_RANGE.gate, src.gate),
+    ratio: clampRange(DENOISE_RANGE.ratio, src.gateRatio),
+    gain: clampRange(DENOISE_RANGE.gain, src.audioGain === undefined ? 1 : src.audioGain),
+  };
+  // "幅度"参数按比例缩一档：amount 是个总强度，压着它下面三项走
+  if (o.amount > 0 && o.amount < 1) {
+    if (o.highpass > 0) o.highpass = Math.round(o.highpass * o.amount);
+    if (o.lowpass > 0) o.lowpass = Math.round(20000 - (20000 - o.lowpass) * o.amount);
+    if (o.gate > 0) o.gate = o.gate * o.amount;
+  }
+  // 低通低于高通就成了"全砍掉"，夹一下保持可听
+  if (o.highpass > 0 && o.lowpass > 0 && o.lowpass <= o.highpass * 2) {
+    o.lowpass = Math.min(20000, o.highpass * 2 + 500);
+  }
+  const idle = o.highpass <= 0 && o.lowpass <= 0 && o.gate <= 0 && Math.abs(o.gain - 1) < 1e-3;
+  return idle ? null : o;
+}
+
+/** 分帧取 RMS（50ms 一帧），降噪分析和"噪声底"估算都用它 */
+function frameRms(data, sampleRate, frameMs = 50) {
+  const n = Math.max(1, Math.round((sampleRate * frameMs) / 1000));
+  const out = [];
+  for (let at = 0; at + n <= data.length; at += n) {
+    let s = 0;
+    for (let i = at; i < at + n; i++) s += data[i] * data[i];
+    out.push(Math.sqrt(s / n));
+  }
+  return out;
+}
+
+/** 取分位数（q = 0..1），输入会被排序 */
+function quantile(sorted, q) {
+  if (!sorted.length) return 0;
+  const i = clamp(Math.round((sorted.length - 1) * q), 0, sorted.length - 1);
+  return sorted[i];
+}
+
+
+/**
+ * 一段信号"有多像噪声"：谱平坦度（几何平均 / 算术平均）。
+ *
+ * 这是把"有内容的信号"和"底噪"分开的关键 —— 光比 RMS 分位数是不够的：
+ * 一段稳定的正弦（或持续的音乐）分位数几乎一样，会被误判成"全是底噪"。
+ * 正弦的谱是几根尖峰 → 平坦度接近 0；白噪声谱是平的 → 接近 1。
+ * 乘上整体电平就得到"噪声成分有多大"的估计。
+ */
+function spectralFlatness(data) {
+  const N = 1024;
+  const re = new Float64Array(N), im = new Float64Array(N);
+  const maxFrames = 8;
+  const step = Math.max(N, Math.floor(data.length / maxFrames));
+  let sumLog = 0, sumLin = 0, bins = 0, used = 0;
+  for (let at = 0; at + N <= data.length && used < maxFrames; at += step, used++) {
+    for (let i = 0; i < N; i++) {
+      const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1));
+      re[i] = (data[at + i] || 0) * w;
+      im[i] = 0;
+    }
+    fft(re, im);
+    for (let k = 1; k < N / 2; k++) {
+      const p = Math.hypot(re[k], im[k]) / N + 1e-12;
+      sumLog += Math.log(p);
+      sumLin += p;
+      bins++;
+    }
+  }
+  if (!bins || sumLin <= 0) return 0;
+  return clamp(Math.exp(sumLog / bins) / (sumLin / bins), 0, 1);
+}
+
+/**
+ * 站在"要降噪"的角度看一段音频，给出一份建议设置。
+ *
+ *   noiseFloor  底噪的电平 —— 由"整段电平 × 噪声成分占比"估出来
+ *   loudLevel   整体电平（RMS 中位数）
+ *   snr         两者之比（dB）
+ *   rumbleDb    低频相对中频高出多少 dB —— 偏高说明有低频轰鸣
+ *   hissDb      高频相对中频高出多少 dB —— 偏高说明有嘶声
+ *
+ * 频段比较用**相对关系**而不是"占比"：占比会被幅度淹没（一段 80Hz 的轰鸣
+ * 能量上就能占掉大半，光看占比分不出"轰鸣"和"低频本来就是这段的主体"）。
+ */
+export function analyzeNoise(data, sampleRate) {
+  if (!data || data.length < 256) return null;
+  const frames = frameRms(data, sampleRate);
+  if (!frames.length) return null;
+  const sorted = [...frames].sort((a, b) => a - b);
+  const loudLevel = quantile(sorted, 0.5);
+  if (!(loudLevel > 1e-7)) {
+    // 整段几乎无声：没有什么可降的
+    return {
+      noiseFloor: 0, loudLevel, snr: 99, floorRatio: 0, lowShare: 0, highShare: 0,
+      rumbleDb: 0, hissDb: 0, flatness: 0, frames: frames.length,
+      recommendation: { denoise: 0, highpass: 0, lowpass: 0, gate: 0, gateRatio: 1, audioGain: 1 },
+    };
+  }
+
+  // ---- 底噪：整段电平 × 噪声成分占比（谱平坦度） ----
+  const flatness = spectralFlatness(data);
+  // 开个 0.75 次方：平坦度本身有波动，直接乘容易把"干净的正弦"算出一堆底噪
+  const noiseShare = Math.pow(flatness, 0.75);
+  const noiseFloor = clamp(loudLevel * noiseShare, 0, loudLevel);
+  const snr = 20 * Math.log10((loudLevel + 1e-9) / (noiseFloor + 1e-9));
+  const floorRatio = clamp(noiseFloor / (loudLevel + 1e-9), 0, 1);
+
+  // ---- 频谱：抓最响的几帧做 256 点 FFT，按低/中/高聚合 ----
+  const N = 256;
+  const re = new Float64Array(N), im = new Float64Array(N);
+  const starts = [];
+  const thresh = Math.max(loudLevel * 0.6, 1e-6);
+  for (let at = 0; at + N <= data.length && starts.length < 12; at += N * 4) {
+    let s = 0;
+    for (let i = 0; i < N; i++) s += data[at + i] * data[at + i];
+    if (Math.sqrt(s / N) >= thresh) starts.push(at);
+  }
+  if (!starts.length) starts.push(0);
+  const bands = { low: 0, mid: 0, high: 0 };
+  for (const at of starts) {
+    for (let i = 0; i < N; i++) {
+      const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1));
+      re[i] = (data[at + i] || 0) * w;
+      im[i] = 0;
+    }
+    fft(re, im);
+    for (let k = 1; k < N / 2; k++) {
+      const f = (k * sampleRate) / N;
+      const mag = Math.hypot(re[k], im[k]);
+      if (f < 200) bands.low += mag;
+      else if (f < 3000) bands.mid += mag;
+      else bands.high += mag;
+    }
+  }
+  const db = (a, b) => 20 * Math.log10((a + 1e-9) / (b + 1e-9));
+  const rumbleDb = db(bands.low, bands.mid);     // 低频比中频高多少
+  const hissDb = db(bands.high, bands.mid);      // 高频比中频高多少
+  const total = bands.low + bands.mid + bands.high + 1e-9;
+
+  const rec = { denoise: 1, highpass: 0, lowpass: 0, gate: 0, gateRatio: 6, audioGain: 1 };
+  // 低频轰鸣：低频已经跟中频一个量级了（差不到 7dB）就该砍
+  if (rumbleDb > -7) rec.highpass = rumbleDb > 2 ? 120 : 80;
+  // 高频嘶声：高频跟中频接近（差不到 2dB）才收，免得把正常的明亮音色也闷掉
+  if (hissDb > 2) rec.lowpass = hissDb > 8 ? 7000 : 11000;
+  // 底噪离正常电平不远才值得上门限
+  if (snr < 30 && floorRatio > 0.02) {
+    rec.gate = clamp(floorRatio * 1.6, 0.03, 0.6);
+    rec.gateRatio = snr < 14 ? 14 : 8;
+  }
+  // 门限压掉底噪之后整体会显得轻，稍微补一点
+  if (rec.gate > 0.1) rec.audioGain = 1.15;
+
+  return {
+    noiseFloor, loudLevel, snr, floorRatio,
+    lowShare: bands.low / total, highShare: bands.high / total,
+    rumbleDb, hissDb, flatness,
+    frames: frames.length, recommendation: rec,
+  };
+}
+
+/** 把建议设置整理成一份可读的说明（界面上的提示文案直接用） */
+export function describeDenoise(a) {
+  if (!a) return '这段没有可分析的声音。';
+  const bits = [];
+  bits.push('整体电平约 ' + (a.loudLevel * 1000).toFixed(1) + '‰　　估计底噪约 ' + (a.noiseFloor * 1000).toFixed(1) + '‰');
+  bits.push('信噪比 ' + a.snr.toFixed(1) + ' dB'
+    + (a.snr >= 30 ? '（挺干净）' : a.snr >= 16 ? '（有一点底噪）' : '（底噪偏大）'));
+  bits.push('低频比中频 ' + a.rumbleDb.toFixed(1) + ' dB' + (a.recommendation.highpass ? ' → 建议开高通' : ''));
+  bits.push('高频比中频 ' + a.hissDb.toFixed(1) + ' dB' + (a.recommendation.lowpass ? ' → 建议开低通' : ''));
+  if (a.recommendation.gate > 0) bits.push('建议门限 ' + a.recommendation.gate.toFixed(2));
+  return bits.join('\n');
+}
+
+// ---------------------------------------------------------------- 降噪的音频链路
+//
+// 为什么不用 DynamicsCompressor 当噪声门：压缩器是**按比例**往下压，安静处的
+// 底噪只能被压小几个 dB，压不掉（实测安静段 RMS 只降了约 10%，听感上等于没做）。
+// 而且把它的阈值调低去"够到"底噪时，正常内容会被一起压瘪（实测大声段掉了 60%）。
+// 真正的门需要"低于阈值直接归零"，Web Audio 里只有 WaveShaper 能做逐样本的
+// 非线性映射 —— 它不引入延迟，"瞬时归零"这件事是稳的。
+//
+// 所以门限**只用 WaveShaper 一个节点**：软膝曲线本身已经避免咔哒声，
+// 后面不再串压缩器（串了反而会把正常内容压瘪）。
+//
+// 注意它是逐样本的，瞬态上会有一点点门限痕迹 —— 这正是噪声门本来的代价。
+
+/**
+ * 门限曲线（WaveShaper 用的查找表）。
+ *
+ *   |x| <= knee*0.6           → 0（安静，完全不出声）
+ *   knee*0.6 ~ knee*1.6       → smoothstep 平滑过渡（软膝，避免"咔"的一声）
+ *   |x| >= knee*1.6           → **原样通过**（阈值以上必须完全透明）
+ *
+ * 阈值以上必须是恒等映射：门限只管"安静处要不要出声"，
+ * 顺手把正常内容也变一点电平和音色就是 bug。
+ *
+ * ⚠️ 曲线的定义域**必须正好是 [-1, 1]**：WaveShaperNode 把输入 x 直接按
+ * `index = (x+1)/2*(N-1)` 取表，它不会按表的"语义范围"去缩放 —— 它假定这张表
+ * 覆盖的就是 [-1, 1]。所以千万别为了"给超过 0dBFS 留余量"而把表铺到 [-1.2, 1.2]，
+ * 那等于把整条曲线横向拉伸，恒等段会变成 x*1.2（实测响内容整体偏大 20%）。
+ * 输入超过 ±1 的部分 WaveShaper 自己会夹住（表两端就是端点值）。
+ */
+export function gateCurve(knee) {
+  const N = 8192;
+  const c = new Float32Array(N);
+  const k = Math.max(1e-5, knee);
+  const lo = k * 0.6, hi = k * 1.6;
+  for (let i = 0; i < N; i++) {
+    const x = (i / (N - 1)) * 2 - 1;          // 正好覆盖 [-1, 1]
+    const a = Math.abs(x);
+    if (a <= lo) { c[i] = 0; continue; }
+    if (a >= hi) { c[i] = x; continue; }      // 恒等：一点都不动
+    const t = (a - lo) / (hi - lo);
+    c[i] = x * (t * t * (3 - 2 * t));
+  }
+  return c;
+}
+
+/**
+ * 往 AudioContext 上接一条降噪链。
+ * @returns {{ node: AudioNode, denoise: object|null }} 末尾那个节点（没开降噪就是入参本身）
+ */
+export function buildDenoiseChain(ctx, sourceNode, opts) {
+  const d = resolveDenoise(opts);
+  if (!d) return { node: sourceNode, denoise: null };
+  let node = sourceNode;
+  if (d.highpass > 0) {
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = d.highpass;
+    hp.Q.value = 0.707;                 // 巴特沃斯，不做共振峰
+    node.connect(hp); node = hp;
+  }
+  if (d.lowpass > 0) {
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = d.lowpass;
+    lp.Q.value = 0.707;
+    node.connect(lp); node = lp;
+  }
+  if (d.gate > 0) {
+    // 门限 0..1 → 膝点（按幅度）。0.3 大约盖住 -30dBFS 的底噪，1.0 到 -18dBFS。
+    // 映射给得比较陡，因为典型底噪就在 -40~-30dBFS 这一档，
+    // 太保守的话用户会觉得"开了降噪跟没开一样"（实测过：膝点 0.016 只能把底噪压掉一半）。
+    const knee = 0.003 + d.gate * 0.12;
+    if (typeof ctx.createWaveShaper === 'function') {
+      const ws = ctx.createWaveShaper();
+      ws.curve = gateCurve(knee);
+      // 不开 oversample：实测 '2x' 会额外引入电平偏移，而门限对阈值以上本该完全透明
+      ws.oversample = 'none';
+      node.connect(ws); node = ws;
+    }
+  }
+  return { node, denoise: d };
+}
