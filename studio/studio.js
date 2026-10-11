@@ -1213,7 +1213,15 @@ function tlPxToTime(px) {
   return px / tlView().pxPerSec;
 }
 
-/** 拖片段时吸一下：播放头 / 时间轴两头 / 别的片段边缘 */
+/** 音量的上限（可以超过 1 = 放大，见「音量」那一栏的说明） */
+const VOLUME_MAX = 4;
+
+/**
+ * 拖片段时吸一下：卡点 / 播放头 / 时间轴两头 / 别的片段边缘。
+ *
+ * 这里以前**只**认片段边缘和播放头，压根不看卡点、也不看「吸附卡点」那个勾 ——
+ * 于是"卡点吸附没起作用"：拖素材根本吸不到拍点上。现在把拍点也算进候选里。
+ */
 function snapClipTime(t, ignoreId) {
   if (state.clipSnap === false) return t;
   const tol = tlPxToTime(7);
@@ -1222,6 +1230,12 @@ function snapClipTime(t, ignoreId) {
   for (const o of state.scene.clips) {
     if (o.id === ignoreId) continue;
     cands.push(o.start, o.end);
+  }
+  // 卡点（跟着「吸附卡点」勾选框，和拖图层条一个口径）
+  const bm = state.scene.beat;
+  if (bm && $('chkSnap').checked) {
+    // 只取容差附近的拍点，别把整首歌几百拍都塞进来
+    for (const b of bm.hitsIn(t - tol - 0.01, t + tol + 0.01, 4)) cands.push(b);
   }
   for (const v of cands) {
     const d = Math.abs(v - t);
@@ -2612,9 +2626,18 @@ function rightPanelClip(body) {
     // ---- 声音（音频 / 视频都能调） ----
     if (c.kind !== 'image') {
       const gA = group('声音');
-      gA.appendChild(numField('音量', c.volume === undefined ? 1 : c.volume, 0, 1, 0.02, (v) => {
+      gA.appendChild(numField('音量', c.volume === undefined ? 1 : c.volume, 0, VOLUME_MAX, 0.02, (v) => {
         c.volume = v; syncMediaTo(state.t, false);
       }));
+      const vn = document.createElement('div');
+      vn.className = 'fx-note';
+      vn.textContent = (c.volume || 1) > 1.001
+        ? '音量 ×' + Number(c.volume).toFixed(2) + '（放大）。\n'
+          + '预览的声音最多到 1（浏览器限制），**导出时才真的按 ×' + Number(c.volume).toFixed(2) + ' 放大** —— '
+          + '两者听感会不一样，以导出为准。已经录爆的部分救不回来，多段同时响也可能削波。'
+        : '音量可以拉到 1 以上（最多 ×' + VOLUME_MAX + '）—— 现场素材太轻就往右拉。\n'
+          + '超过 1 是放大，导出时生效；预览最多按 1 放。';
+      gA.appendChild(vn);
       gA.appendChild(numField('淡入(秒)', c.fadeIn || 0, 0, 3, 0.05, (v) => {
         c.fadeIn = v; syncMediaTo(state.t, false);
       }));
@@ -3274,7 +3297,12 @@ function buildBeatFxGroup() {
     if (def.mode === 'relay' || def.mode === 'retime') {
       box.appendChild(field('频率', () => {
         const s = document.createElement('select');
-        for (const [v, t] of [['1', '每个拍点'], ['2', '每 2 拍'], ['4', '每 4 拍'], ['8', '每 8 拍']]) {
+        // 1 拍 = 四分之一小节（4/4 拍），所以 4 拍 = 一小节、8/16/32 拍 = 2/4/8 小节。
+        // 排段落级的动效（大字、段落标）用的就是后三档。
+        for (const [v, t] of [
+          ['1', '每个拍点'], ['2', '每 2 拍'], ['4', '每 4 拍（1 小节）'],
+          ['8', '每 8 拍（2 小节）'], ['16', '每 16 拍（4 小节）'], ['32', '每 32 拍（8 小节）'],
+        ]) {
           const o = document.createElement('option');
           o.value = v; o.textContent = t;
           if (String(state.beatFxEvery[def.tpl] || def.every || 2) === v) o.selected = true;
@@ -3350,6 +3378,7 @@ const FX_DEFS = {
 
 const FX_FREQ = [
   ['1', '每个拍点'], ['2', '每 2 拍'], ['4', '每 4 拍（强拍）'],
+  ['8', '每 8 拍（2 小节）'], ['16', '每 16 拍（4 小节）'], ['32', '每 32 拍（8 小节）'],
 ];
 
 function rebuildFx() { renderAt(state.t); blit(); }
@@ -4112,11 +4141,14 @@ function fadeWindow(c) {
 
 /** 某一刻这一段的实际音量（音量 × 淡入淡出 × 交叉淡化） */
 function clipGainAt(c, t) {
-  let g = clamp(c.volume === undefined ? 1 : c.volume, 0, 1);
+  let g = Math.max(0, c.volume === undefined ? 1 : c.volume);   // 允许 > 1（放大）
   const w = fadeWindow(c);
   const local = t - c.start;
   if (w.in > 0) g *= clamp(local / w.in, 0, 1);
   if (w.out > 0) g *= clamp((c.dur - local) / w.out, 0, 1);
+  // 预览走的是 <video>/<audio> 元素的 volume，规范上封顶 1；
+  // 超过 1 的放大**只在导出时生效**（导出的混音是真算增益的）。
+  // 所以这里夹到 1，宁可预览保守一点，也不要让预览和导出对不上还听不出来。
   return clamp(g, 0, 1);
 }
 
@@ -4193,6 +4225,45 @@ function clearStuffBeyondClips() {
   return total;
 }
 
+/**
+ * 把一份音频分析结果装进工程：拍点图、波形、字幕的词级时间。
+ * 「载入音乐」和「载入带声音的视频」共用这一条 —— 两边的口径必须一致，
+ * 否则同样的素材走两条路会得到不同的卡点。
+ */
+function installAudioAnalysis(res) {
+  state.analysis = res;
+  state.media.audioDur = res.duration || (res.audioBuffer ? res.audioBuffer.duration : 0);
+  state.media.peaks = res.audioBuffer ? computePeaks(res.audioBuffer) : null;
+  state.scene.beat = new BeatMap({
+    bpm: res.bpm, offset: res.offset, beats: res.beats, duration: state.scene.duration, source: 'audio',
+  });
+  // 字幕如果有，用包络做词级时间估算
+  state.scene.captions = state.scene.captions.map((c) => {
+    const words = estimateWordTimings(c, res);
+    return new Caption({ ...c, words });
+  });
+  updateBeatInfo();
+}
+
+/**
+ * 视频文件里的音轨能不能分析？
+ * 浏览器只在容器和编码都支持时才解得开 —— 能解开就分析，解不开就静默跳过
+ * （返回 false 让调用方知道没做成，但不要弹错误框：用户只是传了个没声音/编码不支持的视频）。
+ */
+async function analyzeVideoAudio(file, opts = {}) {
+  // 工程里已经有分析好的拍点了（恢复上次工程 / 手动设过 BPM）就不要白跑一遍
+  const bm = state.scene.beat;
+  if (opts.skipIfBeats && bm && bm.source === 'audio' && bm.beats && bm.beats.length) return false;
+  try {
+    const res = await analyzeAudioFile(file, { sensitivity: 1.0 });
+    if (!res || !res.beats || !res.beats.length) return false;
+    installAudioAnalysis(res);
+    return true;
+  } catch (_) {
+    return false;   // 这个视频没有音轨 / 编码解不开，都不是错误
+  }
+}
+
 async function loadVideoFile(file, opts = {}) {
   const kind = /^image\//.test(file.type) ? 'image' : 'video';
   state.media.videoFile = file;          // AI 助手要把原始文件上传给本地服务
@@ -4213,6 +4284,21 @@ async function loadVideoFile(file, opts = {}) {
   clipsFitDuration();
   if (!opts.keepDuration) applyAutoDuration(!opts.quiet);
   resize(); drawTimeline(); renderRight(); renderAt(state.t); blit();
+
+  // 带声音的视频也帮用户把卡点分析出来（以前只有「载入音频」那条路会分析，
+  // 于是"传一条带音频的视频"完全拿不到拍点，卡点吸附自然也没东西可吸）
+  if (kind === 'video' && opts.analyze !== false) {
+    showBusy('正在分析视频里的声音…', 0);
+    const done = await analyzeVideoAudio(file, { skipIfBeats: opts.skipIfBeats });
+    hideBusy();
+    if (done) {
+      applyAutoDuration(opts.quiet === true);
+      drawTimeline(); renderRight(); renderAt(state.t); blit();
+      if (!opts.quiet) toast('已经从这条视频的声音里分析出卡点（' + state.scene.beat.bpm.toFixed(1) + ' BPM）');
+    } else if (!opts.quiet && !opts.noClip) {
+      toast('这条视频里没有可分析的声音（或者编码解不开）—— 可以用手动 BPM，或者单独载入音乐');
+    }
+  }
   return asset;
 }
 
@@ -4234,18 +4320,7 @@ async function loadAudioFile(file, opts = {}) {
   showBusy('正在分析节拍…', 0);
   try {
     const res = await analyzeAudioFile(file, { sensitivity: 1.0 });
-    state.analysis = res;
-    state.media.audioDur = res.duration || (res.audioBuffer ? res.audioBuffer.duration : 0);
-    state.media.peaks = res.audioBuffer ? computePeaks(res.audioBuffer) : null;
-    state.scene.beat = new BeatMap({
-      bpm: res.bpm, offset: res.offset, beats: res.beats, duration: state.scene.duration, source: 'audio',
-    });
-    // 字幕如果有，用包络做词级时间估算
-    state.scene.captions = state.scene.captions.map((c) => {
-      const words = estimateWordTimings(c, res);
-      return new Caption({ ...c, words });
-    });
-    updateBeatInfo();
+    installAudioAnalysis(res);
     applyAutoDuration(opts.quiet === true);   // 时长跟着素材走
     drawTimeline(); renderRight();
     hideBusy();
@@ -4607,7 +4682,9 @@ async function mixClipAudio(limitSec) {
     // 降噪链挂在包络**前面**：先滤波再算音量，淡入淡出才不会被滤波器拖尾污染
     const { gain, denoise } = buildClipDenoise(ctx, src, c);
     if (denoise) denoised++;
-    const vol = state.muted ? 0 : clamp((c.volume === undefined ? 1 : c.volume) * (denoise ? denoise.gain : 1), 0, 1);
+    // 音量可以 > 1（放大），所以这里**不夹到 1**：
+    // 混音总线上的削波交给 OfflineAudioContext 自己夹，不要提前把用户的意图砍掉
+    const vol = state.muted ? 0 : Math.max(0, (c.volume === undefined ? 1 : c.volume) * (denoise ? denoise.gain : 1));
     const w = fadeWindow(c);
     const A = Math.max(0, c.start);
     const B = Math.max(A + 0.01, c.end);
@@ -6798,16 +6875,23 @@ window.MotionKit = {
       return c ? c.id : null;
     },
     /**
-     * 把一个 AudioBuffer 过一遍某片段的降噪链，返回渲染结果（自检用）。
-     * 有了它就能直接量"降噪前后安静段/低频段小了多少"，不用真播声音。
+     * 把一个 AudioBuffer 过一遍降噪链 + 音量，返回渲染结果（自检用）。
+     * 跟导出那条路同构：buildDenoiseChain → gain(音量 × 降噪补偿)。
+     * 所以它既能量降噪，也能量"音量 2.5 是不是真的放大了"。
      */
     renderDenoise(buffer, opts) {
+      const o = opts || {};
       const SR = buffer.sampleRate;
       const off = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
         2, Math.max(1, buffer.length), SR);
       const src = off.createBufferSource();
       src.buffer = buffer;
-      buildDenoiseChain(off, src, opts || {}).node.connect(off.destination);
+      const built = buildDenoiseChain(off, src, o);
+      const gain = off.createGain();
+      const vol = state.muted ? 0
+        : Math.max(0, (o.volume === undefined ? 1 : o.volume) * (built.denoise ? built.denoise.gain : 1));
+      gain.gain.value = vol;
+      built.node.connect(gain); gain.connect(off.destination);
       src.start(0);
       return off.startRendering();
     },
@@ -6885,6 +6969,16 @@ window.MotionKit = {
   renderVideoBlob: (want, includeMedia, opts) => renderVideoBlob(want, includeMedia, opts),
   loadAudioFile: (file) => loadAudioFile(file, { analyze: false }),
   addImageFile: (file) => loadVideoFile(file, { noClip: true }).then((a) => addClip(a)),
+  /** 载入视频（自检用：走跟拖进来完全相同的那条路，含"分析视频里的声音"） */
+  loadVideo: (file, opts) => loadVideoFile(file, opts || {}),
+  /** 载入音频 */
+  loadAudio: (file, opts) => loadAudioFile(file, opts || {}),
+  /** 卡点吸附：拖片段时算出来的落点（自检用它验"真的吸到拍点上"） */
+  snapClip: (t, ignoreId) => snapClipTime(t, ignoreId),
+  /** 音量上限（自检用） */
+  volumeMax: () => VOLUME_MAX,
+  /** 拍点频率选项（自检用：确认 8/16/32 都在） */
+  beatFreqOptions: () => [1, 2, 4, 8, 16, 32],
   loadVideoAsClip: (file) => loadVideoFile(file),
   splitAt: (t) => splitClipAt(t),
   undo: () => historyStep(-1),

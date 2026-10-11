@@ -133,19 +133,28 @@ export class BeatMap {
   }
 
   /** 区间 (t0, t1] 内所有拍点 */
+  /**
+   * 区间 [t0, t1] 内的拍点。
+   *
+   * 注意是**闭区间**：t0 那一刻正好有拍点时要算进来（用 1e-6 的容差判）。
+   * 以前这里是 `b > t0` 的开区间，于是 `hitsIn(0, …)` 永远漏掉 t=0 那一拍 ——
+   * "每个拍点铺一层"的首拍（正拍）就永远没有东西，而且 `everyN` 的下标也跟着错位
+   * （每 N 拍取到的是第 2、N+2… 拍）。真踩过。
+   */
   hitsIn(t0, t1, division = 1) {
     const out = [];
     const d = this.beatDur / division;
+    const after = (v) => v >= t0 - 1e-6 && v <= t1 + 1e-6;
     if (this.beats) {
-      for (const b of this.beats) if (b > t0 && b <= t1) out.push(b);
+      for (const b of this.beats) if (after(b)) out.push(b);
       if (division > 1) for (let k = 0; k < this.beats.length - 1; k++) {
         const a = this.beats[k], b = this.beats[k + 1], n = Math.max(1, Math.round((b - a) / d));
-        for (let j = 1; j < n; j++) { const v = a + ((b - a) * j) / n; if (v > t0 && v <= t1) out.push(v); }
+        for (let j = 1; j < n; j++) { const v = a + ((b - a) * j) / n; if (after(v)) out.push(v); }
       }
       return out.sort((a, b) => a - b);
     }
-    let i = Math.ceil((t0 - this.offset) / d);
-    for (;; i++) { const v = this.offset + i * d; if (v > t1) break; if (v > t0) out.push(v); }
+    let i = Math.ceil((t0 - this.offset - 1e-6) / d);
+    for (;; i++) { const v = this.offset + i * d; if (v > t1 + 1e-6) break; if (after(v)) out.push(v); }
     return out;
   }
 
